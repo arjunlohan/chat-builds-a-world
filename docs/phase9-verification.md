@@ -79,11 +79,75 @@ Captures (ignored local verification artifacts under repository `state/`):
 
 ## Two-hour measurements
 
-The final-code run is still in progress; this section will be completed from the
-actual start/15-minute/end samples before this report is committed. Hardware
+Both actual two-hour runs completed successfully (exit 0), with nine formal
+start/15-minute/end samples each. Hardware
 rendering, 300 citizens, fixed seed, local offline providers only. The baseline
 uses cb63470; final rendering uses 2d8f6c2 (later changes affect recovery/docs/tests,
 not the render loop). Both runs replay the full real `pnpm sim` fixture round;
 final also repeats `pnpm sim --crowd-only` every 15 minutes. Ordinary-citizen
 heartbeats and replenishment keep 300 active. Heap values are after explicit GC,
 with raw values and RSS retained in JSON. No accumulated per-frame arrays.
+
+
+Command: `pnpm sim:soak --seconds=7200 --interval=900 --sample=10
+--output=state/phase9-soak-final.json`. Both use Apple M1 Pro / ANGLE Metal,
+production **1920x1080**, shadows and bloom. Heap values below are **MiB after GC**.
+The baseline ran its earlier equivalent isolated harness against cb63470.
+
+| Minute | Before FPS | Before server | Before browser | After FPS | After server | After browser |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 59.97 | 55.455 | 7.265 | 59.97 | 55.932 | 7.268 |
+| 15 | 59.98 | 55.386 | 7.285 | 60.07 | 54.746 | 7.376 |
+| 30 | 59.98 | 55.923 | 7.394 | 59.98 | 55.183 | 7.339 |
+| 45 | 60.07 | 55.978 | 7.248 | 60.08 | 55.253 | 7.411 |
+| 60 | 60.07 | 56.449 | 7.250 | 59.98 | 56.349 | 7.307 |
+| 75 | 60.07 | 56.493 | 7.251 | 59.98 | 55.875 | 7.355 |
+| 90 | 60.08 | 56.488 | 7.254 | 59.99 | 55.857 | 7.360 |
+| 105 | 60.07 | 56.536 | 7.300 | 60.08 | 55.869 | 7.321 |
+| 120 | 59.98 | 56.493 | 7.374 | 59.97 | 55.847 | 7.357 |
+
+All nine final samples: **300 citizens, 940 DOM elements, zero console/page
+errors**. All eight `pnpm sim` executions exited 0. Final setup shipped checked
+fixture v1: independent SwiftShader gate **40.05 FPS** (rolling **40.68**), 15 timed
+samples, **17100 full-HD pixel-equivalents**, 170x150px footprint, **23.68s** total
+check. The gate thresholds were unchanged. Two earlier setup attempts were
+rejected before the timed soak. The retained second check observed 39.7 FPS
+under concurrent verification load (no frozen frame or console error) and hit
+the watchdog during its finishing path. The first attempt did not retain gate
+evidence; the harness now retains setup failures. The final harness suspends its own client during the independent
+gate, just as runner:live already does, and resumes it for a real render receipt.
+These failed setups are not counted as completed soak time.
+
+Final measured sample interval: **7200.026s**; baseline: **7200.213s**. Final server
+heap 55.932 -> **55.847 MiB** (-0.085); browser 7.268 -> **7.357 MiB** (+0.088).
+Baseline server 55.455 -> **56.493 MiB**, browser 7.265 -> **7.374 MiB**. The bounded
+warm-up/GC variations plateau; the final run has no sustained growth. FPS is
+vsync-capped around 60 in both runs, so this is stability evidence, not a claim
+of higher peak speed. Later recovery-only changes were verified separately by
+unit/Git tests and the repeated SIGKILL smoke; they do not change this render loop.
+
+Both runs leave exactly one main worktree before teardown and remove their own
+clones. No live credentials were copied into either clone. Raw samples, pre-GC
+heaps, RSS, health records, simulator output and screenshots remain in ignored
+`state/phase9-soak-{baseline,final}.{json,png}`. `state/phase9-recovery.json`,
+`phase9-polish.json`, `phase9-dev.json`, `phase9-initial-gate.json` and
+`phase9-asset-audit.json` retain the other local evidence. No state files or
+screenshots are committed.
+
+## Commits
+
+| Commit | Scope |
+| --- | --- |
+| f771287 | Process result/redaction cleanup |
+| a1adde4 | Shared admission/entry/ledger/labels and retained modules/history |
+| fe55b81 | Shared browser setup, simulator parsing and typed EventSub |
+| 97671a3 | Atomic persistence, single-flight locks and crash recovery |
+| 0993d49 | Sky, arrivals, phase transitions, pooled confetti and phone layout |
+| 2d8f6c2 | Real crash/moderator verification and isolated soak gate |
+| f58e780 | Merge-to-tag crash recovery and user-commit protection |
+| 0e4da63 | Operation docs, polish smoke and asset/licence notices |
+| 5b6631a | Nonzero exit for interrupted soak |
+| b103c63 | Acceptance report recorded before the long run finished |
+
+A final report commit records the completed measurements. All work is on master;
+no push was requested or performed.
