@@ -5,7 +5,7 @@ import { join } from "node:path";
 export interface ModuleArtifact { id: string; url: string; hash: string; file: string }
 export interface WorldVersion { version: number; tag: string; commit: string; title: string; requester: string; modules: ModuleArtifact[]; receipt: string; healthy?: boolean; restoredFrom?: string }
 export type HistoryEntry = Pick<WorldVersion,"version"|"tag"|"commit"|"title"|"requester"|"modules">;
-interface Stored { baseline?: string; counter: number; current: WorldVersion | null; history: WorldVersion[]; pending?: { path: string; base: string; version: number;process?:number;owner?:number } }
+interface Stored { baseline?: string; counter: number; current: WorldVersion | null; history: WorldVersion[]; pending?: { path: string; base: string; version: number;process?:number;owner?:number;candidate?:string } }
 export class Versions {
   private data: Stored = { counter: 0, current: null, history: [] };
   private replayJson:string|undefined;

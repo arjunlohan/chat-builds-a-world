@@ -38,13 +38,15 @@ export class Runner {
       if(pending?.process&&pending.owner)await stopOrphan(pending.process,pending.owner,pending.path);
       const head=await git(this.root,"rev-parse","master"),advanced=!!pending&&head!==pending.base;
       if(advanced||current?.healthy===false){
+        if(advanced&&pending!.candidate&&head!==pending!.candidate)throw new Error("Master advanced outside the interrupted run; recovery left it unchanged.");
         const tag=`v${advanced?pending!.version:current!.version}`,tagHead=await git(this.root,"rev-parse",`refs/tags/${tag}`).catch(()=>"");
-        if(head!==tagHead)throw new Error("Master advanced outside the interrupted run; recovery left it unchanged.");
+        if(advanced&&!tagHead&&pending!.candidate===head){await cleanMaster(this.root);await git(this.root,"tag",tag,head);}
+        else if(head!==tagHead)throw new Error("Master advanced outside the interrupted run; recovery left it unchanged.");
         await cleanMaster(this.root);
         const target=(current?.healthy===true?current:this.options.versions.previous())??(this.options.versions.baseline?{commit:this.options.versions.baseline,tag:"v0",modules:[]}:null);if(!target)throw new Error("No known-good version is available for recovery.");
         if(pending)await removeTree(this.root,pending.path);
         const version=await this.reserve(),tree=await createTree(this.root,version,head);await this.options.versions.setPending({path:tree,base:head,version});
-        try{await git(tree,"restore","--source",target.commit,"--staged","--worktree","--","world/modules");const commit=await commitTree(tree,`v${version}: recover interrupted activation`);await promote(this.root,head,commit,`v${version}`);await this.options.versions.activate({version,tag:`v${version}`,commit,title:"Recovered previous world",requester:"system",modules:target.modules,restoredFrom:target.tag},false);}finally{await removeTree(this.root,tree);}
+        try{await git(tree,"restore","--source",target.commit,"--staged","--worktree","--","world/modules");const commit=await commitTree(tree,`v${version}: recover interrupted activation`);await this.options.versions.setPending({path:tree,base:head,version,candidate:commit});await promote(this.root,head,commit,`v${version}`);await this.options.versions.activate({version,tag:`v${version}`,commit,title:"Recovered previous world",requester:"system",modules:target.modules,restoredFrom:target.tag},false);}finally{await removeTree(this.root,tree);}
       }else if(pending)await removeTree(this.root,pending.path);
       await this.options.versions.setPending();
     });
@@ -100,6 +102,7 @@ export class Runner {
       const commit = await commitTree(tree, message);
       if (signal.aborted) throw new Error("Build timed out or was cancelled.");
       const artifacts = await Promise.all(modules.map(m => this.options.versions.artifact(m.id, m.file, m.code)));
+      await this.options.versions.setPending({path:tree,base,version,candidate:commit});
       await promote(this.root, base, commit, `v${version}`); merged = true;
       if (signal.aborted) throw new Error("Build timed out or was cancelled.");
       feed("ship", `v${version} checked; activating without a page reload.`);
@@ -140,6 +143,7 @@ export class Runner {
       tree = await createTree(this.root, version, base); await this.options.versions.setPending({ path: tree, base, version });
       await git(tree, "restore", "--source", target.commit, "--staged", "--worktree", "--", "world/modules");
       const commit = await commitTree(tree, `v${version}: restore ${target.tag} (requested by @${requester})`);
+      await this.options.versions.setPending({path:tree,base,version,candidate:commit});
       await promote(this.root, base, commit, `v${version}`);
       const ok = await this.options.versions.activate({ version, tag: `v${version}`, commit, title: `Restore ${target.tag}`, requester, modules: target.modules, restoredFrom: target.tag });
       if (!ok) throw new Error("Rollback activation did not acknowledge.");
