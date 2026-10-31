@@ -130,3 +130,18 @@ test("runtime configuration writes cannot dirty the canonical tracked Codex home
   });assert.equal(await readFile(canonical,"utf8"),'model = "test"\n');await assert.rejects(readFile(join(isolated,"config.toml")));assert.equal(await git(root,"status","--porcelain"),"");
  }finally{await rm(root,{recursive:true,force:true})}
 });
+test("automatic rollback preempts a real queued build and waits for its worktree cleanup", async () => {
+ const root=await repository(),events:string[]=[];
+ try{
+  const first=await git(root,"rev-parse","HEAD"),firstSource=await readFile(join(root,"world/modules/a.ts"),"utf8");let versions!:Versions;
+  versions=new Versions(root,v=>{if(v)versions.acknowledge(v.version,v.receipt,true)});await versions.baselineAt(first);
+  const one=await versions.artifact("visual","world/modules/a.ts","export default 1;");await versions.activate({version:1,tag:"v1",commit:first,title:"One",requester:"viewer",modules:[one]},false);
+  await writeFile(join(root,"world/modules/a.ts"),"export default () => ({id:'failed'});\n");const second=await commitTree(root,"v2 fixture");const two=await versions.artifact("visual","world/modules/a.ts","export default 2;");
+  await versions.activate({version:2,tag:"v2",commit:second,title:"Two",requester:"viewer",modules:[two]},false);await versions.invalidate(2);
+  let started!:()=>void;const ready=new Promise<void>(r=>started=r);
+  const runner=new Runner({root,versions,feed(){},announce:async()=>{events.push("restored")},record(){},builder:async({signal})=>{started();await new Promise<void>(r=>signal.addEventListener("abort",()=>r(),{once:true}));await new Promise(r=>setTimeout(r,20));events.push("child-cleaned");throw new Error("cancelled");}});
+  const build=runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"New",reason:"Safe",spec:{moduleId:"new",description:"Small visual",steps:["Create"],checks:["Dispose"],estimatedSeconds:60},files:["world/modules/new.ts"],mode:"live",latencyMs:0}});
+  await ready;const restore=runner.rollback("system",true);await runner.idle();assert.equal((await build).ok,false);assert.equal((await restore).outcome,"ROLLED BACK");assert.deepEqual(events,["child-cleaned","restored"]);
+  assert.equal(await readFile(join(root,"world/modules/a.ts"),"utf8"),firstSource);assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);assert.equal(await git(root,"status","--porcelain"),"");versions.close();
+ }finally{await rm(root,{recursive:true,force:true})}
+});

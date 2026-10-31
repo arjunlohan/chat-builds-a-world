@@ -98,12 +98,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const ack = (state: import("../../server/contracts.js").SummonState, error?: string) => {
     post("/summon/ack", { id: state.id, receipt: state.receipt, ...(error ? { error } : {}) });
   };
-  const materializer = new SpecMaterializer({ root: scene, ledger: summonLedger, layout: labelManager, labels: labelLayer,
+  const materializer = new SpecMaterializer({ root: scene, ledger: summonLedger, layout: labelManager, labels: labelLayer, onSceneChange: () => { shadowDirty = true; },
     effects: { play: effects.play }, camera: { focus: director.focus }, citizens: citizens.services, onVisible: state => ack(state) });
-  const moduleMaterializer = new SpecMaterializer({ root: scene, ledger, layout: labelManager, labels: labelLayer,
+  const moduleMaterializer = new SpecMaterializer({ root: scene, ledger, layout: labelManager, labels: labelLayer, onSceneChange: () => { shadowDirty = true; },
     effects: { play: effects.play }, camera: { focus: director.focus }, citizens: citizens.services });
   const hostOptions: ConstructorParameters<typeof ModuleHost>[0] = {
-    root: moduleRoot, ledger, protectedResources: engineResources,
+    root: moduleRoot, ledger, onSceneChange: () => { shadowDirty = true; }, protectedResources: engineResources,
     services: { citizens: citizens.services, spawnSpec: spec => moduleMaterializer.spawn(spec), camera: { focus: director.focus }, effects: { play: effects.play }, log },
     onStatus: (event: ModuleStatus) => {
       shadowDirty = true; options.onStatus?.(event);

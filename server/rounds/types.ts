@@ -1,5 +1,5 @@
 export type RoundPhase = "ideas" | "voting" | "guarding" | "building" | "rollback";
-export type StubOutcome = "ship" | "fail" | "timeout";
+export type SimulationOutcome = "ship" | "fail" | "timeout";
 export interface IdeaView { id: string; text: string; requester: string; supporters: number; order: number }
 export interface VoteOption extends IdeaView { slot: number; votes: number }
 export interface FeedLine { id: number; text: string; kind: "plan" | "edit" | "check" | "ship" | "error" }

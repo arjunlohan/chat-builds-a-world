@@ -1,8 +1,8 @@
 import { setTimeout as delay } from "node:timers/promises";
-import type { RoundState, StubOutcome } from "../rounds/types.js";
+import type { RoundState, SimulationOutcome } from "../rounds/types.js";
 import { simChatter } from "./scenario.js";
 
-export async function scriptedRound(base: string, run: string, outcome: StubOutcome) {
+export async function scriptedRound(base: string, run: string, outcome: SimulationOutcome) {
   async function post(path: string, value: unknown) {
     const response = await fetch(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value), signal: AbortSignal.timeout(5000) });
     const result = await response.json() as { accepted: boolean };
@@ -40,6 +40,6 @@ export async function scriptedRound(base: string, run: string, outcome: StubOutc
   if (building.winner?.requester !== "Comet04") throw new Error("Wrong winning requester");
   const done = await wait(s => (s.timeline.at(-1)?.id ?? 0) > previous);
   const result = done.timeline.at(-1)!;
-  if (result.kind !== (outcome === "ship" ? "ship" : "revert") || result.requester !== "Comet04") throw new Error("Stub build result mismatch");
+  if (result.kind !== (outcome === "ship" ? "ship" : "revert") || result.requester !== "Comet04") throw new Error("Fixture runner result mismatch");
   console.log(`Round rehearsal: 7 proposals → 4 distinct ideas → 3 candidates; 13 ballots → 12 voters [1,9,2]; ${outcome === "ship" ? `fixture shipped v${result.version}` : `fixture ${outcome}, retained v${result.version}`} for ${result.requester}. Timings 120/45/180 s at 15×.`);
 }

@@ -2,8 +2,8 @@ import { rejected, reverted } from "../runtime/results.js";
 import type { BuildRequest, RunResult } from "../runner/index.js";
 import type { GuardResult } from "../guard/index.js";
 import type { ChatEvent } from "../contracts.js";
-import type { BuildView, IdeaView, RoundState, StubOutcome, ToastView, VersionView } from "./types.js";
-export type { RoundState, StubOutcome } from "./types.js";
+import type { BuildView, IdeaView, RoundState, SimulationOutcome, ToastView, VersionView } from "./types.js";
+export type { RoundState, SimulationOutcome } from "./types.js";
 
 export const ROUND_MS = Object.freeze({ ideas: 120_000, voting: 45_000, guarding: 45_000, building: 180_000, rollback: 30_000 });
 interface Idea { id: string; text: string; requester: string; order: number; normalized: string; supporters: Set<string> }
@@ -260,7 +260,7 @@ export class Rounds {
   cancelForRevert() { this.cancelReview(); this.abortRun(); }
   externalResult(result: RunResult) { this.build.idea = "Restore previous world"; this.build.requester = "system"; this.finishRun(result); }
   dispose() { this.cancelForRevert(); }
-  startSimulation(outcome: StubOutcome) {
+  startSimulation(outcome: SimulationOutcome) {
     if (!this.options.simulationAllowed) return { accepted: false, reason: "simulation-disabled" };
     if (this.phase !== "ideas" || this.ranked().length || this.paused) return { accepted: false, reason: "round-busy" };
     this.anchorLogical = this.now(); this.anchorReal = this.real(); this.rate = 15; this.simulation = true;

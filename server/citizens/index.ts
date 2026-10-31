@@ -1,8 +1,9 @@
+import { CITIZEN_CAP } from "../../world/shared/limits.js";
 import { isChatCommand } from "../commands.js";
 import type { ChatEvent, CitizenCommand, CitizenState } from "../contracts.js";
 import { hash, isWalkable, terrainHeight } from "../../world/engine/land.js";
 
-export const CITIZEN_LIMIT = 300;
+export const CITIZEN_LIMIT = CITIZEN_CAP;
 export const IDLE_MS = 20 * 60_000;
 export const FADE_MS = 5000;
 const homes: [number, number, number][] = [];

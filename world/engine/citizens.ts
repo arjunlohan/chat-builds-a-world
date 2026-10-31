@@ -121,15 +121,15 @@ export class Citizens {
     delete c.snapshot; c.state = state; c.commandSpeech = isChatCommand(state.speech);
     this.speakers.delete(state.id); this.speakers.add(state.id);
     if (this.speakers.size > 16) this.speakers.delete(this.speakers.keys().next().value!);
-    if (this.measure) {
+    if (this.measure && c.name.textContent !== state.displayName) {
       this.measure.font = "13px system-ui"; c.fullWidth = Math.min(500, Math.ceil(this.measure.measureText(state.displayName).width) + 16);
       this.measure.font = "10px system-ui"; c.quietWidth = Math.min(80, Math.ceil(this.measure.measureText(state.displayName).width) + 10);
     }
-    c.name.textContent = state.displayName;
-    c.bubble.textContent = state.speech;
+    if(c.name.textContent!==state.displayName)c.name.textContent=state.displayName;
+    if(c.bubble.textContent!==state.speech)c.bubble.textContent=state.speech;
     c.label.dataset.command = state.command?.kind ?? "idle";
     c.label.dataset.color = state.color;
-    c.label.style.setProperty("--citizen-color", state.color);
+    if(c.label.style.getPropertyValue("--citizen-color")!==state.color)c.label.style.setProperty("--citizen-color", state.color);
     return spawned ? this.snapshot(c) : undefined;
   }
   sync(states: readonly CitizenState[], now: number) {

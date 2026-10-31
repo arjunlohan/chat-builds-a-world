@@ -22,6 +22,7 @@ export interface MaterializerOptions {
   root: Object3D; ledger: ResourceLedger; layout: LabelManager; labels: HTMLElement;
   effects: WorldServices["effects"]; camera: WorldServices["camera"]; citizens: WorldServices["citizens"];
   onVisible?: (state: SummonState) => void;
+  onSceneChange?: () => void;
 }
 export interface SpecHandle extends SpawnHandle { readonly usage: Usage; readonly root: Group }
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
@@ -83,7 +84,7 @@ export class SpecMaterializer {
       this.options.ledger.reserve(`spec:${id}`, usage);
       const center = new Vector3(); for (const node of nodes.values()) center.add(node.base); center.divideScalar(nodes.size);
       const entry: Entry = { id, root, owner, usage, spec, nodes, center, anchor: center.clone(), born: this.time, emitters, needsAck: !!metadata, spawnPending: !!metadata && !restore, ...(metadata ? { metadata } : {}) };
-      this.entries.set(id, entry); this.options.root.add(root);
+      this.entries.set(id, entry); this.options.root.add(root); this.options.onSceneChange?.();
       if (metadata) {
         const label = document.createElement("div"); label.className = "summon-label"; label.hidden = true;
         label.dataset.summonId = id; label.dataset.requester = metadata.requester; label.dataset.spawnEffect = restore ? "restored" : "pending";
@@ -171,7 +172,7 @@ export class SpecMaterializer {
   }
   remove(id: string) {
     const entry = this.entries.get(id); if (!entry) return;
-    entry.removeLabel?.(); entry.owner.dispose(entry.root); this.options.ledger.release(`spec:${id}`); this.entries.delete(id);
+    this.options.onSceneChange?.(); entry.removeLabel?.(); entry.owner.dispose(entry.root); this.options.ledger.release(`spec:${id}`); this.entries.delete(id);
   }
   dispose() { for (const id of this.entries.keys()) this.remove(id); }
 }

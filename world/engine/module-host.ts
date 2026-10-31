@@ -25,6 +25,7 @@ interface HostOptions {
   protectedResources?: ResourceOwner;
   now?: () => number;
   onStatus?: (status: ModuleStatus) => void;
+  onSceneChange?: () => void;
 }
 const snapshot = (citizen: Citizen): Citizen => Object.isFrozen(citizen) && Object.isFrozen(citizen.position) ? citizen : Object.freeze({
   id: citizen.id, displayName: citizen.displayName, color: citizen.color,
@@ -143,7 +144,7 @@ export class ModuleHost {
     const root = new Group();
     root.name = `module:${module.id}`;
     const record: RecordState = {
-      module, id: module.id, root, key: `${this.namespace}:${module.id}:${++this.serial}`, owner: new ResourceOwner(this.options.protectedResources, () => { record.auditDirty = true; }),
+      module, id: module.id, root, key: `${this.namespace}:${module.id}:${++this.serial}`, owner: new ResourceOwner(this.options.protectedResources, () => { record.auditDirty = true; this.options.onSceneChange?.(); }),
       queue: [], overruns: [], handles: new Set<SpawnHandle>(), auditDirty: true, lastAudit: -Infinity, cleaned: false,
       spawnUsage: new Map(), spawnRoots: new Map(), window: -1, effects: 0, logs: 0, lastFocus: -Infinity, lastQueueWarning: -Infinity,
     };

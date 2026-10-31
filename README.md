@@ -18,7 +18,7 @@ motion keeps the composition and continuous effects still. The module host now
 implements the documented lifecycle, timing budgets, bounded event dispatch,
 resource admission and cleanup. Chatters now become colorful little creatures
 with name tags and speech bubbles. `!jump`, `!dance`, `!follow <name>` and `!home`
-animate them. The server caps the roster at 300; six instanced draws render the
+animate them. The server caps the roster at 300; one instanced draw renders the
 creatures, which fade five seconds after becoming idle for 20 minutes. Automatic
 arrival/action camera shots coalesce and are at least eight seconds apart.
 The Summon fast lane now materializes validated data; checked live-coded modules now ship through isolated worktrees;
@@ -36,7 +36,8 @@ pnpm check
 pnpm dev
 ```
 
-In a second terminal at the repository root, run `pnpm sim`. It replays 80 named
+For the credential-free demo, start a disposable clean clone with
+`SIMULATION_MODE=fixture pnpm dev`. In a second terminal at that clone's root, run `pnpm sim`. It replays 80 named
 chatters in varied colors, 80 chat lines, 80 commands (20 of each kind), and one
 raid through the same pipeline as Twitch. It also adds three hand-written fixture
 summons at 5.1-second intervals, then runs a complete 15× round rehearsal in about
@@ -59,10 +60,10 @@ stretching. Set an OBS browser source to 1920×1080. `/` redirects to `/world`.
   hidden-tab time is excluded and simulation dt is clamped to 0.05 seconds.
 - `?time=dawn`, `?time=day`, `?time=dusk`, `?time=night` freeze the sky at an
   authored time of day for screenshots. Water and fireflies keep animating.
-- Full-HD rendering uses instanced plants/props, pooled particles, one cached
-  1024px soft-shadow map, and a half-resolution bloom chain. Crowd shadows refresh
-  every other frame; active modules cause per-frame shadow refresh. No per-frame
-  geometry/material allocation.
+- Full-HD rendering uses immutable garden batches, one indexed instanced creature
+  geometry, pooled particles, one cached 1024px soft-shadow map and a half-resolution
+  bloom chain. Summon/module changes refresh the shadow; citizens do not cast sun
+  shadows. Buffers upload only changed data. No per-frame geometry/material allocation.
 
 The server binds only to `127.0.0.1`. To change the port, use `PORT=3001 pnpm dev`.
 Stop with Ctrl+C. Browser bundles are built in memory at startup; restart dev
@@ -76,7 +77,7 @@ Never commit `.env` or put secrets into browser bundles.
 
 ## Checks and local simulation
 
-- `pnpm check`: generated-validator consistency, strict TypeScript checks and 129
+- `pnpm check`: generated-validator consistency, strict TypeScript checks and the full
   contract/engine/integration tests covering lifecycle,
   budgets, queues, cleanup, roster/cap/expiry, HTTP/SSE, Twitch reconnect/refresh,
   camera and FPS, round deadlines/dedup/vote replacement/ties/pause/failure/timeout,
@@ -128,12 +129,25 @@ The previous M1 Pro/Metal development run held about 60 FPS at 1920×1080 with 8
 citizens; the Phase 4 check also verifies fixture effects, credits, camera focus,
 render receipts and zero label overlaps. Performance depends on hardware and load.
 
+A reproducible ten-minute physical-GPU soak runs the full simulator in a disposable
+clone, then samples real frame intervals and saves average FPS and p95 frame time:
+
+```sh
+pnpm sim:soak --output=state/soak.json
+```
+
+`--ref=<commit>` selects a baseline revision; `--seconds=600` is the default. It
+injects offline fixtures, waits for the checked round to complete before sampling,
+never loads credentials, and removes its clone and owned worktrees afterward.
+
 ## Runner, candidate checks and rollback
 
 The accepted guard plan creates a **detached `worktrees/vN` from clean master**.
 Codex runs there via CODEX_BIN, workspace-write sandbox, medium effort, JSON events
 and ephemeral mode. The child inherits only PATH, HOME, the Bedrock bearer token
-and dedicated CODEX_HOME in the project's `.codex-runtime`. No Twitch credentials
+and a private writable CODEX_HOME under `.codex-runtime/runs/`. Each invocation
+is seeded from the tracked `.codex-runtime/config.toml` and cleaned on completion;
+CLI preference writes cannot dirty that canonical file. No Twitch credentials
 are inherited. The approved plan and locked World Module API become the prompt;
 no runtime dependencies are installed. The overlay shows short plan/file/check
 lines, never raw JSON, shell commands, private reasoning or stderr.
@@ -146,22 +160,20 @@ unsafe hooks; every approved source is type-checked against the engine API.
 The host uses the TypeScript 5.9 compiler API alias for this analysis because the
 project's TypeScript 7 CLI package does not expose that JavaScript API.
 
-The headless gate starts Chromium with **SwiftShader, a real 1920×1080 canvas and
-300 citizens**, warms up, then samples **15 seconds**. It fails on console/hook
+The headless gate starts Chromium with **SwiftShader, a 1920×1080 viewport and
+300 citizens**, using the production render profile at a reduced 160×90 framebuffer, warms up, then samples **15 seconds**. It fails on console/hook
 errors, measured or rolling average FPS below **40**, a >1-second frame gap,
 unchanging/black pixels or no visible pixels from the candidate itself. An
 external **24-second watchdog** keeps the entire headless check under 25 seconds
 and kills the browser/worker groups if JavaScript freezes.
 
-The explicit software profile caches static island color/depth, omits base
-bloom/shadows and label painting, and renders the 300 citizens as simple single-body
-proxies. All citizen simulations still update, and original full-detail resource
-headroom remains reserved. Candidate geometry/materials/hooks are unchanged.
-This is an admission check for module cost, **not a full-effects OBS benchmark**;
-normal `/world` keeps the original renderer and detailed creatures. Full-quality
-physical-GPU checks remain separate. The existing world alone averaged only about
-6.6 FPS with full effects in SwiftShader on the development machine, so using that
-base cost would reject every candidate independently of its behavior.
+The gate and OBS use the same materials, full citizen geometry, shadows, bloom,
+lighting and simulation. Only render resolution differs. Check-only visibility
+probe targets are allocated only when requested; production allocates no cached
+background or probe targets. There are no citizen proxies or material substitutions.
+Static garden batching preserves every authored triangle and color. The gate
+measures completed real frames and candidate visibility; it is still a software
+admission check, not a full-HD hardware benchmark.
 
 On pass, commit `vN: <title> (requested by @user)` in the worktree, recheck master,
 fast-forward it and tag vN. Immutable local module bundles share the engine's
@@ -178,13 +190,16 @@ votes replace earlier ones. A strict yes majority restores the previous tag's
 module tree through a new forward commit/tag, then hot-swaps its stored checked
 artifacts. Ties/no votes retain the current world. Failed activations and identical module
 snapshots are excluded from rollback targets. Runtime disabled-module faults
-also request restoration. Hooks remain cooperative JavaScript; the guard, static
+also preempt the serialized runner queue, await child/worktree cleanup and request
+restoration. `runner.idle()` waits for the queue to drain. Metric-write failures
+never undo a successful ship. Hooks remain cooperative JavaScript; the guard, static
 policy and timed gate reduce risk but do not prove arbitrary code safe.
 
 `state/versions.json`, `state/modules/` and `state/runner-metrics.jsonl` store recovery,
 artifacts, durations and input/output/total tokens. Missing usage stays null;
 fixture token counts are synthetic, labelled fixture, and spend no provider tokens.
-No raw prompts, JSON event streams, stderr or credentials are logged.
+Redacted CLI failure messages are included in outcomes and metrics. Warning events
+are nonfatal; raw prompts, JSON streams, stderr and credentials are never logged.
 
 Run the **10-round isolated rehearsal** (no dev server/key needed):
 
@@ -211,9 +226,14 @@ pnpm runner:live "Add one small original amber crystal above the ridge"
 This local administrative test advances an empty round's idea/voting timers, uses
 the real guard and Codex + Bedrock builder, opens a browser for activation receipts,
 and intentionally commits/tags on success. It refuses missing credentials or a
-busy round. Live provider generation remains unverified by the offline fixtures.
-`pnpm sim` now also uses the real runner pipeline with a labelled fake builder;
-it can create fixture commits/tags, so use a disposable clean clone for demos.
+busy round. `/runner/live` and every `/sim/*` route require simulation permission.
+`SIMULATION_ALLOWED=0` disables them; the default enables local simulation only
+without Twitch. Set `SIMULATION_ALLOWED=1` explicitly for administrative tests.
+Live mode injects the real reviewer, builder and Summon provider.
+`SIMULATION_MODE=fixture` instead injects offline adapters at server construction;
+message fields such as `fixture` or `mode` never select a provider or binary.
+`pnpm sim` can create fixture commits/tags in that server checkout, so use a
+disposable clean clone for demos.
 
 ## Read-only idea guard
 
@@ -224,7 +244,9 @@ Guard results include a short title, reason, small module plan and allowed files
 Plans have **at most two TypeScript files**, four implementation steps/checks,
 and an estimated **1..119 seconds** of builder work. File paths stay under
 `world/modules/`, with canonical-path and symlink checks. The closed schema is
-`server/guard/guard.schema.json`; this plan is separate from the Summon Scene Spec.
+`server/guard/guard.schema.json`; a generated grammar-compatible projection
+`guard.output.schema.json` goes to Codex. Uniqueness and all canonical bounds are
+enforced locally. This plan is separate from the Summon Scene Spec.
 An estimate is not a guarantee of actual runner duration.
 
 The server invokes the CLI without a shell, passing the idea as JSON-quoted data
@@ -232,7 +254,7 @@ on stdin. The fixed policy rejects injection, networking, private data, real
 people, brands/games, offensive content, locked-file changes and oversized asks.
 The command uses `exec --sandbox read-only --ephemeral --json --output-schema`,
 low reasoning effort, approval_policy=never and the configured Bedrock provider
-with `openai.gpt-6.1-sol`. The JSONL adapter consumes the final completed agent
+with model/provider read from the canonical runtime config. The JSONL adapter consumes the final completed agent
 message, following the [official non-interactive protocol](https://learn.chatgpt.com/docs/non-interactive-mode).
 Raw CLI output/reasoning and credentials are never logged. Tool-use records fail
 closed. A hard **45-second deadline** kills the process group (including children);
@@ -241,7 +263,8 @@ results. Pause holds a completed result until resume; it does not extend the
 subprocess's real-time deadline.
 
 The subprocess receives only **PATH, HOME, AWS_BEARER_TOKEN_BEDROCK**, plus the
-required absolute **CODEX_HOME** pointing at `.codex-runtime`. No Twitch tokens,
+required absolute **CODEX_HOME** pointing at an isolated per-invocation
+`.codex-runtime` home under the ignored runtime directory. No Twitch tokens,
 OpenAI keys or ambient Codex configuration variables are inherited. Read-only
 restricts model filesystem writes; it is not a general secret/code sandbox.
 The guard emits data only. The workspace-write builder runs only after acceptance.
@@ -272,8 +295,8 @@ It prints each verdict, expected verdict, latency and public reason, then match,
 unsafe-acceptance and infrastructure-error counts. Infrastructure failures never
 count as successful policy rejections. It runs sequentially, can take up to 15
 minutes at the timeout ceiling and uses the configured Bedrock account. With no
-key it exits before any subprocess/provider call. **Live guard behavior remains
-unverified until the key is supplied.**
+key it exits before any subprocess/provider call. The Phase 7 fix pass verified
+20/20 expected live verdicts, zero unsafe acceptances and zero infrastructure errors.
 
 ## Stream overlay and rounds
 
@@ -305,7 +328,8 @@ Rounds/queue are in memory; versions, artifacts and metrics persist in ignored s
 120/45/180-second windows. It submits seven proposals → four distinct ideas → three
 candidates, then 13 ballots → 12 voters with counts **[1,9,2]**. The lantern-orchard
 winner is credited to **Comet04**. On completion normal-speed collection resumes.
-Rehearsal acceleration is disabled when Twitch is configured. Run alternate fixture
+Rehearsal routes require simulation permission and fixture adapters for offline
+provider behavior. Run alternate fixture
 outcomes without repeating the crowd/summons:
 
 ```sh
@@ -349,9 +373,8 @@ of 80 overlapping names without removing anyone from the world.
 output. It reads `AWS_BEARER_TOKEN_BEDROCK` **only on the server**. Defaults remain
 `SUMMON_MODEL=openai.gpt-6.1-sol`, `SUMMON_REASONING_EFFORT=max`, and
 `SUMMON_SERVICE_TIER=ultrafast`; set those variables in a private `.env` to change
-them. `.env.example` remains names only. No live Bedrock call has been verified
-without the key; missing credentials return a friendly failure, never a silent
-fixture fallback.
+them. `.env.example` remains names only. Live guard and Summon calls have now been verified; missing credentials return
+a friendly failure and never select a fixture.
 
 The fast lane applies a blocklist, 60-second per-user cooldown and a global
 five-second gap. Finite numeric values are clamped to declared ranges and safe
@@ -372,11 +395,15 @@ The materializer supports primitives, procedural crystal/mushroom/tree recipes,
 materials, capped emitters, local lights and float/orbit/wander/pulse/follow/flee
 behaviors. Summons get an on-screen spawn effect, requester credit and camera
 focus. Verified Twitch mods can `!clear` the last summon; disposal releases all
-owned scene resources. Admission uses per-spec limits, shared world quotas and
-conservative server headroom. At most 24 summons remain active.
+owned scene resources. Admission uses `world/shared/limits.ts` on both sides. Before a provider request,
+the server atomically reserves one of 24 slots and the full schema envelope,
+including in-flight work. It evicts committed summons oldest-first until the
+reservation fits, commits actual usage on validation, or releases on failure.
+The browser has a dedicated Summon pool and a separate module pool computed from
+base-world headroom, so module allocations cannot consume reserved Summon capacity.
 
-Fixture mode is explicit: local `POST /sim/chat` may include `fixture:true` with
-an ordinary `!summon` message. Twitch never enables it. The hand-written fixtures
+Fixture mode is selected only at wiring time with `SIMULATION_MODE=fixture`;
+viewer/HTTP authority fields cannot enable it. The hand-written fixtures
 are jellyfish, mushrooms, crystals and arch; every fixture still goes through
 moderation, cooldowns, normalization, strict validation, admission and browser
 render receipts. `pnpm sim` uses this path and never spends Bedrock tokens.
@@ -386,9 +413,14 @@ of the pipeline and validator, not claims about untested live model responses.
 
 `state/summon-metrics.jsonl` records mode, settings, validity, clamp status, reason,
 provider latency, request-to-screen latency and input/output/total/reasoning/cached
-token counts. The screen metric uses a request-bound browser receipt after an
-object and its credit are visible and composited. No viewer within 30 seconds
-means null screen latency; a late viewer can append the actual observed result.
+token counts. The screen metric uses a request-bound receipt from the primary world client
+after an object and its credit are visible and composited. The first connected
+world browser is elected primary; overlays do not participate. Disconnecting it
+elects the next world client. Only that primary may report a global render failure
+or module fault; secondary browsers cannot remove shared scenes. Failure codes
+distinguish invalid specs, capacity, allocation and rendering errors. No primary receipt within 30 seconds records `renderTimedOut` with null latency,
+keeps the valid scene FIFO-evictable, and sends no viewer-facing failure. A late
+primary receipt can append the actual observed result.
 Fixture usage is explicitly zero; unavailable provider counts stay null. No raw
 prompts, generated bodies, private keys or reasoning text are logged. Failures
 reply in Twitch chat, or locally on screen for simulated traffic.
@@ -446,7 +478,8 @@ deduplication, cooldowns, capacity, commands and broadcasts are identical.
 - `GET /api/world`: current authoritative roster, summons, rounds and raid/control metadata.
 - `GET /api/rounds`: current authoritative round, build, timeline and toast snapshot.
 - `POST /sim/round`: offline-only empty-round rehearsal with JSON `outcome`
-  (`ship`, `fail`, `timeout`); 403 when Twitch is configured.
+  (`ship`, `fail`, `timeout`); 403 without simulation permission. Outcomes steer
+  injected fixture adapters and never rewrite the guard-approved spec.
 - `GET /events`: SSE snapshot then revisioned deltas, 15-second heartbeats,
   automatic browser reconnect and fresh snapshots. At most 16 local viewers.
 
@@ -486,8 +519,9 @@ Later-phase model settings from the product contract are retained in `AGENTS.md`
 and `.codex-runtime/config.toml`: `openai.gpt-6.1-sol` on Bedrock in `us-east-1`;
 summon defaults `max` reasoning and `ultrafast` service tier, configurable through
 `SUMMON_MODEL`, `SUMMON_REASONING_EFFORT` and `SUMMON_SERVICE_TIER`. Guard uses low
-effort and builder medium effort. Live Bedrock access and latency remain unverified until the key is supplied;
-fixtures and a mocked Responses adapter cover the complete data path.
+effort and builder medium effort. Live verification results and latency/token
+metrics are recorded privately under ignored `state/`; offline fixtures remain
+available without credentials.
 
 ## Safety model
 

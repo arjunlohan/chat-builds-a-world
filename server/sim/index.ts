@@ -2,7 +2,7 @@ import { readConfig } from "../config.js";
 import { config as loadEnv } from "dotenv";
 import { setTimeout as delay } from "node:timers/promises";
 import { scriptedRound } from "./round.js";
-import type { StubOutcome } from "../rounds/types.js";
+import type { SimulationOutcome } from "../rounds/types.js";
 import { crowdScenario, SIM_CROWD } from "./scenario.js";
 
 loadEnv({ quiet: true });
@@ -38,8 +38,8 @@ try {
     }
   }
   const outcome = process.argv.find(arg => arg.startsWith("--outcome="))?.slice(10) ?? "ship";
-  if (!["ship", "fail", "timeout"].includes(outcome)) throw new Error("Unknown stub outcome");
-  await scriptedRound(base, run, outcome as StubOutcome);
+  if (!["ship", "fail", "timeout"].includes(outcome)) throw new Error("Unknown simulation outcome");
+  await scriptedRound(base, run, outcome as SimulationOutcome);
   accepted += 20;
   const response = await fetch(`${base}/api/world`);
   const world = await response.json() as { citizens: { id: string }[]; raids: number; summons: unknown[] };

@@ -34,7 +34,7 @@ the procedural world, instanced citizens and shared Twitch/simulator
 pipeline, readable collision-managed labels, and the data-only Summon fast lane.
 Twitch and Bedrock are optional: missing Twitch configuration keeps sim-only mode
 running; missing Bedrock credentials fails live Summon without substituting a
-fixture. Explicit fixture requests use hand-written Scene Specs and the same
+fixture. Explicit startup-injected fixture adapters use hand-written Scene Specs and the same
 validation, cooldown, admission, materialization and receipt path. The read-only
 guard and workspace-write builder use Bedrock when configured. Explicit offline
 fixtures exercise the same runner, Git/check/activation paths without provider calls. Never print or log credentials.
@@ -80,7 +80,9 @@ Bedrock region `us-east-1`, Responses endpoint
 Read `AWS_BEARER_TOKEN_BEDROCK` only from the environment. Summon settings are
 `SUMMON_MODEL` (default `openai.gpt-6.1-sol`), `SUMMON_REASONING_EFFORT` (default
 `max`), `SUMMON_SERVICE_TIER` (default `ultrafast`). Guard effort is `low`, builder
-is `medium`; use `codex exec` and `CODEX_HOME=.codex-runtime`. Availability,
+is `medium`; use `codex exec` and `CODEX_HOME` in a per-invocation `.codex-runtime` directory under ignored
+`.codex-runtime/runs/`, seeded from the canonical config and cleaned afterward.
+This prevents CLI preference writes from dirtying tracked configuration. Availability,
 configuration and latency will be verified when the integration is built.
 `.env.example` contains names only; do not add example values or credentials.
 
@@ -172,8 +174,8 @@ configuration and latency will be verified when the integration is built.
   label layout and a priority camera fly-to. !clear is accepted only from verified
   Twitch moderators/broadcaster and removes the last active summon. Sim JSON can
   never grant moderator privileges. No generated code runs in this lane.
-- `fixture:true` is accepted only on local `/sim/chat`, never from Twitch. The sim
-  adds three different existing viewers' fixture wishes at least 5.1 seconds
+- Fixture adapters are injected at startup with SIMULATION_MODE=fixture. Viewer
+  `fixture`/`mode` fields never select a provider or binary. The sim adds three different existing viewers' fixture wishes at least 5.1 seconds
   apart; it does not bypass limits or need Bedrock credentials. There are four
   hand-written fixtures. `checks/summon-prompts.json` has 30 labeled prompt cases:
   12 allowed, 10 blocked/injection cases and eight invalid output fixtures.
@@ -193,9 +195,9 @@ configuration and latency will be verified when the integration is built.
 - Keep at most 24 active scenes, per-spec canonical caps, conservative server
   global headroom and a final client ledger check. `pnpm summon:bench` requires the
   key and a fresh running dev server; it opens Chromium and submits 20 live wishes
-  sequentially through `/sim/chat` with fixture:false, respects the five-second
+  sequentially through permitted `/sim/chat` with the live provider injected, respects the five-second
   global limit, and prints validity, provider/screen latency and token counts.
-  The live benchmark has not been run without a key and is never faked.
+  Live measurements must be reported separately from synthetic fixture usage.
 
 ## Phase 5 rounds and stream overlay contract
 
@@ -213,14 +215,14 @@ configuration and latency will be verified when the integration is built.
   produce a ship; failure retains the known-good world and shows REVERTED.
 - Up to 100 ideas, 5,000 backers/voters, eight displayed queue items (four visible),
   three candidates, 12 timeline entries (two visible), eight pending toasts (two
-  visible). Publish bounded snapshots at most ten times/second, with idle 1 Hz
-  clock updates. SSE sends current state on reconnect. All user text is textContent.
+  visible). Publish bounded snapshots at most ten times/second only on state
+  changes; the overlay computes countdowns locally from endsAt. SSE sends current state on reconnect. All user text is textContent.
 - `/overlay` is a transparent 1920×1080 source. Panels stay in the side rails,
   preserving the center rectangle X=400..1520, Y=150..910. Columns are 360 px wide;
   panels fit content, the phase card is 120 px high, and empty/idle panels are hidden. Local system fonts,
   readable cream/teal type, reduced-motion support, no external assets. Use
   `/world?overlay=1` beneath it to hide the large world title and interaction hint.
-- `POST /sim/round` starts a 15× rehearsal only with Twitch disabled and an empty,
+- `POST /sim/round` starts a 15× rehearsal only with simulation permission and an empty,
   unpaused collection phase. It selects `ship|fail|timeout`; real durations remain
   120/45/180 seconds on the same logical clock and state machine. `pnpm sim`
   submits seven ideas and 13 ballots through `/sim/chat`, verifies four distinct
@@ -250,13 +252,14 @@ configuration and latency will be verified when the integration is built.
   data, offensive content, games/brands and oversized systems. Require safe
   synchronous lifecycle hooks, ownership cleanup, instancing and frame budgets.
 - Invoke an argv array with shell:false: `codex exec --sandbox read-only
-  --ephemeral --json --output-schema <canonical schema> -c
+  --ephemeral --json --output-schema <generated strict projection> -c
   model_reasoning_effort="low"`, with approval_policy=never, explicit Bedrock
   provider and the product model. `CODEX_BIN` selects the executable (default
   `codex`), never becomes part of the child's environment. The CLI is trusted
   installation/configuration, never chat-controlled.
 - The child environment is freshly constructed from only PATH, HOME,
-  AWS_BEARER_TOKEN_BEDROCK, plus required absolute CODEX_HOME=.codex-runtime.
+  AWS_BEARER_TOKEN_BEDROCK, plus required absolute CODEX_HOME in an isolated
+  per-invocation .codex-runtime home under .codex-runtime/runs/.
   No Twitch/OpenAI credentials, ambient Codex settings or debug variables are
   inherited. Never log raw stdout, stderr, prompts, reasoning or credentials.
   Parse completed JSONL agent messages only after successful turn/exit; malformed
@@ -294,7 +297,9 @@ configuration and latency will be verified when the integration is built.
 - Run CODEX_BIN with `exec --sandbox workspace-write --json --ephemeral`, medium
   effort, explicit Bedrock model/provider, approval_policy=never and cwd=worktree.
   Only inherit PATH/HOME/AWS_BEARER_TOKEN_BEDROCK plus absolute dedicated CODEX_HOME
-  in the project `.codex-runtime` (outside the candidate tree). The prompt embeds
+  under project `.codex-runtime/runs/` (outside the candidate tree). Seed its config
+  from the canonical config, and clean it after close; never let CLI preferences
+  change tracked configuration. The prompt embeds
   this file's World Module API/budgets and JSON-quoted guard plan. No dependency
   installation or Git operations by runtime Codex. No raw JSON/reasoning/commands,
   stderr or credentials are streamed/logged; readable bounded feed lines only.
@@ -410,18 +415,15 @@ failed activation disposes the candidate and keeps the previous version active.
   caps: 1,024 mesh nodes, 200,000 triangles, 256 draw calls, eight local lights,
   2,048 particles and 300 citizens. The engine reserves headroom for its base world;
   reject an allocation atomically if capacity is unavailable. Dispose releases it.
-- The Phase 7 gate uses Chromium/SwiftShader at a real 1920×1080 framebuffer,
-  fixed composition, 300 citizens and a 15-second sample after warmup. Both measured
-  and rolling average FPS must be >=40, per the Phase 7 request. Reject console/hook
-  errors, gaps >1 s, frozen/black pixels or a candidate with no visible pixels.
-  The external checker deadline is 24 s (whole headless check <25 s), including
-  browser startup and cleanup. Candidate hooks/materials/geometry remain unchanged.
-- Software profile (`?check=1`) caches static island color/depth, disables base
-  bloom/shadows, uses simple base materials and 300 single-body crowd proxies,
-  and omits label painting. All 300 simulations still update, and the ledger
-  reserves the original full-detail citizen triangles/draws. This isolates module
-  cost from the locked base world's software rendering cost; it is **not** a
-  full-effects OBS performance benchmark. Normal `/world` keeps the full renderer.
+- The Phase 7 gate uses Chromium/SwiftShader in a 1920×1080 viewport with a reduced
+  160×90 framebuffer, fixed seed, 300 citizens and 15 seconds after warmup. Both
+  measured and rolling average FPS must be >=40. Reject console/hook errors,
+  gaps >1 s, frozen/black pixels or a candidate with no visible pixels. The external
+  checker deadline is 24 s (whole check <25 s), including startup and cleanup.
+- `?check=1` passes a production render profile with only reduced resolution and
+  an owned-geometry visibility probe. Materials, full citizen geometry, lighting,
+  shadows and bloom match normal /world. No cached island, simple materials or
+  crowd proxies are substituted. Normal production allocates no check-only targets.
 - Hardware performance checks remain separate, measuring the full world/crowd.
   Static policy plus headless checks reduce risk; they do not prove arbitrary JS
   safe or preempt a delayed infinite loop in the live page.
@@ -906,6 +908,30 @@ Full JSON schema (keep identical to the canonical file):
   under `.codex-runtime/` is tracked. Never commit secrets or runtime credentials.
 - Chat commands only; no Twitch Extensions, Affiliate Polls/Predictions or channel
   points. No third-party logos, unlicensed fonts or copyrighted audio.
+
+## Phase 7 admission and execution guarantees
+
+- `world/shared/limits.ts` is the shared server/browser budget contract. Summon
+  admission reserves a slot and the full Scene Spec envelope before a paid call,
+  counts in-flight work, then commits actual usage or releases. Committed summons
+  are evicted FIFO to admit new work. The client gives modules their own pool from
+  remaining world headroom; they cannot consume the Summon pool.
+- Provider schemas use the strict grammar subset; full canonical validation still
+  checks uniqueness, references and bounds locally. Guard and builder errors are
+  surfaced with protected environment values redacted; warning events are nonfatal.
+- Runtime operations serialize. Automatic reversion aborts an active build, awaits
+  its child and worktree cleanup, then restores. Metrics cannot affect ship outcome.
+- Provider/builder/reviewer adapters are selected at startup. Viewer data never
+  chooses a fake binary or rewrites an approved plan. All simulation/admin routes
+  require simulation permission. Rate admission precedes every chat lane; rejection
+  replies share per-user/global limits. Lane access is independent of citizen slots.
+- The first connected world browser is the primary render reporter (overlays are
+  excluded). Only primary receipts/faults affect shared state; disconnect promotes
+  the next world. Render timeout is an observation metric; scenes remain FIFO-evictable.
+- Production allocates no check-only cache or probe targets. Static shadows refresh
+  on world allocation changes, citizens share one indexed instanced geometry,
+  immutable garden meshes are baked once, and module trees audit on mutation or
+  once per second. Frozen citizen lists are shared within a frame.
 
 ## Working agreements
 

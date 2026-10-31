@@ -49,7 +49,7 @@ export class WorldPipeline {
   subscribe(listener: (event: WorldEvent, serialized: string) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   reply(chat: ChatEvent, message: string, send?: () => Promise<void> | void) {
     const now = this.now();
-    if (now - (this.replyAt.get(chat.userId) ?? -Infinity) < 10_000 || now - this.lastReply < 1000) return;
+    if (now - (this.replyAt.get(chat.userId) ?? -Infinity) < 10_000 || now - this.lastReply < 2500) return;
     this.replyAt.set(chat.userId, now); this.lastReply = now; this.publish({ type: "reply", message });
     try { void Promise.resolve(send?.()).catch(() => {}); } catch {}
   }

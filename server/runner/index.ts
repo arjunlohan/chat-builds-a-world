@@ -1,3 +1,4 @@
+import { ACTIVE_MODULE_CAP } from "../../world/shared/limits.js";
 import { reverted } from "../runtime/results.js";
 import { OperationQueue } from "../runtime/queue.js";
 import { protectedValues, redact } from "../runtime/process.js";
@@ -76,7 +77,7 @@ export class Runner {
       const compiled = await compileModule(tree, approved.files[0]!, approved.spec.moduleId, nodeModules, approved.files);
       const retained = (previous?.modules ?? []).filter(m => m.id !== compiled.id);
       const modules = [...retained.map(m => ({ ...m, code: this.options.versions.bundle(m.hash)! })), { ...compiled, file: approved.files[0]! }];
-      if (modules.length > 8) throw new Error("Eight active modules maximum.");
+      if (modules.length > ACTIVE_MODULE_CAP) throw new Error("Eight active modules maximum.");
       feed("check", "SwiftShader · 300 citizens · 15-second candidate gate.");
       check = await (this.options.check ?? candidateCheck)(this.root, modules, compiled.id, signal);
       if (!check.ok) throw new Error(check.reason ?? "Candidate gate failed.");

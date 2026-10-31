@@ -15,7 +15,8 @@
     "summon:bench": "tsx server/summon/bench.ts",
     "guard:eval": "tsx server/guard/eval.ts",
     "runner:live": "tsx server/runner/live.ts",
-    "runner:sim": "tsx checks/runner.sim.ts"
+    "runner:sim": "tsx checks/runner.sim.ts",
+    "sim:soak": "tsx checks/perf-soak.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0",
