@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "tsx watch server/index.ts",
     "sim": "tsx server/sim/index.ts",
-    "check": "tsc --noEmit && tsx --test checks/contracts.test.ts && tsx checks/build.ts"
+    "check": "tsc --noEmit && tsx --test checks/*.test.ts && tsx checks/build.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0",

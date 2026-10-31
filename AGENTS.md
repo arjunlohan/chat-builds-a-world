@@ -28,9 +28,10 @@ Build in this order; cut scope from the bottom:
    scaled to viewer count within the citizen cap. `/history` replays v1…vN as a
    time-lapse. Cross-channel module gifts are stretch scope.
 
-Phase 1 provides specifications, typed stubs, offline fixtures and placeholder
-pages only. Twitch, Bedrock and runtime Codex calls are disabled. Never use API
-keys in this phase. Do not present stub success as a completed integration.
+Phase 2 provides the procedural world, cinematic camera, bounded module host,
+frame diagnostics and offline fixtures. Citizens, Twitch, Bedrock, spec
+materialization and runtime Codex calls remain disabled. No API keys are needed.
+Do not present stub success as a completed integration.
 
 ## Architecture and ownership
 
@@ -47,7 +48,7 @@ Version playback → /history
 Use pnpm, ES modules, strict TypeScript, Node >=20 and the committed lockfile.
 `pnpm dev` serves local pages, `pnpm sim` emits deterministic offline chat/raid
 fixtures, and `pnpm check` type-checks all stubs, tests the data contract and
-bundles browser entrypoints. Restart dev after browser-source changes in Phase 1.
+bundles browser entrypoints. Restart dev after browser-source changes.
 No external CDN, fonts, logos, audio or browser network calls.
 
 - `server/twitch/`: EventSub, reconnect/dedup, tokens, moderation commands.
@@ -153,7 +154,9 @@ failed activation disposes the candidate and keeps the previous version active.
   seed and representative 300-citizen load for 15 seconds after warmup; reject
   runtime errors, median fps below 50, a frame gap above 1 second, frozen canvas
   or black frames. Use an external process timeout to catch page freezes. The
-  Phase 1 smoke verifies the placeholder only; it is not the candidate gate.
+  Phase 2 smoke verifies day/night rendering and animation only; it is not the
+  candidate gate. `checks/world.performance.ts` separately measures the empty
+  world for 15 seconds on an identified physical GPU.
 
 ## Scene Spec v1: data only
 
@@ -622,7 +625,7 @@ Full JSON schema (keep identical to the canonical file):
   uses read-only sandbox, low effort and JSON schema output. Construct an explicit
   minimal environment: only the Bedrock credential, dedicated CODEX_HOME and
   necessary allowlisted execution variables. Never inherit Twitch credentials.
-  Do not log credentials. No provider calls or subprocesses exist in Phase 1.
+  Do not log credentials. No provider calls or runtime Codex subprocesses exist yet.
 - Module host wraps each hook, budgets scheduling and auto-disables on failures.
   Require isolated headless checks before merge/tag, and retain the previous known
   good version for reversion. Serialize activation and persist recovery state.

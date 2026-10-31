@@ -1,14 +1,40 @@
 import "./style.css";
 import { createRenderer } from "./engine/renderer.js";
+import type { WorldStats } from "./engine/stats.js";
+
+declare global { interface Window { __worldStats: WorldStats } }
 
 const canvas = document.querySelector<HTMLCanvasElement>("#world");
 const status = document.querySelector<HTMLElement>("#status");
+const fps = document.querySelector<HTMLOutputElement>("#fps");
+const clock = document.querySelector<HTMLElement>("#time-of-day");
+const fault = document.querySelector<HTMLElement>("#module-status");
+const query = new URLSearchParams(location.search);
+if (fps) fps.hidden = query.get("debug") !== "1";
+const phases: Record<string, number> = { dawn: 0.25, day: 0.5, dusk: 0.75, night: 0 };
+const phase = phases[query.get("time") ?? ""];
+function fail(message: string) {
+  if (status) { status.hidden = false; status.textContent = message; status.classList.add("error"); }
+}
 try {
   if (!canvas) throw new Error("World canvas is missing");
-  const world = createRenderer(canvas);
-  if (status) status.textContent = "Three.js ready · offline scaffold";
+  const world = createRenderer(canvas, {
+    ...(phase !== undefined ? { fixedTime: phase } : {}),
+    onReady() { if (status) status.hidden = true; canvas.dataset.ready = "true"; },
+    onError: fail,
+    onFrame(instant, average, time) {
+      if (fps && !fps.hidden) fps.textContent = `${instant.toFixed(0)} FPS · ${average.toFixed(1)} AVG`;
+      if (clock) clock.textContent = time < 0.24 || time > 0.8 ? "AFTER THE STARS" : time < 0.3 ? "FIRST LIGHT" : time < 0.65 ? "THE GOLDEN HOURS" : "EVENING GLOW";
+    },
+    onStatus(event) {
+      if (!fault) return;
+      if (event.state === "disabled" || event.state === "rejected") {
+        fault.hidden = false;
+        fault.textContent = `${event.id} · ${event.reason}`;
+      }
+    },
+  });
   window.addEventListener("pagehide", () => world.dispose(), { once: true });
-} catch (error) {
-  if (status) status.textContent = "Placeholder ready · WebGL unavailable in this browser";
-  console.error(error);
+} catch {
+  fail("This world needs WebGL 2. Enable graphics acceleration, then reload.");
 }
