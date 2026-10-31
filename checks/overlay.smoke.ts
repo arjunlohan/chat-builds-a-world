@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import { launchWorldPage, measureFps } from "./browser.js";
 
 // Run against a fresh pnpm dev. Composite the two actual OBS sources, not a mock.
-const errors:string[]=[];const {browser,page,gpu}=await launchWorldPage("http://127.0.0.1:3000","overlay=1&time=day",{onPage(page){page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});}});
+const {browser,page,gpu,errors}=await launchWorldPage("http://127.0.0.1:3000","overlay=1&time=day");
 await mkdir("test-results",{recursive:true});
 try {
   assert.equal(await page.locator(".world-heading").isVisible(), false);

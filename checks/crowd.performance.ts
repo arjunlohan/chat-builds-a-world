@@ -5,7 +5,7 @@ import { launchWorldPage, measureFps } from "./browser.js";
 import type { CitizenState } from "../server/contracts.js";
 
 // pnpm dev must already be running. This executes the same pnpm sim a judge uses.
-const errors:string[]=[];const {browser,page,gpu}=await launchWorldPage("http://127.0.0.1:3000","debug=1",{onPage(page){page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});}});
+const {browser,page,gpu,errors}=await launchWorldPage("http://127.0.0.1:3000","debug=1");
 try {
   assert.ok(!/swiftshader|llvmpipe|software|unknown/i.test(gpu), `Physical GPU required, found ${gpu}`);
   const simRun = promisify(execFile)("pnpm", ["sim"], { cwd: process.cwd(), timeout: 100_000 });

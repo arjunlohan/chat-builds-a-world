@@ -10,7 +10,7 @@ let now=Date.now();const pipeline=new WorldPipeline(()=>now),rounds=new Rounds({
 for(let i=0;i<150;i++)pipeline.chat({id:`old-${i}`,userId:`old-${i}`,displayName:`Moss${i}`,color:"#DBA778",text:"hello"});now+=QUIET_MS;
 for(let i=0;i<150;i++)pipeline.chat({id:`new-${i}`,userId:`new-${i}`,displayName:`Clover${i}`,color:i%2?"#E8A7C0":"#9CBFE8",text:"hello"});
 const app=await createWorldServer(pipeline,undefined,rounds,undefined,{broadcasterId:"target",simulationAllowed:true,live:false,async fault(){}});await new Promise<void>(r=>app.server.listen(0,"127.0.0.1",r));const base=`http://127.0.0.1:${(app.server.address() as {port:number}).port}`;
-const errors:string[]=[],{browser,page,gpu}=await launchWorldPage(base,"time=day&debug=1",{onPage(page){page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});}});
+const {browser,page,gpu,errors}=await launchWorldPage(base,"time=day&debug=1");
 try{
  await mkdir("state",{recursive:true});const raid=await fetch(base+"/sim/eventsub",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(raidFixture("target",150,"AuroraCrew","polish-raid"))});assert.equal((await raid.json() as {admitted:number}).admitted,150);await page.waitForTimeout(3000);await page.screenshot({path:"state/phase9-after-1080.png"});
  const commandHidden=await page.locator('.citizen-bubble:visible').allTextContents();assert.ok(commandHidden.every(t=>!t.startsWith("!")));const timing=await measureFps(page,10000);assert.ok(timing.fps>=58);assert.equal(timing.stats.citizenCount,300);

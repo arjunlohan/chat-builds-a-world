@@ -1,8 +1,6 @@
-import {spawn} from "node:child_process";
+import {fixtureServer,delay} from "./fixture-server.js";
 import {parseArgs} from "node:util";
-import {mkdtemp,symlink,appendFile,mkdir,writeFile,rm,cp} from "node:fs/promises";
-import {createServer} from "node:net";
-import {tmpdir} from "node:os";
+import {mkdir,writeFile,cp} from "node:fs/promises";
 import {join,resolve,dirname} from "node:path";
 import WebSocket from "ws";
 import {git} from "../server/runner/git.js";
@@ -12,26 +10,21 @@ import type {CitizenState} from "../server/contracts.js";
 const {values}=parseArgs({options:{seconds:{type:"string",default:"7200"},interval:{type:"string",default:"900"},sample:{type:"string",default:"10"},output:{type:"string",default:"state/soak.json"},ref:{type:"string",default:"HEAD"}}});
 const seconds=Number(values.seconds),interval=Number(values.interval),sampleSeconds=Number(values.sample);
 if(!Number.isInteger(seconds)||seconds<10||seconds>86400||interval<10||sampleSeconds<1||sampleSeconds>60)throw new Error("Use 10..86400 seconds, interval >=10 and a 1..60 second FPS sample");
-const source=process.cwd(),root=await mkdtemp(join(tmpdir(),"world-soak-")),output=resolve(values.output),delay=(ms:number)=>new Promise<void>(r=>setTimeout(r,ms));
-const socket=createServer();await new Promise<void>(r=>socket.listen(0,"127.0.0.1",r));const port=(socket.address() as {port:number}).port;await new Promise<void>(r=>socket.close(()=>r()));
-const env={PATH:process.env.PATH??"/usr/bin:/bin",HOME:process.env.HOME??"",PORT:String(port),SIMULATION_ALLOWED:"1",SIMULATION_MODE:"fixture"};
+const source=process.cwd(),fixture=await fixtureServer(source,{prefix:"world-soak-",ref:values.ref}),{root,port,base,env}=fixture,output=resolve(values.output);
 interface Heap {heapUsed:number;heapTotal:number;rss:number;external:number}
 interface Sample {minute:number;at:string;fps:number;avgFps:number;serverHeap:Heap;serverRawHeap:Heap;browserHeap:{usedSize:number;totalSize:number};browserRawHeap:{usedSize:number;totalSize:number};dom:number;citizens:number;frame:number}
 const report={status:"starting",startedAt:new Date().toISOString(),pid:process.pid,serverPid:0,root,port,commit:"",renderer:"",samples:[] as Sample[],health:[] as {at:string;heapUsed:number;fps:number;citizens:number}[],errors:[] as string[],sim:[] as {code:number|null;output:string}[],worktrees:0,finishedAt:""};
 await mkdir(dirname(output),{recursive:true});const save=()=>writeFile(output,JSON.stringify(report,null,2),{mode:0o600});
-let server:ReturnType<typeof spawn>|undefined,world:Awaited<ReturnType<typeof launchWorldPage>>|undefined,inspector:WebSocket|undefined;
+let world:Awaited<ReturnType<typeof launchWorldPage>>|undefined,inspector:WebSocket|undefined;
 let aborted=false;for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{aborted=true;});
 try{
- await git(source,"clone","--quiet","--no-hardlinks",source,root);await git(root,"switch","-C","master",values.ref);report.commit=await git(root,"rev-parse","HEAD");await symlink(join(source,"node_modules"),join(root,"node_modules"));await appendFile(join(root,".git/info/exclude"),"\nnode_modules\n");
- let inspectorUrl="",stderr="";server=spawn(process.execPath,["--inspect=127.0.0.1:0","--import","tsx","server/index.ts"],{cwd:root,env,detached:true,stdio:["ignore","ignore","pipe"]});report.serverPid=server.pid??0;
- server.stderr!.on("data",chunk=>{stderr=(stderr+String(chunk)).slice(-8192);inspectorUrl=/ws:\/\/127\.0\.0\.1:\d+\/[a-f0-9-]+/.exec(stderr)?.[0]??inspectorUrl;});await save();
- const base=`http://127.0.0.1:${port}`;let ready=false;for(let i=0;i<200;i++){try{if((await fetch(base+"/api/world")).ok&&inspectorUrl){ready=true;break;}}catch{}await delay(100);}if(!ready)throw new Error("Soak server did not start");
+ report.commit=await git(root,"rev-parse","HEAD");const started=await fixture.start(true);report.serverPid=started.process.pid??0;const inspectorUrl=started.inspectorUrl;await save();
  inspector=new WebSocket(inspectorUrl);await new Promise<void>((r,j)=>{inspector!.once("open",r);inspector!.once("error",j);});let serial=0;
  const pending=new Map<number,{resolve:(value:unknown)=>void;reject:(error:Error)=>void}>();
  inspector.on("message",raw=>{const value=JSON.parse(String(raw)) as {id?:number;result:unknown;error?:{message:string}};if(value.id){const callback=pending.get(value.id);if(callback){pending.delete(value.id);if(value.error)callback.reject(new Error(value.error.message));else callback.resolve(value.result);}}});
  const command=<T,>(method:string,params:object={})=>new Promise<T>((r,j)=>{const id=++serial;pending.set(id,{resolve:value=>r(value as T),reject:j});inspector!.send(JSON.stringify({id,method,params}));});
  const memory=async()=> (await command<{result:{value:Heap}}>("Runtime.evaluate",{expression:"process.memoryUsage()",returnByValue:true})).result.value;
- world=await launchWorldPage(base,"overlay=1",{onPage(page){page.on("pageerror",e=>report.errors.push(e.message));page.on("console",e=>{if(e.type()==="error")report.errors.push(e.text());});}});const {page,gpu}=world;report.renderer=gpu;if(/swiftshader|llvmpipe|software|unknown/i.test(gpu))throw new Error("Soak needs a physical GPU");
+ world=await launchWorldPage(base,"overlay=1");const {page,gpu,errors}=world;report.errors=errors;report.renderer=gpu;if(/swiftshader|llvmpipe|software|unknown/i.test(gpu))throw new Error("Soak needs a physical GPU");
  async function sim(crowdOnly=false){const result=await runBounded({bin:"pnpm",args:["sim",...(crowdOnly?["--crowd-only"]:[])],cwd:root,env,timeoutMs:180000,maxBytes:65536});report.sim.push({code:result.code,output:result.output});if(result.code!==0||result.error){const state=await(await fetch(base+"/api/rounds")).json();await writeFile(output.replace(/\.json$/,"-round-failure.json"),JSON.stringify(state,null,2));await cp(join(root,"state/checks"),output.replace(/\.json$/,"-checks"),{recursive:true}).catch(()=>{});throw new Error("pnpm sim failed: "+(result.error??result.output.slice(-300)));}}
  // Suspend this client only during the independent SwiftShader gate. Resume it
  // for the real hot-swap/receipt before the runner's eight-second deadline.
@@ -53,4 +46,4 @@ try{
  }
  await sample(Math.round(seconds/60));report.status=aborted?"cancelled":"complete";report.finishedAt=new Date().toISOString();report.worktrees=(await git(root,"worktree","list","--porcelain")).split("worktree ").length-1;await page.screenshot({path:output.replace(/\.json$/,".png")});await save();
  if(aborted||report.errors.length||report.worktrees!==1||report.samples.some(s=>s.fps<50||s.citizens!==300))process.exitCode=1;
-}catch(error){report.status="failed";report.errors.push(error instanceof Error?error.message:"Soak failed");await save();process.exitCode=1;}finally{inspector?.close();await world?.browser.close();if(server?.pid)try{process.kill(-server.pid,"SIGTERM");}catch{}await delay(500);await rm(root,{recursive:true,force:true});}
+}catch(error){report.status="failed";report.errors.push(error instanceof Error?error.message:"Soak failed");await save();process.exitCode=1;}finally{inspector?.close();await world?.browser.close();await fixture.dispose();}

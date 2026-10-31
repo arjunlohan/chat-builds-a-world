@@ -36,7 +36,7 @@ let lastReal = Date.now(); const clock = setInterval(() => { const real = Date.n
 for (let i=0;i<80;i++) pipeline.roster.accept({ id:`seed-${i}`,userId:`sim-${i}`,displayName:`Neighbor${i}`,color:"#79D7CF",text:"hello",timestamp:now },now);
 const app = await createWorldServer(pipeline, undefined, rounds, versions, {live:false, simulationAllowed:true, async fault(){}}); await new Promise<void>(r => app.server.listen(0,"127.0.0.1",r));
 const port = (app.server.address() as {port:number}).port;
-const errors:string[]=[];let navigations=0;const {browser,page}=await launchWorldPage(`http://127.0.0.1:${port}`,"overlay=1",{onPage(page){page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});page.on("framenavigated",frame=>{if(frame===page.mainFrame())navigations++;});}});navigations=0;
+let navigations=0;const {browser,page,errors}=await launchWorldPage(`http://127.0.0.1:${port}`,"overlay=1",{onPage(page){page.on("framenavigated",frame=>{if(frame===page.mainFrame())navigations++;});}});navigations=0;
 const results: { round:number; verdict:string; outcome:string; durationMs:number; reason:string; tag?:string; check?:unknown }[]=[];
 try {
 

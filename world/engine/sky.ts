@@ -59,7 +59,7 @@ export function createSky(scene: Scene, fixedTime?: number) {
   const fill = new DirectionalLight("#a3d9cf", 0.6);
   fill.position.set(8, 4, -8);
   root.add(hemisphere, sunlight, sunlight.target, fill);
-  const fog = new FogExp2("#e6b08b", 0.005);
+  const fog = new FogExp2(dayHorizon, 0.005);
   scene.fog = fog;
 
   const cloudUniforms = { uColor: { value: new Color() }, uOpacity: { value: 0.22 } };

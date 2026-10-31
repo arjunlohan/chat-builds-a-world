@@ -17,7 +17,7 @@ const LIMIT = CITIZEN_CAP;
 export const idleFade = (now: number, lastActive: number) => Math.max(0, Math.min(1, 1 - (now - lastActive - IDLE_MS) / FADE_MS));
 interface Creature {
   snapshot: Citizen | undefined; state: CitizenState; position: Vector3; phase: number; yaw: number; born: number;
-  cos: number; sin: number; commandSpeech: boolean; label: HTMLDivElement; name: HTMLSpanElement; bubble: HTMLSpanElement; removeLabel: () => void; fullWidth: number; quietWidth: number;
+  cos: number; sin: number; commandSpeech: boolean; label: HTMLDivElement | undefined; name: HTMLSpanElement | undefined; bubble: HTMLSpanElement | undefined; removeLabel: () => void; fullWidth: number; quietWidth: number;
 }
 /** One instanced geometry retains all six creature parts and their authored palette. */
 export class Citizens {
@@ -86,14 +86,28 @@ export class Citizens {
     const spawned = !c;
     if (!c) {
       if (this.count >= LIMIT) return undefined;
+      const phase = hash(state.id) / 4294967296 * Math.PI * 2;
+      c = { snapshot:undefined, cos:1, sin:0, commandSpeech:false, fullWidth: 160, quietWidth: 80, removeLabel: () => {}, state, position: state.entry&&inParade(state.entry.at,now)?new Vector3(...state.entry.from):new Vector3(...state.home), phase, yaw: phase, born: state.entry?state.entry.at+state.entry.delay:now, label:undefined, name:undefined, bubble:undefined };
+      const matrix=this.body.mesh.instanceMatrix.array as Float32Array,offset=this.items.length*16;matrix.fill(0,offset,offset+16);matrix[offset+15]=1;
+      this.items.push(c); this.byId.set(state.id, c);
+
+    }
+    this.frozenList = undefined;
+    if (spawned || c.state.color !== state.color || !!c.state.entry !== !!state.entry) this.dirtyColors.add(state.id);
+    c.snapshot = undefined; c.state = state; c.commandSpeech = isChatCommand(state.speech);
+    this.speakers.delete(state.id); this.speakers.add(state.id);
+    if (this.speakers.size > 16) this.speakers.delete(this.speakers.keys().next().value!);
+    if(now>=c.born&&!c.label)this.createLabel(c);
+    this.updateLabel(c);
+    return spawned ? this.snapshot(c) : undefined;
+  }
+  private createLabel(c:Creature){
+    const state=c.state;
       const label = document.createElement("div"), name = document.createElement("span"), bubble = document.createElement("span");
       label.className = "citizen-label"; name.className = "citizen-name"; bubble.className = "citizen-bubble";
       label.dataset.userId = state.id; label.hidden = true;
       label.append(bubble, name); this.labels.append(label);
-      const phase = hash(state.id) / 4294967296 * Math.PI * 2;
-      c = { snapshot:undefined, cos:1, sin:0, commandSpeech:false, fullWidth: 160, quietWidth: 80, removeLabel: () => {}, state, position: state.entry&&inParade(state.entry.at,now)?new Vector3(...state.entry.from):new Vector3(...state.home), phase, yaw: phase, born: state.entry?state.entry.at+state.entry.delay:now, label, name, bubble };
-      const matrix=this.body.mesh.instanceMatrix.array as Float32Array,offset=this.items.length*16;matrix.fill(0,offset,offset+16);matrix[offset+15]=1;
-      this.items.push(c); this.byId.set(state.id, c);
+    c.label=label;c.name=name;c.bubble=bubble;
       const creature = c;
       creature.removeLabel = this.layout.add(`citizen:${state.id}`, label, (candidate, time, camera, focus) => {
         if(time<creature.born)return;
@@ -103,30 +117,27 @@ export class Citizens {
         const distance = creature.position.distanceTo(camera.position);
         const speaking = !!s.speech && !creature.commandSpeech && spokeAge < 5500 && this.speakers.has(s.id);
         const mode = speaking ? "speech" : citizenLabelMode(distance, spokeAge, time - creature.born, focused);
-        if (creature.bubble.hidden !== !speaking) creature.bubble.hidden = !speaking;
+        if (creature.bubble!.hidden !== !speaking) creature.bubble!.hidden = !speaking;
         const nameWidth = mode === "quiet" ? creature.quietWidth : creature.fullWidth;
         candidate.width=speaking?Math.max(200,nameWidth):nameWidth;candidate.height=speaking?82:mode==="quiet"?18:26;
         candidate.kind=mode;candidate.opacity=idleFade(time,s.lastActive)*(mode==="quiet"?0.35:1);
         candidate.priority=speaking?2000+Math.max(0,5500-spokeAge)/5500:focused?900:mode==="quiet"?1:100+Math.max(0,30000-spokeAge)/1000+30/Math.max(1,distance);
         return true;
       });
-    }
-    this.frozenList = undefined;
-    if (spawned || c.state.color !== state.color || !!c.state.entry !== !!state.entry) this.dirtyColors.add(state.id);
-    c.snapshot = undefined; c.state = state; c.commandSpeech = isChatCommand(state.speech);
-    this.speakers.delete(state.id); this.speakers.add(state.id);
-    if (this.speakers.size > 16) this.speakers.delete(this.speakers.keys().next().value!);
-    if (this.measure && c.name.textContent !== state.displayName) {
+    this.updateLabel(c);
+  }
+  private updateLabel(c:Creature){
+    if(!c.label)return;const state=c.state;
+    if (this.measure && c.name!.textContent !== state.displayName) {
       this.measure.font = "13px system-ui"; c.fullWidth = Math.min(500, Math.ceil(this.measure.measureText(state.displayName).width) + 16);
       this.measure.font = "10px system-ui"; c.quietWidth = Math.min(80, Math.ceil(this.measure.measureText(state.displayName).width) + 10);
     }
-    if(c.name.textContent!==state.displayName)c.name.textContent=state.displayName;
-    if(c.bubble.textContent!==state.speech)c.bubble.textContent=state.speech;
+    if(c.name!.textContent!==state.displayName)c.name!.textContent=state.displayName;
+    if(c.bubble!.textContent!==state.speech)c.bubble!.textContent=state.speech;
     c.label.dataset.command = state.command?.kind ?? "idle";
     c.label.dataset.color = state.color;
     c.label.dataset.visitor = state.entry ? "true" : "false";
     if(c.label.style.getPropertyValue("--citizen-color")!==state.color)c.label.style.setProperty("--citizen-color", state.color);
-    return spawned ? this.snapshot(c) : undefined;
   }
   sync(states: readonly CitizenState[], now: number) {
     const keep = new Set(states.map(s => s.id));
@@ -161,7 +172,7 @@ export class Citizens {
       const age = Math.max(0, (now - s.commandAt) / 1000);
       const command = s.command;
       let targetX = s.home[0], targetZ = s.home[2], speed = s.entry&&inParade(s.entry.at,now)?1.35:0.35;
-      const waiting=now<c.born;
+      const waiting=now<c.born;if(!waiting&&!c.label)this.createLabel(c);
       if (command?.kind === "follow") {
         const target = this.byId.get(command.targetId);
         if (target) {
