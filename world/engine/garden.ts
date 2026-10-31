@@ -1,3 +1,4 @@
+import { batchStaticGarden } from "./static-batch.js";
 import { indexGeometry } from "./index-geometry.js";
 import {
   BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, DodecahedronGeometry,
@@ -150,5 +151,5 @@ export function createGarden() {
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
   }
-  return root;
+  return batchStaticGarden(root);
 }

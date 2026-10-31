@@ -2,7 +2,7 @@ import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometr
 import { CITIZEN_CAP } from "../shared/limits.js";
 import { isChatCommand } from "../../server/commands.js";
 import {
-  BufferGeometry, Float32BufferAttribute, Matrix4, OctahedronGeometry, SphereGeometry, Color, ConeGeometry, DynamicDrawUsage, Group, IcosahedronGeometry,
+  BufferGeometry, Float32BufferAttribute, Matrix4, Color, ConeGeometry, DynamicDrawUsage, Group, IcosahedronGeometry,
   InstancedBufferAttribute, InstancedMesh, MeshStandardMaterial, Sphere, Vector3,
   type PerspectiveCamera,
 } from "three";
@@ -48,13 +48,13 @@ export class Citizens {
       g.setAttribute("color",new Float32BufferAttribute(colors,3));g.setAttribute("aTint",new Float32BufferAttribute(new Float32Array(count).fill(Number(tint)),1));
       g.setAttribute("aBody",new Float32BufferAttribute(new Float32Array(count).fill(Number(body)),1));pieces.push(g);
     };
-    piece(new IcosahedronGeometry(1,0),true,"#ffffff",0,.31,0,.24,.3,.21,true);
-    piece(new IcosahedronGeometry(1,0),false,"#f4e6c5",0,.34,.16,.175,.145,.075);
-    piece(new OctahedronGeometry(1),true,"#ffffff",0,.22,-.23,.09,.09,.09);
+    piece(new IcosahedronGeometry(1,1),true,"#ffffff",0,.31,0,.24,.3,.21,true);
+    piece(new IcosahedronGeometry(1,1),false,"#f4e6c5",0,.34,.16,.175,.145,.075);
+    piece(new IcosahedronGeometry(1,0),true,"#ffffff",0,.22,-.23,.09,.09,.09);
     for(const side of [-1,1]){
       piece(new ConeGeometry(1,1,5),true,"#ffffff",side*.125,.64,0,.08,.24,.065);
-      piece(new SphereGeometry(1,4,2),false,"#283b42",side*.065,.385,.225,.024,.032,.018);
-      piece(new OctahedronGeometry(1),false,"#eee1bf",side*.12,.055,.06,.095,.055,.12);
+      piece(new IcosahedronGeometry(1,0),false,"#283b42",side*.065,.385,.225,.024,.032,.018);
+      piece(new IcosahedronGeometry(1,0),false,"#eee1bf",side*.12,.055,.06,.095,.055,.12);
     }
     const combined=mergeGeometries(pieces)!;for(const g of pieces)g.dispose();
     // Flat shading reconstructs face normals in the fragment shader. Shared vertices cut

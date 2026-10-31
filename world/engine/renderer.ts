@@ -150,12 +150,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const disconnect = connectWorld(event => {
     serverOffset = event.now - Date.now();
     if (["snapshot", "summon", "summon-remove", "version"].includes(event.type)) shadowDirty = true;
-    if (event.type === "snapshot") {
+    switch (event.type) {
+    case "snapshot": {
       void activate(event.version);
       citizens.sync(event.citizens, event.now); stats.value.raidCount = event.raids;
       for (const failure of materializer.sync(event.summons)) ack(failure.state, failure.code);
-    } else if (event.type === "version") { void activate(event.version);
-    } else if (event.type === "chat") {
+      break; }
+    case "version": void activate(event.version); break;
+    case "chat": {
       const spawned = citizens.upsert(event.citizen, event.now);
       if (spawned) {
         host.onCitizenSpawn(spawned);
@@ -171,13 +173,16 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         const citizen = citizens.services.get(event.citizen.id);
         if (citizen) director.notice(citizen.position, 1);
       }
-    } else if (event.type === "remove") citizens.remove(event.ids);
-    else if (event.type === "raid") { stats.value.raidCount++; host.onRaid(event.raid); }
-    else if (event.type === "summon") {
+      break; }
+    case "remove": citizens.remove(event.ids); break;
+    case "raid": stats.value.raidCount++; host.onRaid(event.raid); break;
+    case "summon": {
       try { materializer.spawn(event.summon.spec, event.summon); stats.value.summonFocuses++; }
       catch (error) { ack(event.summon, error instanceof RenderFailure ? error.code : "render-error"); }
-    } else if (event.type === "summon-remove") { for (const id of event.ids) materializer.remove(id); }
-    else if (event.type === "reply") options.onReply?.(event.message);
+      break; }
+    case "summon-remove": for (const id of event.ids) materializer.remove(id); break;
+    case "reply": options.onReply?.(event.message); break;
+    }
     stats.value.summonCount = materializer.count;
     // Pause/skip/clear controls are broadcast for later lanes, not arbitrary module code.
     stats.value.citizenCount = citizens.count;
@@ -264,7 +269,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   if (!document.hidden) frameId = requestAnimationFrame(frame);
 
   return {
-    renderer, scene, camera, director, host, citizens, materializer, stats: stats.value, baseUsage: base,
+    renderer, scene, camera, director, get host(){return host;}, citizens, materializer, stats: stats.value, baseUsage: base,
     dispose() {
       if (disposed) return;
       disposed = true;

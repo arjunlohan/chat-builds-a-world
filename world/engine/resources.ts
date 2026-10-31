@@ -39,7 +39,8 @@ export class ResourceOwner {
         }
         const count = "isInstancedMesh" in object ? (object as Mesh & { count: number }).count : 1;
         const vertices = object.geometry.index?.count ?? object.geometry.getAttribute("position")?.count ?? 0;
-        usage.draws += Math.max(1, object.geometry.groups.length);
+        const drawMaterials = Array.isArray(object.material) ? object.material : undefined;
+        usage.draws += drawMaterials ? object.geometry.groups.reduce((count: number, group: {materialIndex?:number}) => count + Number(!!drawMaterials[group.materialIndex ?? 0]), 0) : 1;
         if (object instanceof Points) usage.particles += vertices;
         else { usage.nodes++; usage.triangles += vertices / 3 * count; }
       }

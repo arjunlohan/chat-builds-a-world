@@ -115,3 +115,7 @@ test("blocked messages consume admission rate and rejection replies are bounded"
  for(let i=0;i<100;i++)assert.equal(p.chat(chat(`spam${i}`,"spam","!summon doxxing")).reason,"rate-limited");
  now+=300;assert.equal(p.chat(chat("blocked2","spam","!summon doxxing")).reason,"blocked");assert.equal(replies.length,1);
 });
+test("immutable garden batching preserves its authored triangle budget and finite bounds", async () => {
+ const {createGarden}=await import("../world/engine/garden.js"),{ResourceOwner}=await import("../world/engine/resources.js"),{Box3}=await import("three");
+ const garden=createGarden(),owner=new ResourceOwner(),used=owner.audit(garden);assert.equal(used.triangles,14696);assert.ok(used.draws<12);assert.ok(new Box3().setFromObject(garden).min.toArray().every(Number.isFinite));owner.dispose(garden);
+});

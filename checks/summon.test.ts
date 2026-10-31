@@ -7,7 +7,7 @@ import { test } from "node:test";
 import prompts from "./summon-prompts.json";
 import { fixtureFor, bedrockProvider, fixtureProvider, responseSchema, SummonError, zeroUsage } from "../server/summon/provider.js";
 import { SummonService, type SummonJob } from "../server/summon/index.js";
-import { normalizeSceneSpec, parseSceneSpec, type SceneSpec } from "../server/summon/scene-spec.js";
+import { normalizeSceneSpec, parseSceneSpec, specUsage, type SceneSpec } from "../server/summon/scene-spec.js";
 import { createSpecGeometry, triangleCost } from "../world/engine/spec-geometry.js";
 import { packLabels, citizenLabelMode, type LabelCandidate } from "../world/engine/labels.js";
 import { WorldPipeline } from "../server/pipeline.js";
@@ -179,4 +179,11 @@ test("render timeout is an observation metric; secondary render failures never r
  await service.submit({id:"metric",userId:"metric",displayName:"M",color:"#ffffff",text:"!summon jellyfish",timestamp:now});
  const scene=service.active()[0]!;assert.equal(await service.acknowledge(scene.id,scene.receipt,"capacity",false),false);assert.equal(service.active().length,1);
  now=31000;service.prune();await new Promise(r=>setImmediate(r));assert.equal(service.status(scene.id)!.status,"awaiting-render");assert.equal(service.status(scene.id)!.renderTimedOut,true);assert.equal(replies,0);
+});
+test("every recipe's server usage matches the independent client ledger", () => {
+ for(const kind of ["box","sphere","cylinder","cone","torus","plane","crystal","mushroom","tree"] as const){
+  const spec=structuredClone(fixtureFor("crystals")) as SceneSpec;spec.geometries[0]!.kind=kind;spec.nodes=spec.nodes.filter(n=>n.geometryId===spec.geometries[0]!.id);spec.behaviors=[];
+  const root=new Group();const materializer=new SpecMaterializer({root,ledger:new ResourceLedger(),layout:new LabelManager(),labels:{} as HTMLElement,effects:{play(){}},camera:{focus(){}},citizens:{get:()=>undefined,list:()=>[]}});
+  const handle=materializer.spawn(normalizeSceneSpec(JSON.stringify(spec)).spec);assert.deepEqual(handle.usage,specUsage(spec),kind);handle.dispose();
+ }
 });

@@ -1,4 +1,4 @@
-import { allowedWish } from "./content-policy.js";
+import { contentPolicy, DEFAULT_BLOCKLIST } from "./content-policy.js";
 import type { WorldVersion } from "./versions/index.js";
 import type { ChatEvent, RaidEvent, WorldEvent, LaneEvent } from "./contracts.js";
 import type { SummonService } from "./summon/index.js";
@@ -45,7 +45,7 @@ export class WorldPipeline {
   private raids = 0;
   private window = -1;
   private messages = 0;
-  constructor(private readonly now = () => Date.now(), private readonly blocklist = ["doxxing", "kill yourself"], private readonly sendRejection?: (message: string, source: "sim" | "twitch") => Promise<void>) {}
+  constructor(private readonly now = () => Date.now(), private readonly blocklist = DEFAULT_BLOCKLIST, private readonly sendRejection?: (message: string, source: "sim" | "twitch") => Promise<void>) {}
   subscribe(listener: (event: WorldEvent, serialized: string) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   reply(chat: ChatEvent, message: string, send?: () => Promise<void> | void) {
     const now = this.now();
@@ -84,8 +84,7 @@ export class WorldPipeline {
       return { accepted: true, count: this.roster.size };
     }
     if (this.paused) return { accepted: false, reason: "paused" };
-    const wish = /^!(summon|idea)(?:\s|$)/i.test(event.text.trim()) ? event.text.replace(/^!\w+\s*/, "") : event.text;
-    if (this.blocklist.some(term => event.text.toLocaleLowerCase().includes(term)) || (/^!(summon|idea)(?:\s|$)/i.test(event.text.trim()) && !allowedWish(wish))) {
+    if (!contentPolicy(event.text, /^!(summon|idea)(?:\s|$)/i.test(event.text.trim()), this.blocklist)) {
       const message=`@${event.displayName} Please use a safe, original visual idea.`;
       this.reply(event,message,()=>this.sendRejection?.(message,authority.source??"sim"));
       return { accepted: false, reason: "blocked" };

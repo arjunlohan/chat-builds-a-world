@@ -80,7 +80,7 @@ export class ModuleHost {
       scene: record.root,
       citizens: Object.freeze({
         get: (id: string) => { allow(); const citizen = this.options.services.citizens.get(id); return citizen ? snapshot(citizen) : undefined; },
-        list: () => { allow(); return this.citizenList ??= Object.freeze(this.options.services.citizens.list().map(snapshot)); },
+        list: () => { allow(); if (!this.citizenList) { const list=this.options.services.citizens.list(); this.citizenList=Object.isFrozen(list)?list:Object.freeze(list.map(snapshot)); } return this.citizenList; },
       }),
       spawnSpec: (spec: Parameters<WorldServices["spawnSpec"]>[0]) => {
         allow();
