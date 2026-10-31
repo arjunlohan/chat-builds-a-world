@@ -14,7 +14,7 @@ import { Versions } from "../server/versions/index.js";
 import { Rounds } from "../server/rounds/index.js";
 async function repository() {
   const root = await mkdtemp(join(tmpdir(), "runner-unit-")); await mkdir(join(root, "world/modules"), { recursive: true });
-  await writeFile(join(root, "README.md"), "session file\n"); await writeFile(join(root, ".gitignore"), "state/\nworktrees/\n.env\n");
+  await writeFile(join(root, "README.md"), "session file\n"); await writeFile(join(root, ".gitignore"), "state/\nworktrees/\n.env\n.codex-runtime/\n");
   await writeFile(join(root, "world/modules/a.ts"), "export default () => ({});\n");
   await git(root, "init", "-b", "master"); await git(root, "add", "."); await git(root, "-c", "user.name=Test", "-c", "user.email=test@localhost", "commit", "--no-gpg-sign", "-m", "Base"); return root;
 }
@@ -119,5 +119,14 @@ test("a metrics write failure cannot revert a successfully activated version", a
   const runner=new Runner({root,versions,bin:resolve("checks/fixtures/fake-builder.cjs"),env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"synthetic-fixture-secret"},feed(){},announce:async()=>{},record(){throw new Error("disk full")},check:async()=>({ok:true,fps:60,avgFps:60})});
   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"Test",reason:"Safe",spec:{moduleId:"metric",description:"good",steps:["Small visual"],checks:["Cleanup"],estimatedSeconds:60},files:["world/modules/metric.ts"],mode:"live",latencyMs:0}});
   assert.equal(result.outcome,"SHIPPED");assert.equal(versions.current?.tag,"v1");assert.equal(await git(root,"tag","--list"),"v1");await runner.idle();assert.equal(runner.isBusy,false);versions.close();
+ }finally{await rm(root,{recursive:true,force:true})}
+});
+test("runtime configuration writes cannot dirty the canonical tracked Codex home", async () => {
+ const {withCodexHome}=await import("../server/runtime/process.js"),root=await repository();
+ try{
+  await mkdir(join(root,".codex-runtime"),{recursive:true});const canonical=join(root,".codex-runtime/config.toml");await writeFile(canonical,'model = "test"\n');
+  let isolated="";await withCodexHome(root,{PATH:process.env.PATH,HOME:process.env.HOME,AWS_BEARER_TOKEN_BEDROCK:"synthetic-credential",TWITCH_ACCESS_TOKEN:"must-not-inherit"},async env=>{
+   isolated=env.CODEX_HOME!;assert.notEqual(isolated,join(root,".codex-runtime"));assert.equal(env.TWITCH_ACCESS_TOKEN,undefined);assert.equal(await readFile(join(isolated,"config.toml"),"utf8"),'model = "test"\n');await writeFile(join(isolated,"config.toml"),'runtime preference = true');
+  });assert.equal(await readFile(canonical,"utf8"),'model = "test"\n');await assert.rejects(readFile(join(isolated,"config.toml")));assert.equal(await git(root,"status","--porcelain"),"");
  }finally{await rm(root,{recursive:true,force:true})}
 });

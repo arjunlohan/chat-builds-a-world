@@ -1,4 +1,4 @@
-import { runBounded, minimalEnvironment, codexArgs, cliFailure, isCliWarning, protectedValues, redact } from "../runtime/process.js";
+import { runBounded, withCodexHome, minimalEnvironment, codexArgs, cliFailure, isCliWarning, protectedValues, redact } from "../runtime/process.js";
 import { metricWriter } from "../runtime/metrics.js";
 import { lstat, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -94,7 +94,7 @@ export class IdeaGuard {
     if (!this.env.AWS_BEARER_TOKEN_BEDROCK?.trim()) return result(failed("Guard unavailable: AWS_BEARER_TOKEN_BEDROCK is missing."));
     let prompt: string; try { prompt = buildGuardPrompt(idea); } catch { return result(failed("Guard rejected an empty or oversized idea.")); }
     if (signal?.aborted) return result(failed("Guard review cancelled."));
-    const raw = await runBounded({ bin: this.bin, args: await codexArgs(this.root, "read-only", "low", GUARD_SCHEMA), cwd: this.root, env: this.env, input: prompt, signal, timeoutMs: this.timeout, maxBytes: 1_048_576 });
+    const raw = await withCodexHome(this.root,this.env,async env => runBounded({ bin: this.bin, args: await codexArgs(this.root, "read-only", "low", GUARD_SCHEMA), cwd: this.root, env, input: prompt, signal, timeoutMs: this.timeout, maxBytes: 1_048_576 }));
     if (raw.reason) return result(failed(({ timeout: "Guard timed out after 45 seconds.", cancelled: "Guard review cancelled.", start: "Guard could not start the configured Codex CLI.", "output-limit": "Guard output exceeded its limit." } as Record<string,string>)[raw.reason] ?? "Guard returned malformed events."));
     try {
       if (this.secrets.some(secret => raw.output.includes(secret))) {

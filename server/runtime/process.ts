@@ -1,11 +1,21 @@
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
-import { readFile } from "node:fs/promises";
+import { readFile, mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 export const protectedValues = (env: NodeJS.ProcessEnv) => [...new Set(Object.entries(env).filter(([k,v]) => /TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY/i.test(k) && v && v.length >= 8).map(([,v]) => v!))];
 export function redact(text: string, values: readonly string[]) { for (const value of values) text = text.split(value).join("[REDACTED]"); return text.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 600); }
 export function minimalEnvironment(env: NodeJS.ProcessEnv, root?: string): NodeJS.ProcessEnv {
   return { PATH: env.PATH ?? "/usr/bin:/bin", HOME: env.HOME ?? homedir(), ...(root ? { AWS_BEARER_TOKEN_BEDROCK: env.AWS_BEARER_TOKEN_BEDROCK ?? "", CODEX_HOME: resolve(root, ".codex-runtime") } : {}) };
+}
+/** Codex may persist runtime settings. Never give it the tracked canonical config as writable home. */
+export async function withCodexHome<T>(root: string, env: NodeJS.ProcessEnv, run: (env: NodeJS.ProcessEnv) => Promise<T>): Promise<T> {
+  const directory=resolve(root,".codex-runtime/runs");await mkdir(directory,{recursive:true});
+  const owned=await mkdtemp(resolve(directory,"invocation-")),home=resolve(owned,".codex-runtime");await mkdir(home);
+  try {
+    const config=await readFile(resolve(root,".codex-runtime/config.toml"),"utf8").catch(()=>"");
+    await writeFile(resolve(home,"config.toml"),config,{mode:0o600});
+    return await run({...minimalEnvironment(env,root),CODEX_HOME:home});
+  }finally{await rm(owned,{recursive:true,force:true});}
 }
 export async function codexArgs(root: string, sandbox: "read-only" | "workspace-write", effort: "low" | "medium", schema?: string) {
   const config = await readFile(resolve(root, ".codex-runtime/config.toml"), "utf8").catch(() => "");
