@@ -79,7 +79,7 @@ export class Rounds {
   private ranked() { return this.ranking ??= [...this.ideas.values()].filter(i => i.supporters.size > 0).sort((a, b) => b.supporters.size - a.supporters.size || a.order - b.order); }
   private voteCounts(id: string) { return this.counts.get(id) ?? 0; }
   private rollbackTally() { return { yes: this.rollbackYes, no: this.rollbackVotes.size - this.rollbackYes }; }
-  snapshot(): RoundState { return structuredClone(this.view()); }
+  snapshot(): RoundState { return this.view(); }
   private view(): RoundState {
     return { round: this.round, phase: this.phase, startedAt: this.startedAt, endsAt: this.endsAt,
       now: this.now(), realNow: this.real(), clockRate: this.rate, simulation: this.simulation, paused: this.paused,

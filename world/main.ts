@@ -24,7 +24,6 @@ function fail(message: string) {
 try {
   if (!canvas) throw new Error("World canvas is missing");
   const world = createRenderer(canvas, {
-    standbyUntilVersion: query.get("standby") === "1",
     profile: query.get("check") === "1" ? CANDIDATE_PROFILE : PRODUCTION_PROFILE,
     probeId: query.get("probe") ?? "",
     ...(labels ? { labels } : {}),

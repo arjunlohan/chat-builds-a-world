@@ -1,4 +1,4 @@
-import { SUMMON_COUNT, WORLD_BOUNDS, RenderFailure } from "../shared/limits.js";
+import { SUMMON_COUNT, clampToWorld, RenderFailure } from "../shared/limits.js";
 import {
   AdditiveBlending, BufferGeometry, Color, Float32BufferAttribute, Group, Mesh,
   MeshStandardMaterial, Object3D, PointLight, Points, ShaderMaterial, SpotLight, Vector3,
@@ -25,7 +25,6 @@ export interface MaterializerOptions {
   onSceneChange?: () => void;
 }
 export interface SpecHandle extends SpawnHandle { readonly usage: Usage; readonly root: Group }
-const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
 export class SpecMaterializer {
   private readonly entries = new Map<string, Entry>();
@@ -92,10 +91,10 @@ export class SpecMaterializer {
         const credit = document.createElement("small"); credit.textContent = `by ${metadata.requester}`; label.append(credit);
         this.options.labels.append(label); entry.label = label;
         const order = ++this.sequence;
-        entry.removeLabel = this.options.layout.add(`summon:${id}`, label, (_now, camera) => {
+        entry.removeLabel = this.options.layout.add(`summon:${id}`, label, (candidate, _now, camera) => {
           this.projection.copy(entry.anchor).project(camera);
           if (this.projection.z <= -1 || this.projection.z >= 1) return undefined;
-          return { x: (this.projection.x + 1) * 960, y: (1 - this.projection.y) * 540, width: 240, height: 46, kind: "summon", priority: 1200 + order, opacity: 1 };
+          candidate.x=(this.projection.x+1)*960;candidate.y=(1-this.projection.y)*540;candidate.width=240;candidate.height=46;candidate.kind="summon";candidate.priority=1200+order;candidate.opacity=1;return true;
         });
       }
       if (!restore) { if (!metadata) this.options.effects.play("spawn", center); this.options.camera.focus(center, { duration: 2.5, priority: 3 }); }
@@ -135,8 +134,7 @@ export class SpecMaterializer {
       entry.center.set(0, 0, 0); let top = -Infinity;
       for (const node of entry.nodes.values()) {
         node.mesh.position.copy(node.base).add(node.drift).add(node.offset);
-        node.mesh.position.set(clamp(node.mesh.position.x, WORLD_BOUNDS.minX + node.extent.x, WORLD_BOUNDS.maxX - node.extent.x),
-          clamp(node.mesh.position.y, WORLD_BOUNDS.minY + node.extent.y, WORLD_BOUNDS.maxY - node.extent.y), clamp(node.mesh.position.z, WORLD_BOUNDS.minZ + node.extent.z, WORLD_BOUNDS.maxZ - node.extent.z));
+        clampToWorld(node.mesh.position,node.extent);
         node.mesh.scale.copy(node.scale).multiplyScalar(node.pulse);
         entry.center.add(node.mesh.position); top = Math.max(top, node.mesh.position.y + node.extent.y);
       }

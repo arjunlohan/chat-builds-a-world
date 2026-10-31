@@ -29,33 +29,30 @@ export function packLabels(candidates: readonly LabelCandidate[]) {
 export function citizenLabelMode(distance: number, spokeAge: number, arrivedAge: number, focused: boolean) {
   return distance < 19 || spokeAge < 30_000 || arrivedAge < 8000 || focused ? "tag" : "quiet";
 }
-type Describe = (now: number, camera: PerspectiveCamera, focus: Readonly<Vector3> | undefined) => Omit<LabelCandidate, "id"> | undefined;
+type Describe = (candidate: LabelCandidate, now: number, camera: PerspectiveCamera, focus: Readonly<Vector3> | undefined) => boolean | undefined;
 export class LabelManager {
-  private readonly entries = new Map<string, { element: HTMLElement; describe: Describe; candidate: LabelCandidate }>();
+  private readonly entries = new Map<string, { element: HTMLElement; describe: Describe; candidate: LabelCandidate; transform: string; width: string; opacity: string }>();
   private visible = new Set<string>();
   private last = -Infinity;
   add(id: string, element: HTMLElement, describe: Describe) {
-    this.entries.set(id, { element, describe, candidate: {id,x:0,y:0,width:0,height:0,priority:0,kind:"quiet",opacity:0} });
+    this.entries.set(id, { element, describe, transform: "", width: "", opacity: "", candidate: {id,x:0,y:0,width:0,height:0,priority:0,kind:"quiet",opacity:0} });
     return () => { this.entries.delete(id); this.visible.delete(id); element.remove(); };
   }
   update(now: number, camera: PerspectiveCamera, focus?: Readonly<Vector3>) {
     if (now - this.last < 50) return;
     this.last = now;
     const candidates: LabelCandidate[] = [];
-    for (const [id, entry] of this.entries) {
-      const description = entry.describe(now, camera, focus);
-      if (description) candidates.push(Object.assign(entry.candidate, description));
-    }
+    for (const entry of this.entries.values()) if (entry.describe(entry.candidate, now, camera, focus)) candidates.push(entry.candidate);
     const chosen = packLabels(candidates);
     for (const id of this.visible) if (!chosen.has(id)) { const element=this.entries.get(id)?.element;if(element) element.hidden=true; }
     for (const c of candidates) if (chosen.has(c.id)) {
-      const element = this.entries.get(c.id)!.element;
+      const entry=this.entries.get(c.id)!,element=entry.element;
       if (!this.visible.has(c.id)) element.hidden = false;
       if (element.dataset.mode !== c.kind) element.dataset.mode = c.kind;
       const width=`${c.width}px`, transform=`translate3d(${c.x.toFixed(1)}px,${c.y.toFixed(1)}px,0) translate(-50%,-100%)`, opacity=String(c.opacity);
-      if(element.style.width!==width)element.style.width=width;
-      if(element.style.transform!==transform)element.style.transform=transform;
-      if(element.style.opacity!==opacity)element.style.opacity=opacity;
+      if(entry.width!==width)element.style.width=entry.width=width;
+      if(entry.transform!==transform)element.style.transform=entry.transform=transform;
+      if(entry.opacity!==opacity)element.style.opacity=entry.opacity=opacity;
     }
     this.visible=chosen;
   }

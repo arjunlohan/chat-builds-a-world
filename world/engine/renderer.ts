@@ -29,7 +29,6 @@ import { log } from "./log.js";
 
 export interface RendererOptions {
   profile?: Readonly<RenderProfile>;
-  standbyUntilVersion?: boolean;
   probeId?: string;
   fixedTime?: number;
   labels?: HTMLElement;
@@ -44,7 +43,7 @@ export interface RendererOptions {
 /** Fixed OBS framebuffer; CSS fits it into any viewport without extra DPR work. */
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions = {}) {
   const profile = options.profile ?? PRODUCTION_PROFILE;
-  let shadowDirty = true, standby = !!options.standbyUntilVersion;
+  let shadowDirty = true;
   const clientId = crypto.randomUUID();
   const post = (url: string, data: object) => void fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, clientId }) }).catch(() => {});
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -100,15 +99,15 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const ack = (state: import("../../server/contracts.js").SummonState, error?: string) => {
     post("/summon/ack", { id: state.id, receipt: state.receipt, ...(error ? { error } : {}) });
   };
-  const materializer = new SpecMaterializer({ root: scene, ledger: summonLedger, layout: labelManager, labels: labelLayer, onSceneChange: () => { shadowDirty = true; },
-    effects: { play: effects.play }, camera: { focus: director.focus }, citizens: citizens.services, onVisible: state => ack(state) });
-  const moduleMaterializer = new SpecMaterializer({ root: scene, ledger, layout: labelManager, labels: labelLayer, onSceneChange: () => { shadowDirty = true; },
-    effects: { play: effects.play }, camera: { focus: director.focus }, citizens: citizens.services });
+  const materializerOptions = { root: scene, layout: labelManager, labels: labelLayer, onSceneChange: () => { shadowDirty = true; },
+    effects: { play: effects.play }, camera: { focus: director.focus }, citizens: citizens.services };
+  const materializer = new SpecMaterializer({ ...materializerOptions, ledger: summonLedger, onVisible: state => ack(state) });
+  const moduleMaterializer = new SpecMaterializer({ ...materializerOptions, ledger });
   const hostOptions: ConstructorParameters<typeof ModuleHost>[0] = {
     root: moduleRoot, ledger, onSceneChange: () => { shadowDirty = true; }, protectedResources: engineResources,
     services: { citizens: citizens.services, spawnSpec: spec => moduleMaterializer.spawn(spec), camera: { focus: director.focus }, effects: { play: effects.play }, log },
     onStatus: (event: ModuleStatus) => {
-      shadowDirty = true; options.onStatus?.(event);
+      options.onStatus?.(event);
       if (event.state === "disabled" || event.state === "rejected") {
         stats.value.moduleError = `${event.id}: ${event.reason}`;
         if (event.state === "disabled" && !pendingAck && activeVersion) post("/modules/fault", { version: activeVersion.version, receipt: activeVersion.receipt });
@@ -119,10 +118,16 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   let pendingAck: { version: WorldVersion; frames: number } | null = null;
   let activeVersion: WorldVersion | null = null;
   const moduleReceipt = (version: WorldVersion, ok: boolean) => post("/modules/ack", { version: version.version, receipt: version.receipt, ok });
-  const probeTarget = profile.probe ? new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height) : undefined;
-  const probeHdrTarget = profile.probe ? new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,{type:HalfFloatType}) : undefined;
-  const withPixels = profile.probe ? new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4) : undefined;
-  const withoutPixels = profile.probe ? new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4) : undefined;
+  const probe = profile.probe ? {
+    target: new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height),
+    hdr: new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,{type:HalfFloatType}),
+    withPixels: new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),
+    withoutPixels: new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),
+    capture(pixels: Uint8Array) {
+      renderer.setRenderTarget(this.hdr);renderer.render(scene,camera);output.render(renderer,this.target,this.hdr,0,false);
+      renderer.readRenderTargetPixels(this.target,0,0,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,pixels);
+    },
+  } : undefined;
   let activation = 0;
   async function activate(version: WorldVersion | null) {
     const generation = ++activation; shadowDirty = true;
@@ -151,14 +156,13 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   let serverOffset = 0;
   const disconnect = connectWorld(event => {
     serverOffset = event.now - Date.now();
-    if (["snapshot", "summon", "summon-remove", "version"].includes(event.type)) shadowDirty = true;
     switch (event.type) {
     case "snapshot": {
       void activate(event.version);
       citizens.sync(event.citizens, event.now); stats.value.raidCount = event.raids;
       for (const failure of materializer.sync(event.summons)) ack(failure.state, failure.code);
       break; }
-    case "version": void activate(event.version).then(()=>{if(standby){standby=false;visibility();}}); break;
+    case "version": void activate(event.version); break;
     case "chat": {
       const spawned = citizens.upsert(event.citizen, event.now);
       if (spawned) {
@@ -191,7 +195,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   }, connected => options.onConnection?.(connected), clientId);
 
   function frame(now: number) {
-    if (disposed || document.hidden || standby) return;
+    if (disposed || document.hidden) return;
     const realDt = stats.sample(now);
     const dt = Math.min(0.05, realDt);
     elapsed += dt;
@@ -220,17 +224,15 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       composer.render(dt);
       stats.value.renderMs = performance.now() - renderStart; stats.value.triangles = renderer.info.render.triangles;
       materializer.rendered(camera);
-      const probeStart=probeTarget?performance.now():0;
-      if (probeTarget && probeHdrTarget && withPixels && withoutPixels && options.probeId && stats.value.probeRequest>stats.value.probeCompleted) {
+      const probeStart=probe?performance.now():0;
+      if (probe && options.probeId && stats.value.probeRequest>stats.value.probeCompleted) {
         const roots=host.visualRoots(options.probeId),visible=roots.map(root=>root.visible),toScreen=output.renderToScreen;
         try {
           output.renderToScreen=false;
-          renderer.setRenderTarget(probeHdrTarget);renderer.render(scene,camera);
-          output.render(renderer,probeTarget,probeHdrTarget,0,false);
-          renderer.readRenderTargetPixels(probeTarget,0,0,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,withPixels);
+          probe.capture(probe.withPixels);
           for(const root of roots)root.visible=false;
-          renderer.setRenderTarget(probeHdrTarget);renderer.render(scene,camera);output.render(renderer,probeTarget,probeHdrTarget,0,false);renderer.readRenderTargetPixels(probeTarget,0,0,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,withoutPixels);
-          const footprint=contributionFootprint(withPixels,withoutPixels,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height);
+          probe.capture(probe.withoutPixels);
+          const footprint=contributionFootprint(probe.withPixels,probe.withoutPixels,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height);
           stats.value.modulePixels=footprint.hdPixels;stats.value.moduleProbePixels=footprint.probePixels;stats.value.moduleWidth=footprint.hdWidth;stats.value.moduleHeight=footprint.hdHeight;
           stats.value.probeCompleted=stats.value.probeRequest;
         }finally{output.renderToScreen=toScreen;for(let i=0;i<roots.length;i++)roots[i]!.visible=visible[i]!;renderer.setRenderTarget(null);}
@@ -248,10 +250,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     frameId = requestAnimationFrame(frame);
   }
   function visibility() {
-    host.setPaused(document.hidden || standby);
+    host.setPaused(document.hidden);
     stats.resetClock();
     cancelAnimationFrame(frameId);
-    if (!document.hidden && !disposed && !standby) frameId = requestAnimationFrame(frame);
+    if (!document.hidden && !disposed) frameId = requestAnimationFrame(frame);
   }
   const raycaster = new Raycaster(), pointer = new Vector2();
   function explore(event: PointerEvent) {
@@ -272,8 +274,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   document.addEventListener("visibilitychange", visibility);
   canvas.addEventListener("pointerup", explore);
   canvas.addEventListener("webglcontextlost", contextLost);
-  host.setPaused(document.hidden || standby);
-  if (!document.hidden && !standby) frameId = requestAnimationFrame(frame);
+  host.setPaused(document.hidden);
+  if (!document.hidden) frameId = requestAnimationFrame(frame);
 
   return {
     renderer, scene, camera, director, get host(){return host;}, citizens, materializer, stats: stats.value, baseUsage: base,
@@ -287,7 +289,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       disconnect(); resizeLabels.disconnect(); citizens.dispose(); labelManager.dispose();
       host.dispose(); materializer.dispose(); moduleMaterializer.dispose();
       engineResources.dispose(environment);
-      probeTarget?.dispose();probeHdrTarget?.dispose();
+      probe?.target.dispose();probe?.hdr.dispose();
       bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose(); renderer.dispose();
     },
   };

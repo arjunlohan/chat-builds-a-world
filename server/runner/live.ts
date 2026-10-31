@@ -8,13 +8,24 @@ if (!process.env.AWS_BEARER_TOKEN_BEDROCK?.trim()) {
 } else {
   const base = `http://127.0.0.1:${readConfig().port}`;
   const browser = await chromium.launch({ headless: true, args: process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu"] : ["--enable-gpu"] });
+  const eventsAbort=new AbortController();let observer:Promise<void>|undefined;
   try {
-    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } }); let reloads=0; page.on("framenavigated",frame=>{if(frame===page.mainFrame())reloads++;}); await page.goto(`${base}/world?standby=1`); await page.waitForFunction(()=>!!window.__worldStats); reloads=0;
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } }); let reloads=0; page.on("framenavigated",frame=>{if(frame===page.mainFrame())reloads++;}); await page.goto(`${base}/world`); await page.waitForSelector('canvas[data-ready="true"]'); reloads=0;
+    // Benchmark orchestration owns suspension; production renderer needs no test-only mode.
+    const cdp=await page.context().newCDPSession(page);await cdp.send("Page.setWebLifecycleState",{state:"frozen"});
+    const stream=await fetch(`${base}/events`,{signal:eventsAbort.signal});if(!stream.ok||!stream.body)throw new Error("Version stream unavailable");
+    let observerError:unknown;
+    observer=(async()=>{const reader=stream.body!.getReader(),decoder=new TextDecoder();let buffer="";
+      try{for(;;){const value=await reader.read();if(value.done)break;buffer+=decoder.decode(value.value,{stream:true});let end:number;
+        while((end=buffer.indexOf("\n\n"))>=0){const message=buffer.slice(0,end);buffer=buffer.slice(end+2);const data=message.split("\n").find(line=>line.startsWith("data: "));if(data&&JSON.parse(data.slice(6)).type==="version"){await cdp.send("Page.setWebLifecycleState",{state:"active"});return;}}
+      }}finally{await reader.cancel().catch(()=>{});}
+    })().catch(error=>{if(!eventsAbort.signal.aborted)observerError=error;});
     const response = await fetch(`${base}/runner/live`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idea: process.argv.slice(2).join(" ") || "Add one original amber crystal that gently floats above the ridge." }) });
     if (!response.ok) throw new Error("Live round refused. Restart dev with the key, clean master and an empty idea round.");
     const { round } = await response.json() as { round: number };
     const deadline = Date.now() + 240_000;
     while (Date.now() < deadline) {
+      if(observerError)throw observerError;
       const state = await (await fetch(`${base}/api/rounds`)).json() as { round: number; phase: string; guard: { status: string; reason: string; latencyMs: number }; build: { status: string } };
       if (state.round > round && state.phase === "ideas") {
         if (state.guard.status === "rejected") { console.log(`Guard rejected: ${state.guard.reason}`); process.exitCode = 1; }
@@ -28,5 +39,5 @@ if (!process.env.AWS_BEARER_TOKEN_BEDROCK?.trim()) {
     }
     if (Date.now() >= deadline) throw new Error("Live round exceeded its watchdog.");
   } catch { console.error("Live round did not ship; inspect the local overlay and sanitized state metrics."); process.exitCode = 1; }
-  finally { await browser.close(); }
+  finally { eventsAbort.abort();await observer;await browser.close(); }
 }

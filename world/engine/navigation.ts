@@ -22,10 +22,13 @@ const queue = new Int16Array(total);
 // Conservative grid interiors need no analytic terrain evaluation. Boundary cells retain exact tests.
 const fineCell = 0.125, fineWidth = 157, fineDepth = 125;
 const fine = new Uint8Array(fineWidth * fineDepth);
-for (let z=0;z<fineDepth;z++) for (let x=0;x<fineWidth;x++) {
-  const px=minX+x*fineCell,pz=minZ+z*fineCell;
-  fine[z*fineWidth+x]=Number(isWalkable(px,pz)&&isWalkable(px+fineCell,pz)&&isWalkable(px,pz+fineCell)&&isWalkable(px+fineCell,pz+fineCell)&&isWalkable(px+fineCell/2,pz+fineCell/2));
+const corners = new Uint8Array((fineWidth+1)*(fineDepth+1));
+for(let z=0;z<=fineDepth;z++)for(let x=0;x<=fineWidth;x++)corners[z*(fineWidth+1)+x]=Number(isWalkable(minX+x*fineCell,minZ+z*fineCell));
+for(let z=0;z<fineDepth;z++)for(let x=0;x<fineWidth;x++){
+  const i=z*(fineWidth+1)+x;
+  fine[z*fineWidth+x]=Number(corners[i]&&corners[i+1]&&corners[i+fineWidth+1]&&corners[i+fineWidth+2]&&isWalkable(minX+(x+.5)*fineCell,minZ+(z+.5)*fineCell));
 }
+
 function walkable(x:number,z:number) { const ix=Math.floor((x-minX)/fineCell),iz=Math.floor((z-minZ)/fineCell);return ix>=0&&ix<fineWidth&&iz>=0&&iz<fineDepth&&!!fine[iz*fineWidth+ix] ? true : isWalkable(x,z); }
 const nearestCache=new Map<number,number>();
 const cellId=(x:number,z:number)=>Math.max(0,Math.min(depth-1,Math.round((z-minZ)/cell)))*width+Math.max(0,Math.min(width-1,Math.round((x-minX)/cell)));

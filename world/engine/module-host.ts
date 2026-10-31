@@ -1,4 +1,4 @@
-import { ACTIVE_MODULE_CAP, WORLD_BOUNDS } from "../shared/limits.js";
+import { ACTIVE_MODULE_CAP, clampToWorld } from "../shared/limits.js";
 import { Group, Vector3 } from "three";
 import type { ChatEvent, RaidEvent } from "../../server/contracts.js";
 import type { Citizen, SpawnHandle, WorldModule, WorldModuleFactory, WorldServices } from "./api.js";
@@ -33,7 +33,7 @@ const snapshot = (citizen: Citizen): Citizen => Object.isFrozen(citizen) && Obje
 });
 const position = (p: Readonly<Vector3>) => {
   if (![p.x, p.y, p.z].every(Number.isFinite)) throw new Error("invalid position");
-  return new Vector3(Math.max(WORLD_BOUNDS.minX, Math.min(WORLD_BOUNDS.maxX, p.x)), Math.max(WORLD_BOUNDS.minY, Math.min(WORLD_BOUNDS.maxY, p.y)), Math.max(WORLD_BOUNDS.minZ, Math.min(WORLD_BOUNDS.maxZ, p.z)));
+  return clampToWorld(new Vector3(p.x,p.y,p.z));
 };
 
 /** Cooperative hook isolation; candidate code still requires the external guard/check gate. */
@@ -47,7 +47,6 @@ export class ModuleHost {
   private serial = 0;
   private cursor = 0;
   private paused = false;
-  private citizenList: readonly Citizen[] | undefined;
 
   constructor(private readonly options: HostOptions) {
     this.now = options.now ?? (() => performance.now());
@@ -81,7 +80,7 @@ export class ModuleHost {
       scene: record.root,
       citizens: Object.freeze({
         get: (id: string) => { allow(); const citizen = this.options.services.citizens.get(id); return citizen ? snapshot(citizen) : undefined; },
-        list: () => { allow(); if (!this.citizenList) { const list=this.options.services.citizens.list(); this.citizenList=Object.isFrozen(list)?list:Object.freeze(list.map(snapshot)); } return this.citizenList; },
+        list: () => { allow(); const list=this.options.services.citizens.list(); return Object.isFrozen(list)?list:Object.freeze(list.map(snapshot)); },
       }),
       spawnSpec: (spec: Parameters<WorldServices["spawnSpec"]>[0]) => {
         allow();
@@ -212,7 +211,7 @@ export class ModuleHost {
 
   update(dt: number) {
     if (this.paused || this.records.size === 0) return;
-    this.frame++; this.citizenList = undefined;
+    this.frame++;
     const start = this.now();
     const records = [...this.records.values()];
     const disabled: RecordState[] = [];

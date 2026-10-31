@@ -119,3 +119,22 @@ test("immutable garden batching preserves its authored triangle budget and finit
  const {createGarden}=await import("../world/engine/garden.js"),{ResourceOwner}=await import("../world/engine/resources.js"),{Box3}=await import("three");
  const garden=createGarden(),owner=new ResourceOwner(),used=owner.audit(garden);assert.equal(used.triangles,14696);assert.ok(used.draws<12);assert.ok(new Box3().setFromObject(garden).min.toArray().every(Number.isFinite));owner.dispose(garden);
 });
+test("label transforms remain stable even when the browser normalizes style strings", async()=>{
+ const {LabelManager}=await import("../world/engine/labels.js");let reads=0,writes=0;
+ const style={width:"",opacity:"",get transform(){reads++;return "normalized browser transform"},set transform(_value:string){writes++;}};
+ const element={hidden:true,dataset:{},style,remove(){}} as unknown as HTMLElement;
+ const manager=new LabelManager();manager.add("stable",element,c=>{c.x=960;c.y=540;c.width=100;c.height=26;c.kind="tag";c.opacity=1;c.priority=1;return true;});
+ manager.update(0,new PerspectiveCamera());manager.update(60,new PerspectiveCamera());
+ assert.equal(element.hidden,false);assert.equal(writes,1);assert.equal(reads,0);manager.dispose();
+});
+test("direct static batches retain indexed and non-indexed transforms, normals and instance tints",async()=>{
+ const {Group,Mesh,InstancedMesh,PlaneGeometry,MeshStandardMaterial,Matrix4,Color}=await import("three"),{batchStaticGarden}=await import("../world/engine/static-batch.js");
+ const root=new Group(),material=new MeshStandardMaterial(),geometry=new PlaneGeometry(2,2),instances=new InstancedMesh(geometry,material,2);
+ instances.setMatrixAt(0,new Matrix4().makeTranslation(3,0,0));instances.setMatrixAt(1,new Matrix4().makeScale(2,3,1));instances.setColorAt(0,new Color().setRGB(.5,.25,.125));instances.setColorAt(1,new Color().setRGB(1,1,1));root.add(instances);
+ const plain=new Mesh(geometry.toNonIndexed(),material);plain.position.z=4;root.add(plain);
+ batchStaticGarden(root);assert.equal(root.children.length,1);const combined=(root.children[0] as import("three").Mesh).geometry,p=combined.getAttribute("position"),n=combined.getAttribute("normal"),c=combined.getAttribute("color");
+ assert.equal(combined.index!.count,18);assert.deepEqual([p.getX(0),p.getY(0),p.getZ(0)],[2,1,0]);
+ assert.deepEqual([p.getX(4),p.getY(4),p.getZ(4)],[-2,3,0]);assert.equal(p.getZ(8),4);
+ assert.deepEqual([n.getX(0),n.getY(0),n.getZ(0)],[0,0,1]);assert.deepEqual([c.getX(0),c.getY(0),c.getZ(0)],[.5,.25,.125]);
+ combined.dispose();(root.children[0] as import("three").Mesh).material instanceof MeshStandardMaterial&&((root.children[0] as import("three").Mesh).material as import("three").Material).dispose();
+});

@@ -1,9 +1,9 @@
 export interface FrameTrace { frames: Uint32Array; times: Float64Array; intervals: Float32Array; cpu: Float32Array; render: Float32Array; probe: Float32Array; size: number; cursor: number }
-export interface WorldStats { fps: number; avgFps: number; frame: number; citizenCount: number; raidCount: number; cameraFocuses: number; summonCount: number; summonFocuses: number; commandReactions: number; moduleVersion: number; moduleCount: number; moduleSwaps: number; moduleError: string; modulePixels: number; updateMs: number; renderMs: number; cacheRenders: number; triangles: number; maxFrameGap: number; lastFrameAt: number; probeRequest: number; probeCompleted: number; moduleProbePixels: number; moduleWidth: number; moduleHeight: number }
+export interface WorldStats { fps: number; avgFps: number; frame: number; citizenCount: number; raidCount: number; cameraFocuses: number; summonCount: number; summonFocuses: number; commandReactions: number; moduleVersion: number; moduleCount: number; moduleSwaps: number; moduleError: string; modulePixels: number; updateMs: number; renderMs: number; triangles: number; maxFrameGap: number; lastFrameAt: number; probeRequest: number; probeCompleted: number; moduleProbePixels: number; moduleWidth: number; moduleHeight: number }
 
 /** Real presentation timing, not simulation dt. Pauses never count as slow frames. */
 export class FrameStats {
-  readonly value: WorldStats = { fps: 0, avgFps: 0, frame: 0, citizenCount: 0, raidCount: 0, cameraFocuses: 0, summonCount: 0, summonFocuses: 0, commandReactions: 0, moduleVersion: 0, moduleCount: 0, moduleSwaps: 0, moduleError: "", modulePixels: 0, updateMs: 0, renderMs: 0, cacheRenders: 0, triangles: 0, maxFrameGap: 0, lastFrameAt: 0, probeRequest: 0, probeCompleted: 0, moduleProbePixels: 0, moduleWidth: 0, moduleHeight: 0 };
+  readonly value: WorldStats = { fps: 0, avgFps: 0, frame: 0, citizenCount: 0, raidCount: 0, cameraFocuses: 0, summonCount: 0, summonFocuses: 0, commandReactions: 0, moduleVersion: 0, moduleCount: 0, moduleSwaps: 0, moduleError: "", modulePixels: 0, updateMs: 0, renderMs: 0, triangles: 0, maxFrameGap: 0, lastFrameAt: 0, probeRequest: 0, probeCompleted: 0, moduleProbePixels: 0, moduleWidth: 0, moduleHeight: 0 };
   private last: number | undefined;
   private readonly samples = new Float64Array(120);
   private cursor = 0;

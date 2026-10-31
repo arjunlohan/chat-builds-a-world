@@ -1,5 +1,6 @@
-import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
-import { CITIZEN_CAP } from "../shared/limits.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { indexGeometry } from "./index-geometry.js";
+import { CITIZEN_CAP, IDLE_MS, FADE_MS } from "../shared/limits.js";
 import { isChatCommand } from "../../server/commands.js";
 import {
   BufferGeometry, Float32BufferAttribute, Matrix4, Color, ConeGeometry, DynamicDrawUsage, Group, IcosahedronGeometry,
@@ -9,21 +10,17 @@ import {
 import type { Citizen, WorldServices } from "./api.js";
 import type { CitizenState } from "../../server/contracts.js";
 import { hash, terrainHeight } from "./land.js";
-import { LabelManager, citizenLabelMode, type LabelCandidate } from "./labels.js";
+import { LabelManager, citizenLabelMode } from "./labels.js";
 import { stepOnLand } from "./navigation.js";
 
-const LIMIT = CITIZEN_CAP, IDLE_MS = 20 * 60_000, FADE_MS = 5000;
+const LIMIT = CITIZEN_CAP;
 export const idleFade = (now: number, lastActive: number) => Math.max(0, Math.min(1, 1 - (now - lastActive - IDLE_MS) / FADE_MS));
 interface Creature {
-  snapshot?: Citizen; state: CitizenState; position: Vector3; phase: number; yaw: number; born: number;
+  snapshot: Citizen | undefined; state: CitizenState; position: Vector3; phase: number; yaw: number; born: number;
   cos: number; sin: number; commandSpeech: boolean; label: HTMLDivElement; name: HTMLSpanElement; bubble: HTMLSpanElement; removeLabel: () => void; fullWidth: number; quietWidth: number;
 }
-interface Part { mesh: InstancedMesh; fade: InstancedBufferAttribute; bounce: InstancedBufferAttribute; matricesChanged: boolean; fadeChanged: boolean; bounceChanged: boolean }
+interface Part { mesh: InstancedMesh; fade: InstancedBufferAttribute; bounce: InstancedBufferAttribute; fadeChanged: boolean; bounceChanged: boolean }
 
-function writeMatrix(part: Part, offset: number, slot: number, value: number) {
-  const a=part.mesh.instanceMatrix.array as Float32Array,v=Math.fround(value);
-  if(a[offset+slot]!==v){a[offset+slot]=v;part.matricesChanged=true;}
-}
 /** One instanced geometry retains all six creature parts and their authored palette. */
 export class Citizens {
   readonly root = new Group();
@@ -60,7 +57,7 @@ export class Citizens {
     // Flat shading reconstructs face normals in the fragment shader. Shared vertices cut
     // repeated instance/lighting transforms without changing triangles or silhouettes.
     combined.deleteAttribute("uv"); const normals=combined.getAttribute("normal");for(let i=0;i<normals.count;i++)normals.setXYZ(i,0,1,0);
-    const geometry=mergeVertices(combined);combined.dispose();
+    const geometry=indexGeometry(combined);
     const fade=new InstancedBufferAttribute(new Float32Array(LIMIT).fill(1),1),bounce=new InstancedBufferAttribute(new Float32Array(LIMIT),1);
     fade.setUsage(DynamicDrawUsage);bounce.setUsage(DynamicDrawUsage);geometry.setAttribute("aFade",fade);geometry.setAttribute("aBounce",bounce);
     const material=new MeshStandardMaterial({color:"#ffffff",vertexColors:true,roughness:.9,flatShading:true});
@@ -74,7 +71,7 @@ export class Citizens {
     material.customProgramCacheKey=()=>"citizen-merged-v2";
     const mesh=new InstancedMesh(geometry,material,LIMIT);mesh.instanceMatrix.setUsage(DynamicDrawUsage);mesh.boundingSphere=new Sphere(new Vector3(0,3,0),24);
     mesh.name="citizens • one shared creature geometry";mesh.castShadow=false;mesh.receiveShadow=true;this.root.add(mesh);
-    this.body={mesh,fade,bounce,matricesChanged:false,fadeChanged:false,bounceChanged:false};
+    this.body={mesh,fade,bounce,fadeChanged:false,bounceChanged:false};
   }
 
   get count() { return this.items.length; }
@@ -95,11 +92,11 @@ export class Citizens {
       label.dataset.userId = state.id; label.hidden = true;
       label.append(bubble, name); this.labels.append(label);
       const phase = hash(state.id) / 4294967296 * Math.PI * 2;
-      c = { cos:1, sin:0, commandSpeech:false, fullWidth: 160, quietWidth: 80, removeLabel: () => {}, state, position: new Vector3(...state.home), phase, yaw: phase, born: now, label, name, bubble };
+      c = { snapshot:undefined, cos:1, sin:0, commandSpeech:false, fullWidth: 160, quietWidth: 80, removeLabel: () => {}, state, position: new Vector3(...state.home), phase, yaw: phase, born: now, label, name, bubble };
+      const matrix=this.body.mesh.instanceMatrix.array as Float32Array,offset=this.items.length*16;matrix.fill(0,offset,offset+16);matrix[offset+15]=1;
       this.items.push(c); this.byId.set(state.id, c);
       const creature = c;
-      const candidate: Omit<LabelCandidate,"id"> = { x:0,y:0,width:0,height:0,kind:"quiet",opacity:0,priority:0 };
-      creature.removeLabel = this.layout.add(`citizen:${state.id}`, label, (time, camera, focus) => {
+      creature.removeLabel = this.layout.add(`citizen:${state.id}`, label, (candidate, time, camera, focus) => {
         this.projection.copy(creature.position); this.projection.y += 1.0; this.projection.project(camera);
         if (this.projection.z <= -1 || this.projection.z >= 1) return undefined;
         const s = creature.state, spokeAge = time - s.speechAt;
@@ -113,12 +110,12 @@ export class Citizens {
         candidate.width=speaking?Math.max(200,nameWidth):nameWidth;candidate.height=speaking?82:mode==="quiet"?18:26;
         candidate.kind=mode;candidate.opacity=idleFade(time,s.lastActive)*(mode==="quiet"?0.35:1);
         candidate.priority=speaking?2000+Math.max(0,5500-spokeAge)/5500:focused?900:mode==="quiet"?1:100+Math.max(0,30000-spokeAge)/1000+30/Math.max(1,distance);
-        return candidate;
+        return true;
       });
     }
     this.frozenList = undefined;
     if (spawned || c.state.color !== state.color) this.dirtyColors.add(state.id);
-    delete c.snapshot; c.state = state; c.commandSpeech = isChatCommand(state.speech);
+    c.snapshot = undefined; c.state = state; c.commandSpeech = isChatCommand(state.speech);
     this.speakers.delete(state.id); this.speakers.add(state.id);
     if (this.speakers.size > 16) this.speakers.delete(this.speakers.keys().next().value!);
     if (this.measure && c.name.textContent !== state.displayName) {
@@ -145,17 +142,16 @@ export class Citizens {
     }
     for (const c of this.items) this.dirtyColors.add(c.state.id); this.frozenList = undefined;
   }
-  private place(part: Part, index: number, c: Creature, x: number, y: number, z: number, sx: number, sy: number, sz: number, yaw: number, opacity: number) {
-    const cos = c.cos, sin = c.sin, a = part.mesh.instanceMatrix.array as Float32Array, offset = index * 16;
-    const px = c.position.x + x * cos + z * sin, py = c.position.y + y, pz = c.position.z - x * sin + z * cos;
-    writeMatrix(part,offset,0,cos*sx);writeMatrix(part,offset,1,0);writeMatrix(part,offset,2,-sin*sx);writeMatrix(part,offset,3,0);writeMatrix(part,offset,4,0);writeMatrix(part,offset,5,sy);writeMatrix(part,offset,6,0);writeMatrix(part,offset,7,0);writeMatrix(part,offset,8,sin*sz);writeMatrix(part,offset,9,0);writeMatrix(part,offset,10,cos*sz);writeMatrix(part,offset,11,0);writeMatrix(part,offset,12,px);writeMatrix(part,offset,13,py);writeMatrix(part,offset,14,pz);writeMatrix(part,offset,15,1);
+  private place(index: number, c: Creature, scale: number, opacity: number) {
+    const part=this.body,a=part.mesh.instanceMatrix.array as Float32Array,o=index*16,cos=c.cos*scale,sin=c.sin*scale;
+    a[o]=cos;a[o+2]=-sin;a[o+5]=scale;a[o+8]=sin;a[o+10]=cos;
+    a[o+12]=c.position.x;a[o+13]=c.position.y;a[o+14]=c.position.z;
     if (part.fade.getX(index) !== Math.fround(opacity)) { part.fade.setX(index,opacity); part.fadeChanged = true; }
-
   }
   update(dt: number, time: number, now: number, camera: PerspectiveCamera, reducedMotion: boolean) {
     this.frozenList = undefined;
     for (let i = 0; i < this.items.length; i++) {
-      const c = this.items[i]!, s = c.state; delete c.snapshot;
+      const c = this.items[i]!, s = c.state; c.snapshot = undefined;
       const age = Math.max(0, (now - s.commandAt) / 1000);
       const command = s.command;
       let targetX = s.home[0], targetZ = s.home[2], speed = 0.35;
@@ -188,17 +184,17 @@ export class Citizens {
       const fade = idleFade(now, s.lastActive);
       const arrival = reducedMotion ? 1 : 0.9 + Math.max(0, Math.min(1, (now - c.born) / 400)) * 0.1;
       const bounce = dancing && !reducedMotion ? Math.sin(age * 12) * 0.025 : 0;
-      this.place(this.body,i,c,0,0,0,arrival,arrival,arrival,yaw,fade);
+      this.place(i,c,arrival,fade);
       if(this.body.bounce.getX(i)!==Math.fround(bounce)){this.body.bounce.setX(i,bounce);this.body.bounceChanged=true;}
       if(this.dirtyColors.has(s.id)){this.tint.set(s.color);this.body.mesh.setColorAt(i,this.tint);this.body.mesh.instanceColor?.addUpdateRange(i*3,3);}
 
     }
     const part=this.body;part.mesh.count=this.count;
-    if(part.matricesChanged)part.mesh.instanceMatrix.needsUpdate=true;
+    if(this.count)part.mesh.instanceMatrix.needsUpdate=true;
     if(part.fadeChanged)part.fade.needsUpdate=true;
     if(part.bounceChanged)part.bounce.needsUpdate=true;
     if(this.dirtyColors.size&&part.mesh.instanceColor)part.mesh.instanceColor.needsUpdate=true;
-    part.matricesChanged=part.fadeChanged=part.bounceChanged=false;
+    part.fadeChanged=part.bounceChanged=false;
     this.dirtyColors.clear();
   }
   dispose() { for (const c of this.items) c.removeLabel(); this.items.length = 0; this.byId.clear(); }
