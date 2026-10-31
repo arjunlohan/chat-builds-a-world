@@ -16,3 +16,10 @@ const path = "world/engine/scene-validators.generated.ts";
 if (process.argv.includes("--check")) {
   if (await readFile(path, "utf8") !== generated) throw new Error("Scene validators are stale; run pnpm exec tsx checks/generate-validator.ts");
 } else await writeFile(path, generated);
+
+const { strictSchema } = await import("../server/runtime/schema.js");
+const guard = JSON.parse(await readFile("server/guard/guard.schema.json", "utf8"));
+const providerSchema = JSON.stringify(strictSchema(guard), null, 2) + "\n";
+const providerPath = "server/guard/guard.output.schema.json";
+if (process.argv.includes("--check")) { if (await readFile(providerPath,"utf8") !== providerSchema) throw new Error("Guard provider schema is stale"); }
+else await writeFile(providerPath, providerSchema);

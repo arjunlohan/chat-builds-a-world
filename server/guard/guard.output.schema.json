@@ -1,0 +1,84 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "reason",
+    "title",
+    "spec",
+    "files"
+  ],
+  "properties": {
+    "verdict": {
+      "enum": [
+        "accept",
+        "reject"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "description": "minLength: 1, maxLength: 240"
+    },
+    "title": {
+      "type": "string",
+      "description": "minLength: 1, maxLength: 40"
+    },
+    "spec": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "moduleId",
+            "description",
+            "steps",
+            "checks",
+            "estimatedSeconds"
+          ],
+          "properties": {
+            "moduleId": {
+              "type": "string",
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,47}$"
+            },
+            "description": {
+              "type": "string",
+              "description": "minLength: 1, maxLength: 600"
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "minLength: 1, maxLength: 160"
+              },
+              "description": "minItems: 1, maxItems: 4"
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "minLength: 1, maxLength: 160"
+              },
+              "description": "minItems: 1, maxItems: 4"
+            },
+            "estimatedSeconds": {
+              "type": "integer",
+              "description": "minimum: 1, maximum: 119"
+            }
+          }
+        }
+      ]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^world/modules/(?:[a-zA-Z][a-zA-Z0-9_-]*/)*[a-zA-Z][a-zA-Z0-9_-]*\\.ts$",
+        "description": "maxLength: 240"
+      },
+      "description": "maxItems: 2"
+    }
+  }
+}

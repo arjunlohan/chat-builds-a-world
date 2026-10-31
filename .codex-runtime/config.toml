@@ -4,4 +4,3 @@ model_reasoning_effort = "medium"
 
 [model_providers.amazon-bedrock.aws]
 region = "us-east-1"
-wire_api = "responses"

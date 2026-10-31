@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { runBounded, minimalEnvironment, codexArgs, cliFailure, protectedValues, redact } from "../runtime/process.js";
+import { metricWriter } from "../summon/index.js";
 import { lstat, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -10,15 +11,14 @@ export interface BuildSpec { moduleId: string; description: string; steps: strin
 export interface GuardDecision { verdict: "accept" | "reject"; reason: string; title: string; spec: BuildSpec | null; files: string[] }
 export interface GuardResult extends GuardDecision { latencyMs: number; mode: "live" | "fixture"; reviewed?: boolean }
 export const GUARD_TIMEOUT_MS = 45_000;
-export const GUARD_SCHEMA = fileURLToPath(new URL("./guard.schema.json", import.meta.url));
+export const GUARD_SCHEMA = fileURLToPath(new URL("./guard.output.schema.json", import.meta.url));
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const validate = new Ajv2020({ strict: true, allErrors: false }).compile<GuardDecision>(schema);
 const failed = (reason: string): GuardDecision => ({ verdict: "reject", reason, title: "Idea rejected", spec: null, files: [] });
 
 /** Exactly three inherited variables plus the required isolated Codex home. No ambient auth/config. */
 export function guardEnvironment(env: NodeJS.ProcessEnv, root = REPO): NodeJS.ProcessEnv {
-  return { PATH: env.PATH ?? "/usr/bin:/bin", HOME: env.HOME ?? homedir(),
-    AWS_BEARER_TOKEN_BEDROCK: env.AWS_BEARER_TOKEN_BEDROCK ?? "", CODEX_HOME: resolve(root, ".codex-runtime") };
+  return minimalEnvironment(env, root);
 }
 export function buildGuardPrompt(idea: string) {
   if (!idea.trim() || [...idea].length > 1000 || Buffer.byteLength(idea) > 4096) throw new Error("Invalid idea size");
@@ -40,6 +40,7 @@ export async function validateDecision(value: unknown, root = REPO): Promise<Gua
   if (value.verdict === "reject") {
     if (value.spec !== null || value.files.length) throw new Error("Rejected decision contains a build");
   } else if (!value.spec || !value.files.length) throw new Error("Accepted decision needs a bounded spec and files");
+  if (new Set(value.files).size !== value.files.length) throw new Error("Duplicate guard file");
   const serialized = JSON.stringify(value);
   const strings = [value.title, value.reason, ...value.files, ...(value.spec ? [value.spec.moduleId, value.spec.description, ...value.spec.steps, ...value.spec.checks] : [])];
   if (Buffer.byteLength(serialized) > 8192 || strings.some(text => !text.trim() || /[\u0000-\u001f\u007f]/.test(text))) throw new Error("Invalid guard text");
@@ -64,7 +65,7 @@ export function parseGuardStream(stdout: string): unknown {
   for (const line of stdout.trim().split(/\r?\n/)) {
     const event = JSON.parse(line) as { type?: string; item?: { type?: string; text?: string } };
     if (!event || typeof event.type !== "string") throw new Error("Invalid Codex event");
-    if (["error", "turn.failed"].includes(event.type)) throw new Error("Codex turn failed");
+    const failure = cliFailure(event); if (failure) throw new Error(failure);
     if (event.item && !["agent_message", "reasoning"].includes(event.item.type ?? "")) throw new Error("Guard used a tool");
     if (event.type === "item.completed" && event.item?.type === "agent_message") { final = event.item.text; completed = false; }
     if (event.type === "turn.completed") completed = true;
@@ -78,44 +79,33 @@ export class IdeaGuard {
   private readonly env: NodeJS.ProcessEnv;
   private readonly bin: string;
   private readonly timeout: number;
+  private readonly secrets: string[];
+  private readonly record: ReturnType<typeof metricWriter>;
   constructor(options: Options = {}) {
-    const source = options.env ?? process.env;
-    this.root = resolve(options.root ?? REPO); this.env = guardEnvironment(source, this.root);
+    const source = options.env ?? process.env; this.secrets = protectedValues(source);
+    this.root = resolve(options.root ?? REPO); this.record = metricWriter(join(this.root, "state"), "guard-metrics.jsonl"); this.env = guardEnvironment(source, this.root);
     this.bin = options.bin?.trim() || source.CODEX_BIN?.trim() || "codex";
     this.timeout = Math.max(1, Math.min(GUARD_TIMEOUT_MS, options.timeoutMs ?? GUARD_TIMEOUT_MS));
   }
   async review(idea: string, signal?: AbortSignal): Promise<GuardResult> {
     const started = performance.now();
-    const result = (decision: GuardDecision, reviewed = false): GuardResult => ({ ...decision, latencyMs: Math.round(performance.now() - started), mode: "live", reviewed });
+    const result = (decision: GuardDecision, reviewed = false): GuardResult => { const value: GuardResult = { ...decision, reason: redact(decision.reason, this.secrets), latencyMs: Math.round(performance.now() - started), mode: "live", reviewed }; void this.record({ at: Date.now(), ...value }); return value; };
     if (!this.env.AWS_BEARER_TOKEN_BEDROCK?.trim()) return result(failed("Guard unavailable: AWS_BEARER_TOKEN_BEDROCK is missing."));
     let prompt: string; try { prompt = buildGuardPrompt(idea); } catch { return result(failed("Guard rejected an empty or oversized idea.")); }
     if (signal?.aborted) return result(failed("Guard review cancelled."));
-    const raw = await new Promise<{ output?: string; reason?: string }>(resolveRun => {
-      const args = ["exec", "--sandbox", "read-only", "--ephemeral", "--json", "--output-schema", GUARD_SCHEMA,
-        "-c", 'model_reasoning_effort="low"', "-c", 'approval_policy="never"',
-        "-c", 'model_provider="amazon-bedrock"', "--model", "openai.gpt-6.1-sol", "-"];
-      const child = spawn(this.bin, args, { cwd: this.root, env: this.env, shell: false, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"] });
-      let done = false, output = "", bytes = 0;
-      const kill = () => { try { if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL"); else child.kill("SIGKILL"); } catch { /* process already exited */ } };
-      const finish = (value: { output?: string; reason?: string }) => {
-        if (done) return; done = true; clearTimeout(timer); signal?.removeEventListener("abort", abort); resolveRun(value);
-      };
-      const abort = () => { kill(); finish({ reason: "Guard review cancelled." }); };
-      const timer = setTimeout(() => { kill(); finish({ reason: "Guard timed out after 45 seconds." }); }, this.timeout);
-      signal?.addEventListener("abort", abort, { once: true });
-      child.stdout.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => { bytes += Buffer.byteLength(chunk); if (bytes > 1_048_576) { kill(); finish({ reason: "Guard output exceeded its limit." }); } else output += chunk; });
-      child.stderr.on("data", (chunk: Buffer) => { bytes += chunk.length; if (bytes > 1_048_576) { kill(); finish({ reason: "Guard output exceeded its limit." }); } });
-      child.stdin.on("error", () => {}); // A fast child failure may close stdin before the prompt is written.
-      child.once("error", () => finish({ reason: "Guard could not start the configured Codex CLI." }));
-      child.once("close", code => finish(code === 0 ? { output } : { reason: "Guard CLI failed; review rejected." }));
-      child.stdin.end(prompt);
-    }).catch((): { output?: string; reason?: string } => ({ reason: "Guard could not start the configured Codex CLI." }));
-    if (raw.reason) return result(failed(raw.reason));
+    const raw = await runBounded({ bin: this.bin, args: await codexArgs(this.root, "read-only", "low", GUARD_SCHEMA), cwd: this.root, env: this.env, input: prompt, signal, timeoutMs: this.timeout, maxBytes: 1_048_576 });
+    if (raw.reason) return result(failed(({ timeout: "Guard timed out after 45 seconds.", cancelled: "Guard review cancelled.", start: "Guard could not start the configured Codex CLI.", "output-limit": "Guard output exceeded its limit." } as Record<string,string>)[raw.reason] ?? "Guard returned malformed events."));
     try {
-      if (raw.output!.includes(this.env.AWS_BEARER_TOKEN_BEDROCK!)) return result(failed("Guard output contained protected data."));
-      return result(await validateDecision(parseGuardStream(raw.output!), this.root), true);
-    } catch { return result(failed("Guard returned malformed or unsafe output; review rejected.")); }
+      if (this.secrets.some(secret => raw.output.includes(secret))) {
+        // Failure events may carry provider diagnostics; redact them before surfacing.
+        for (const line of raw.output.trim().split(/\r?\n/)) { const detail = cliFailure(JSON.parse(line)); if (detail) throw new Error(redact(detail, this.secrets)); }
+        return result(failed("Guard output contained protected data."));
+      }
+      const parsed = parseGuardStream(raw.output);
+      if (raw.code !== 0) throw new Error("Guard CLI exited without completing.");
+      return result(await validateDecision(parsed, this.root), true);
+    } catch (error) { return result(failed(redact(error instanceof Error ? error.message : "Guard returned malformed or unsafe output.", this.secrets))); }
+
   }
 }
 /** Explicit offline simulator fixture. Never substitutes for a missing live credential. */

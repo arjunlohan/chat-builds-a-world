@@ -9,7 +9,7 @@ if (keys !== ['PATH','HOME','AWS_BEARER_TOKEN_BEDROCK','CODEX_HOME'].sort().join
 for (const flag of ['exec','--ephemeral','--json','--output-schema','read-only','model_reasoning_effort="low"','model_provider="amazon-bedrock"','openai.gpt-6.1-sol']) if (!args.includes(flag)) process.exit(12);
 if (args[args.indexOf('--sandbox') + 1] !== 'read-only' || args.at(-1) !== '-') process.exit(13);
 const schema = JSON.parse(fs.readFileSync(args[args.indexOf('--output-schema') + 1], 'utf8'));
-if (schema.properties.title.maxLength !== 40) process.exit(14);
+if (schema.properties.title.type !== "string" || JSON.stringify(schema).includes("uniqueItems")) process.exit(14);
 let input = '';
 process.stdin.setEncoding('utf8'); process.stdin.on('data', chunk => input += chunk);
 process.stdin.on('end', () => {
@@ -30,6 +30,8 @@ process.stdin.on('end', () => {
     const child = require('node:child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});
     fs.writeFileSync(path.join(process.env.HOME,'child.pid'),String(child.pid)); setInterval(()=>{},1000); return;
   }
+  if (idea === '__FAKE_EVENT_ERROR__') { console.log(JSON.stringify({type:'turn.failed',error:{message:'invalid_json_schema synthetic '+process.env.AWS_BEARER_TOKEN_BEDROCK}})); process.exitCode=1;return; }
+  if (idea === '__FAKE_WARNING__') console.log(JSON.stringify({type:'error',level:'warning',message:'Warning: configuration note'}));
   if (idea === '__FAKE_FAILURE__') { process.stderr.write('sensitive upstream detail'); process.exitCode=2; return; }
   if (idea === '__FAKE_FLOOD__') { process.stdout.write("x".repeat(1_048_577)); setInterval(() => {},1000); return; }
   if (idea === '__FAKE_JSON__') { process.stdout.write('not json\n'); return; }

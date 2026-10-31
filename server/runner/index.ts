@@ -1,4 +1,7 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { OperationQueue } from "../runtime/queue.js";
+import { protectedValues, redact } from "../runtime/process.js";
+import { metricWriter } from "../summon/index.js";
+import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateDecision, type GuardResult } from "../guard/index.js";
@@ -15,12 +18,16 @@ interface Options {
   feed(kind: "plan" | "edit" | "check" | "ship" | "error", text: string): void;
   announce(message: string): Promise<void>;
   check?: typeof candidateCheck;
+  builder?: typeof runCodex;
+  record?: (record: unknown) => Promise<void> | void;
 }
 export class Runner {
-  private busy = false;
+  private readonly queue = new OperationQueue();
+  private readonly record: NonNullable<Options["record"]>;
   readonly root: string;
-  constructor(private options: Options) { this.root = resolve(options.root); }
-  get isBusy() { return this.busy; }
+  constructor(private options: Options) { this.root = resolve(options.root); this.record = options.record ?? metricWriter(join(this.root, "state"), "runner-metrics.jsonl"); }
+  get isBusy() { return this.queue.busy; }
+  idle() { return this.queue.idle(); }
   async recover() {
     const pending = this.options.versions.pending;
     if (pending && pending.path === join(this.root, "worktrees", `v${pending.version}`)) {
@@ -32,12 +39,13 @@ export class Runner {
     return this.options.versions.reserve(Math.max(0, ...tags) + 1);
   }
   private async log(result: RunResult, mode: string) {
-    await mkdir(join(this.root, "state"), { recursive: true });
-    await appendFile(join(this.root, "state/runner-metrics.jsonl"), JSON.stringify({ at: Date.now(), mode, ...result }) + "\n", { mode: 0o600 });
+    try { await this.record({ at: Date.now(), mode, ...result }); } catch { /* Metrics are never part of promotion or recovery. */ }
   }
   async build(request: BuildRequest): Promise<RunResult> {
-    if (this.busy) return { ok: false, outcome: "REVERTED", reason: "Runner is busy.", durationMs: 0, tokens: { input: null, output: null, total: null } };
-    this.busy = true; const start = performance.now(), controller = new AbortController();
+    return this.queue.enqueue(signal => this.buildNow({ ...request, signal: AbortSignal.any([signal, request.signal]) }));
+  }
+  private async buildNow(request: BuildRequest): Promise<RunResult> {
+    const start = performance.now(), controller = new AbortController();
     const cancel = () => controller.abort(); request.signal.addEventListener("abort", cancel, { once: true });
     if (request.signal.aborted) controller.abort(); const signal = controller.signal;
     const timer = setTimeout(() => controller.abort(), Math.min(this.options.timeoutMs ?? BUILD_TIMEOUT_MS, BUILD_TIMEOUT_MS));
@@ -53,16 +61,13 @@ export class Runner {
       base = await cleanMaster(this.root); await this.options.versions.baselineAt(base); version = await this.reserve();
       tree = await createTree(this.root, version, base); await this.options.versions.setPending({ path: tree, base, version });
       const before = await inventory(tree); feed("plan", `Created isolated worktree v${version}.`);
-      const fixture = request.decision.mode === "fixture";
       const sourceEnv = this.options.env ?? process.env;
-      tokens = await runCodex({ root: this.root, tree, bin: fixture ? fileURLToPath(new URL("../../checks/fixtures/fake-builder.cjs", import.meta.url)) : this.options.bin ?? sourceEnv.CODEX_BIN ?? "codex",
-        env: fixture ? { ...sourceEnv, AWS_BEARER_TOKEN_BEDROCK: "offline-fixture-not-a-key" } : sourceEnv,
-        decision: approved, signal, feed, ...(this.options.timeoutMs ? { timeoutMs: this.options.timeoutMs } : {}) });
+      tokens = await (this.options.builder ?? runCodex)({ root: this.root, tree, bin: this.options.bin ?? sourceEnv.CODEX_BIN ?? "codex", env: sourceEnv, decision: approved, signal, feed, ...(this.options.timeoutMs ? { timeoutMs: this.options.timeoutMs } : {}) });
       await auditDiff(tree, base, before, approved.files); feed("check", "Approved paths verified; compiling the candidate.");
-      const protectedValues = Object.entries(sourceEnv).filter(([name, value]) => /TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY/i.test(name) && value && value.length >= 8).map(([, value]) => value!);
+      const secrets = protectedValues(sourceEnv);
       for (const file of approved.files) {
         const source = await readFile(join(tree, file), "utf8");
-        if (protectedValues.some(value => source.includes(value))) throw new Error("Candidate contained protected data.");
+        if (secrets.some(value => source.includes(value))) throw new Error("Candidate contained protected data.");
       }
       const nodeModules = fileURLToPath(new URL("../../node_modules", import.meta.url));
       const compiled = await compileModule(tree, approved.files[0]!, approved.spec.moduleId, nodeModules, approved.files);
@@ -84,12 +89,12 @@ export class Runner {
       const active = await this.options.versions.activate({ version, tag: `v${version}`, commit, title: approved.title, requester, modules: artifacts });
       if (!active) throw new Error("Live activation did not acknowledge; restoring the previous world.");
       const result: RunResult = { ok: true, outcome: "SHIPPED", reason: "Checks passed and live module swap acknowledged.", durationMs: Math.round(performance.now() - start), tokens, version, tag: `v${version}`, check };
-      await this.log(result, fixture ? "fixture" : "live");
+      await this.log(result, request.decision.mode);
       try { await this.options.announce(`Shipped v${version}: ${approved.title} — requested by @${requester}`); } catch { feed("check", "Shipped; Twitch announcement unavailable."); } return result;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Build failed.";
-      const key = (this.options.env ?? process.env).AWS_BEARER_TOKEN_BEDROCK;
-      const reason = signal.aborted ? "Build timed out or was cancelled." : key && detail.includes(key) ? "Build failed; protected detail suppressed." : detail.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 180);
+      tokens = (error as { tokens?: Usage })?.tokens ?? tokens;
+      const reason = signal.aborted ? "Build timed out or was cancelled." : redact(detail, protectedValues(this.options.env ?? process.env));
       if (merged && tree) {
         // Recovery is another forward commit, never a reset of the session checkout.
         await git(tree, "restore", "--source", base, "--staged", "--worktree", "--", "world/modules");
@@ -102,14 +107,17 @@ export class Runner {
       await this.log(result, request.decision.mode); return result;
     } finally {
       clearTimeout(timer); request.signal.removeEventListener("abort", cancel); controller.abort();
-      try { if (tree) await removeTree(this.root, tree); } finally { await this.options.versions.setPending(); this.busy = false; }
+      try { if (tree) await removeTree(this.root, tree); } finally { await this.options.versions.setPending(); }
     }
   }
   async rollback(requester: string, automatic = false): Promise<RunResult> {
+    return this.queue.enqueue(() => this.rollbackNow(requester, automatic), automatic);
+  }
+  private async rollbackNow(requester: string, automatic: boolean): Promise<RunResult> {
     const baseline = this.options.versions.baseline;
     const start = performance.now(), target = this.options.versions.previous() ?? (automatic && baseline ? { version: 0, tag: "v0", commit: baseline, title: "Original world", requester: "system", modules: [], receipt: "" } : null), tokens = { input: 0, output: 0, total: 0 };
-    if (this.busy || !target) return { ok: false, outcome: "REVERTED", reason: this.busy ? "Runner is busy." : "No previous tag to restore.", durationMs: 0, tokens };
-    this.busy = true; let tree = "";
+    if (!target) return { ok: false, outcome: "REVERTED", reason: "No previous tag to restore.", durationMs: 0, tokens };
+    let tree = "";
     try {
       const base = await cleanMaster(this.root), version = await this.reserve();
       tree = await createTree(this.root, version, base); await this.options.versions.setPending({ path: tree, base, version });
@@ -121,6 +129,6 @@ export class Runner {
       const result: RunResult = { ok: true, outcome: "ROLLED BACK", reason: `Restored ${target.tag} without resetting master.`, version, tag: `v${version}`, durationMs: Math.round(performance.now() - start), tokens };
       this.options.feed("ship", `Restored ${target.tag}.`); await this.log(result, "rollback"); try { await this.options.announce(`Rolled back to ${target.tag}.`); } catch { this.options.feed("check", "Restored; Twitch announcement unavailable."); } return result;
     } catch (error) { const result: RunResult = { ok: false, outcome: "REVERTED", reason: error instanceof Error ? error.message : "Rollback failed.", durationMs: Math.round(performance.now() - start), tokens }; await this.log(result, "rollback"); return result; }
-    finally { if (tree) await removeTree(this.root, tree); await this.options.versions.setPending(); this.busy = false; }
+    finally { if (tree) await removeTree(this.root, tree); await this.options.versions.setPending(); }
   }
 }

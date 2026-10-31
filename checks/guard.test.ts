@@ -118,3 +118,18 @@ test("skipped reviews cancel and ignore late results; paused reviews wait for re
   await new Promise(resolve => setImmediate(resolve)); assert.equal(paused.r.snapshot().phase, "guarding");
   paused.r.setPaused(false); assert.equal(paused.r.snapshot().phase, "building"); paused.r.dispose();
 });
+test("strict provider schemas omit unsupported keywords while validators enforce uniqueness", async () => {
+  const schema = JSON.parse(await readFile("server/guard/guard.output.schema.json", "utf8"));
+  const { responseSchema } = await import("../server/summon/provider.js");
+  for (const value of [schema, responseSchema()]) {
+    const visit = (v: unknown) => { if (!v || typeof v !== "object") return; for (const [k, child] of Object.entries(v)) { assert.ok(!["uniqueItems", "allOf", "if", "then", "else", "minimum", "maximum"].includes(k), k); visit(child); } };
+    visit(value);
+  }
+  const { latencyMs, mode, ...base } = decision();
+  await assert.rejects(validateDecision({ ...base, files: [base.files[0], base.files[0]] }), /Duplicate/);
+});
+test("CLI failure details are surfaced and redacted; warning error events are nonfatal", async () => {
+  const failure = await guard().review("__FAKE_EVENT_ERROR__");
+  assert.match(failure.reason, /invalid_json_schema/); assert.match(failure.reason, /REDACTED/); assert.ok(!failure.reason.includes(env.AWS_BEARER_TOKEN_BEDROCK));
+  assert.equal((await guard().review("__FAKE_WARNING__")).reviewed, true);
+});
