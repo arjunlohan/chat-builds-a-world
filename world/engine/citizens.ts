@@ -1,6 +1,6 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { indexGeometry } from "./index-geometry.js";
-import { CITIZEN_CAP, IDLE_MS, FADE_MS } from "../shared/limits.js";
+import { CITIZEN_CAP, IDLE_MS, FADE_MS, inParade } from "../shared/limits.js";
 import { isChatCommand } from "../../server/commands.js";
 import {
   BufferGeometry, Float32BufferAttribute, Matrix4, Color, ConeGeometry, DynamicDrawUsage, Group, IcosahedronGeometry,
@@ -10,8 +10,7 @@ import {
 import type { Citizen, WorldServices } from "./api.js";
 import type { CitizenState } from "../../server/contracts.js";
 import { hash, terrainHeight } from "./land.js";
-import { LabelManager, citizenLabelMode } from "./labels.js";
-import { RAID_ENTRY, RAID_PARADE_MS } from "./raid-portal.js";
+import { LabelManager, citizenLabelMode, projectLabel } from "./labels.js";
 import { stepOnLand } from "./navigation.js";
 
 const LIMIT = CITIZEN_CAP;
@@ -26,9 +25,10 @@ export class Citizens {
   private readonly items: Creature[] = [];
   private readonly byId = new Map<string, Creature>();
   private readonly tint = new Color();
-  private readonly projection = new Vector3();
   private readonly measure = document.createElement("canvas").getContext("2d");
   private readonly dirtyColors = new Set<string>();
+  private dirtyFirst=Infinity;
+  private dirtyLast=-1;
   private frozenList: readonly Citizen[] | undefined;
   private readonly speakers = new Set<string>();
   private readonly body: {mesh:InstancedMesh;fade:InstancedBufferAttribute;bounce:InstancedBufferAttribute;fadeChanged:boolean;bounceChanged:boolean};
@@ -91,14 +91,13 @@ export class Citizens {
       label.dataset.userId = state.id; label.hidden = true;
       label.append(bubble, name); this.labels.append(label);
       const phase = hash(state.id) / 4294967296 * Math.PI * 2;
-      c = { snapshot:undefined, cos:1, sin:0, commandSpeech:false, fullWidth: 160, quietWidth: 80, removeLabel: () => {}, state, position: state.raid&&now-state.raid.arrivedAt<RAID_PARADE_MS?new Vector3(RAID_ENTRY.x,RAID_ENTRY.y,RAID_ENTRY.z):new Vector3(...state.home), phase, yaw: phase, born: state.raid?state.raid.arrivedAt+state.raid.order*45:now, label, name, bubble };
+      c = { snapshot:undefined, cos:1, sin:0, commandSpeech:false, fullWidth: 160, quietWidth: 80, removeLabel: () => {}, state, position: state.entry&&inParade(state.entry.at,now)?new Vector3(...state.entry.from):new Vector3(...state.home), phase, yaw: phase, born: state.entry?state.entry.at+state.entry.delay:now, label, name, bubble };
       const matrix=this.body.mesh.instanceMatrix.array as Float32Array,offset=this.items.length*16;matrix.fill(0,offset,offset+16);matrix[offset+15]=1;
       this.items.push(c); this.byId.set(state.id, c);
       const creature = c;
       creature.removeLabel = this.layout.add(`citizen:${state.id}`, label, (candidate, time, camera, focus) => {
         if(time<creature.born)return;
-        this.projection.copy(creature.position); this.projection.y += 1.0; this.projection.project(camera);
-        if (this.projection.z <= -1 || this.projection.z >= 1) return undefined;
+        if(!projectLabel(creature.position,camera,candidate,1))return;
         const s = creature.state, spokeAge = time - s.speechAt;
         const focused = !!focus && creature.position.distanceToSquared(focus) < 3.2;
         const distance = creature.position.distanceTo(camera.position);
@@ -106,7 +105,6 @@ export class Citizens {
         const mode = speaking ? "speech" : citizenLabelMode(distance, spokeAge, time - creature.born, focused);
         if (creature.bubble.hidden !== !speaking) creature.bubble.hidden = !speaking;
         const nameWidth = mode === "quiet" ? creature.quietWidth : creature.fullWidth;
-        candidate.x=(this.projection.x+1)*960; candidate.y=(1-this.projection.y)*540;
         candidate.width=speaking?Math.max(200,nameWidth):nameWidth;candidate.height=speaking?82:mode==="quiet"?18:26;
         candidate.kind=mode;candidate.opacity=idleFade(time,s.lastActive)*(mode==="quiet"?0.35:1);
         candidate.priority=speaking?2000+Math.max(0,5500-spokeAge)/5500:focused?900:mode==="quiet"?1:100+Math.max(0,30000-spokeAge)/1000+30/Math.max(1,distance);
@@ -144,17 +142,24 @@ export class Citizens {
   }
   private place(index: number, c: Creature, scale: number, opacity: number) {
     const part=this.body,a=part.mesh.instanceMatrix.array as Float32Array,o=index*16,cos=c.cos*scale,sin=c.sin*scale;
-    const moved=a[o]!==Math.fround(cos)||a[o+2]!==Math.fround(-sin)||a[o+5]!==Math.fround(scale)||a[o+8]!==Math.fround(sin)||a[o+10]!==Math.fround(cos)||a[o+12]!==Math.fround(c.position.x)||a[o+13]!==Math.fround(c.position.y)||a[o+14]!==Math.fround(c.position.z);
-    if(moved){a[o]=cos;a[o+2]=-sin;a[o+5]=scale;a[o+8]=sin;a[o+10]=cos;a[o+12]=c.position.x;a[o+13]=c.position.y;a[o+14]=c.position.z;part.mesh.instanceMatrix.addUpdateRange(o,16);part.mesh.instanceMatrix.needsUpdate=true;}
+    const moved =
+      a[o]!==Math.fround(cos) || a[o+2]!==Math.fround(-sin) || a[o+5]!==Math.fround(scale) ||
+      a[o+8]!==Math.fround(sin) || a[o+10]!==Math.fround(cos) ||
+      a[o+12]!==Math.fround(c.position.x) || a[o+13]!==Math.fround(c.position.y) || a[o+14]!==Math.fround(c.position.z);
+    if(moved){
+      a[o]=cos;a[o+2]=-sin;a[o+5]=scale;a[o+8]=sin;a[o+10]=cos;
+      a[o+12]=c.position.x;a[o+13]=c.position.y;a[o+14]=c.position.z;
+      this.dirtyFirst=Math.min(this.dirtyFirst,index);this.dirtyLast=index;
+    }
     if (part.fade.getX(index) !== Math.fround(opacity)) { part.fade.setX(index,opacity); part.fadeChanged = true; }
   }
   update(dt: number, time: number, now: number, camera: PerspectiveCamera, reducedMotion: boolean) {
-    this.frozenList = undefined;
+    this.frozenList = undefined;this.dirtyFirst=Infinity;this.dirtyLast=-1;
     for (let i = 0; i < this.items.length; i++) {
       const c = this.items[i]!, s = c.state; c.snapshot = undefined;
       const age = Math.max(0, (now - s.commandAt) / 1000);
       const command = s.command;
-      let targetX = s.home[0], targetZ = s.home[2], speed = s.raid&&now-s.raid.arrivedAt<RAID_PARADE_MS?1.35:0.35;
+      let targetX = s.home[0], targetZ = s.home[2], speed = s.entry&&inParade(s.entry.at,now)?1.35:0.35;
       const waiting=now<c.born;
       if (command?.kind === "follow") {
         const target = this.byId.get(command.targetId);
@@ -191,6 +196,7 @@ export class Citizens {
 
     }
     const part=this.body;part.mesh.count=this.count;
+    if(this.dirtyLast>=0){part.mesh.instanceMatrix.addUpdateRange(this.dirtyFirst*16,(this.dirtyLast-this.dirtyFirst+1)*16);part.mesh.instanceMatrix.needsUpdate=true;}
     if(part.fadeChanged)part.fade.needsUpdate=true;
     if(part.bounceChanged)part.bounce.needsUpdate=true;
     if(this.dirtyColors.size&&part.mesh.instanceColor)part.mesh.instanceColor.needsUpdate=true;

@@ -191,6 +191,15 @@ export class ModuleHost {
     this.status(id, "disposed", "module removed");
   }
 
+  /** Atomically adopt checked deltas while retaining unchanged live instances. */
+  adopt(candidate: ModuleHost, desired: readonly string[]) {
+    const ids=new Set(desired);
+    if(candidate.ledger!==this.ledger||ids.size!==desired.length||ids.size>MODULE_BUDGET.maxActive||candidate.ids.some(id=>!ids.has(id))||desired.some(id=>!candidate.records.has(id)&&!this.records.has(id)))throw new Error("Invalid module transition");
+    for(const id of this.ids)if(!ids.has(id)||candidate.records.has(id))this.unload(id);
+    for(const [id,record] of candidate.records){this.options.root.add(record.root);this.records.set(id,record);}
+    candidate.records.clear();
+  }
+
   onChat(event: Readonly<ChatEvent>) { this.enqueue({ kind: "onChat", value: Object.freeze({ ...event }) }); }
   onCitizenSpawn(citizen: Citizen) { this.enqueue({ kind: "onCitizenSpawn", value: snapshot(citizen) }); }
   onRaid(event: Readonly<RaidEvent>) { this.enqueue({ kind: "onRaid", value: Object.freeze({ ...event }) }); }

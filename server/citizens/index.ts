@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { raidAdmission } from "./raid-policy.js";
-import { CITIZEN_CAP, IDLE_MS, FADE_MS } from "../../world/shared/limits.js";
+import { RAID_ENTRY } from "../../world/shared/landmarks.js";
+import { CITIZEN_CAP, IDLE_MS, FADE_MS, QUIET_MS, RAID_CAP } from "../../world/shared/limits.js";
 import { isChatCommand } from "../commands.js";
 import type { ChatEvent, CitizenCommand, CitizenState, RaidEvent } from "../contracts.js";
 import { hash, isWalkable, terrainHeight } from "../../world/engine/land.js";
@@ -27,16 +27,19 @@ export class CitizenRoster {
   list() { return [...this.citizens.values()]; }
   get(id: string) { return this.citizens.get(id); }
 
-  accept(event: ChatEvent, now: number): { citizen: CitizenState; spawned: boolean } | undefined {
-    const existing = this.citizens.get(event.userId);
-    if (!existing && this.size >= CITIZEN_LIMIT) return;
-    let home = existing?.home;
-    if (!home) {
-      let seat = hash(event.userId) % homes.length;
-      while (this.occupied.has(seat)) seat = (seat + 1) % homes.length;
-      this.seats.set(event.userId, seat); this.occupied.add(seat);
-      home = Object.freeze([...homes[seat]!] as [number, number, number]);
-    }
+  private admit(desired: number, now: number) {
+    const needed=Math.max(0,desired-(CITIZEN_LIMIT-this.size));
+    const removed=needed?this.list().filter(c=>now-c.lastActive>=QUIET_MS).sort((a,b)=>a.lastActive-b.lastActive||a.id.localeCompare(b.id)).slice(0,needed).map(c=>c.id):[];
+    this.remove(removed);return {removed,count:Math.min(desired,CITIZEN_LIMIT-this.size)};
+  }
+  private home(id: string) {
+    let seat=hash(id)%homes.length;while(this.occupied.has(seat))seat=(seat+1)%homes.length;
+    this.seats.set(id,seat);this.occupied.add(seat);return Object.freeze([...homes[seat]!] as [number,number,number]);
+  }
+  accept(event: ChatEvent, now: number): { citizen: CitizenState; spawned: boolean; removed:string[] } | undefined {
+    const existing=this.citizens.get(event.userId),plan=existing?{removed:[],count:1}:this.admit(1,now);
+    if(!plan.count)return;
+    const home=existing?.home??this.home(event.userId);
     let command: CitizenCommand | null = existing?.command ?? null;
     let commandAt = existing?.commandAt ?? 0;
     const text = event.text.trim();
@@ -50,26 +53,25 @@ export class CitizenRoster {
     }
     const citizen: CitizenState = Object.freeze({
       id: event.userId, displayName: event.displayName, color: chatColor(event.color, event.userId), home,
-      lastActive: now, speech: isChatCommand(text) ? "" : text, speechAt: isChatCommand(text) ? 0 : now, command: command ? Object.freeze(command) : null, commandAt,
+      lastActive: now, speech: isChatCommand(text) ? "" : text, speechAt: isChatCommand(text) ? 0 : now, command: command ? Object.freeze(command) : null, commandAt, ...(existing?.entry?{entry:existing.entry}:{}),
     });
     this.citizens.set(citizen.id, citizen);
-    return { citizen, spawned: !existing };
+    return { citizen, spawned: !existing, removed:plan.removed };
   }
 
   remove(ids: readonly string[]) {
     for(const id of ids){this.citizens.delete(id);const seat=this.seats.get(id);if(seat!==undefined)this.occupied.delete(seat);this.seats.delete(id);}
   }
   arrive(raid: RaidEvent, now: number) {
-    const plan=raidAdmission(this.list(),raid.viewerCount,now);this.remove(plan.evictIds);
+    const plan=this.admit(Math.min(RAID_CAP,raid.viewerCount),now);
     const citizens:CitizenState[]=[],prefix=createHash("sha256").update(raid.id).digest("hex").slice(0,24);
     for(let i=0;i<plan.count;i++){
-      const userId=`raid-${prefix}-${i}`;
-      const result=this.accept({id:userId,userId,displayName:`${raid.broadcasterName} · ${i+1}`.slice(0,64),color:chatColor("",raid.broadcasterId),text:"",timestamp:now},now)!;
-      const citizen=Object.freeze({...result.citizen,speechAt:0,raid:Object.freeze({id:raid.id,channel:raid.broadcasterName,arrivedAt:now,order:i})});this.citizens.set(userId,citizen);citizens.push(citizen);
+      const id=`raid-${prefix}-${i}`,citizen:CitizenState=Object.freeze({id,displayName:`${raid.broadcasterName} · ${i+1}`.slice(0,64),color:chatColor("",raid.broadcasterId),home:this.home(id),lastActive:now,speech:"",speechAt:0,command:null,commandAt:0,entry:Object.freeze({from:Object.freeze([RAID_ENTRY.x,RAID_ENTRY.y,RAID_ENTRY.z] as [number,number,number]),at:now,delay:i*45})});
+      this.citizens.set(id,citizen);citizens.push(citizen);
     }
-    return {citizens,removed:plan.evictIds};
+    return {citizens,removed:plan.removed};
   }
   prune(now: number) {
-    const removed=this.list().filter(c=>now-c.lastActive>=IDLE_MS+FADE_MS).map(c=>c.id);this.remove(removed);return removed;
+    const removed:string[]=[];for(const citizen of this.citizens.values())if(now-citizen.lastActive>=IDLE_MS+FADE_MS)removed.push(citizen.id);this.remove(removed);return removed;
   }
 }

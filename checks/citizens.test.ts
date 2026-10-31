@@ -79,7 +79,7 @@ test("scripted simulator admits 80 chatters, 24 raiders, 160 messages and one ra
     now += step.delay;
     assert.equal((step.kind === "chat" ? world.chat(step.event) : world.raid(step.event)).accepted, true);
   }
-  assert.equal(world.roster.size, 104); assert.equal(world.roster.list().filter(c=>c.raid).length,24); assert.equal(scenario.length, 161); assert.equal(world.snapshot().raids, 1);
+  assert.equal(world.roster.size, 104); assert.equal(world.roster.list().filter(c=>c.entry).length,24); assert.equal(scenario.length, 161); assert.equal(world.snapshot().raids, 1);
   for (const kind of ["jump", "dance", "home", "follow"]) assert.equal(world.roster.list().filter(c => c.command?.kind === kind).length, 20);
 });
 test("automatic camera notices coalesce a crowd instead of restarting every frame", () => {

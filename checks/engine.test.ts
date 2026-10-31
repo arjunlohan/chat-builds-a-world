@@ -164,6 +164,12 @@ test("shared world bounds handle box extents and light radii consistently",async
 });
 
 test("ledger distinguishes invalid items from capacity and queries without eviction",async()=>{
- const {ResourceLedger,ItemLimitError,emptyUsage}=await import("../world/shared/limits.js");const ledger=new ResourceLedger(emptyUsage(),{nodes:64,triangles:60000,draws:64,lights:4,particles:512});
- ledger.reserve("first",{...emptyUsage(),triangles:40000});assert.equal(ledger.fits("next",{...emptyUsage(),triangles:30000}),false);assert.equal(ledger.shortfall("next",{...emptyUsage(),triangles:30000}).triangles,10000);assert.equal(ledger.fits("next",{...emptyUsage(),triangles:30000},new Set(["first"])),true);assert.equal(ledger.usage().triangles,40000);assert.throws(()=>ledger.reserve("bad",{...emptyUsage(),triangles:50001}),ItemLimitError);assert.equal(ledger.usage().triangles,40000);
+ const {ResourceLedger,RenderFailure,emptyUsage}=await import("../world/shared/limits.js");const ledger=new ResourceLedger(emptyUsage(),{nodes:64,triangles:60000,draws:64,lights:4,particles:512});
+ ledger.reserve("first",{...emptyUsage(),triangles:40000});assert.equal(ledger.overCap("next",{...emptyUsage(),triangles:30000}),"triangles");assert.equal(ledger.usage().triangles,40000);assert.equal(ledger.overCap("next",{...emptyUsage(),triangles:30000},new Set(["first"])),undefined);assert.equal(ledger.usage().triangles,40000);assert.throws(()=>ledger.reserve("bad",{...emptyUsage(),triangles:50001}),RenderFailure);assert.equal(ledger.usage().triangles,40000);
+});
+test("module transitions retain unchanged instances and adopt only checked deltas",()=>{
+ const f=fixture(),ledger=new ResourceLedger(),services:Omit<WorldServices,"scene">={citizens:{get:()=>undefined,list:()=>[]},spawnSpec:()=>({id:"x",dispose(){}}),camera:{focus(){}},effects:{play(){}},log(){}};
+ const host=new ModuleHost({root:new Group(),ledger,services}),candidate=new ModuleHost({root:new Group(),ledger,services});let initA=0,disposeA=0;
+ host.load(()=>f.module("a",{init(){initA++;},dispose(){disposeA++;}}));candidate.load(()=>f.module("b"));host.adopt(candidate,["a","b"]);candidate.dispose();assert.equal(initA,1);assert.equal(disposeA,0);assert.equal(host.activeCount,2);host.update(1/60);
+ const empty=new ModuleHost({root:new Group(),ledger,services});host.adopt(empty,["a"]);assert.equal(initA,1);assert.equal(disposeA,0);host.dispose();assert.equal(disposeA,1);
 });

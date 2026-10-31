@@ -103,7 +103,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       response.writeHead(405, { Allow: "GET, HEAD" }).end(); return;
     }
     if (path === "/api/rounds") { json(response, rounds ? 200 : 503, rounds?.snapshot() ?? { error: "Rounds unavailable" }); return; }
-    if (path === "/api/history") { json(response,200,{versions:versions?.replay()??[]});return; }
+    if (path === "/api/history") { response.writeHead(200,{"Content-Type":"application/json; charset=utf-8"}).end(versions?.serializedHistory()??'{"versions":[]}');return; }
     if (path === "/api/world") { json(response, 200, pipeline.snapshot()); return; }
     if (path === "/events") {
       if (request.method === "HEAD") { response.writeHead(200).end(); return; }

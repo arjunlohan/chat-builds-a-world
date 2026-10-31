@@ -7,6 +7,7 @@ export type HistoryEntry = Pick<WorldVersion,"version"|"tag"|"commit"|"title"|"r
 interface Stored { baseline?: string; counter: number; current: WorldVersion | null; history: WorldVersion[]; pending?: { path: string; base: string; version: number } }
 export class Versions {
   private data: Stored = { counter: 0, current: null, history: [] };
+  private replayJson:string|undefined;
   private readonly bundles = new Map<string, string>();
   private waiters = new Map<string, { resolve(ok: boolean): void; timer: ReturnType<typeof setTimeout> }>();
   constructor(readonly root: string, private publish: (version: WorldVersion | null) => void) {}
@@ -29,8 +30,10 @@ export class Versions {
     for(const entry of this.data.history)if(entry.version>0&&entry.healthy===true){const {version,tag,commit,title,requester,modules}=entry;shipped.set(version,{version,tag,commit,title,requester,modules});}
     return structuredClone([...shipped.values()].sort((a,b)=>a.version-b.version));
   }
+  serializedHistory(){return this.replayJson??=JSON.stringify({versions:this.replay()});}
   get pending() { return this.data.pending; }
   async save() {
+    this.replayJson=undefined;
     await mkdir(join(this.root, "state"), { recursive: true });
     const file = join(this.root, "state/versions.json"), temporary = `${file}.${randomUUID()}.tmp`;
     await writeFile(temporary, JSON.stringify(this.data), { mode: 0o600 }); await rename(temporary, file);

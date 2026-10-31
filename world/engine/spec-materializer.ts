@@ -9,7 +9,7 @@ import type { SummonState } from "../../server/contracts.js";
 import type { SpawnHandle, WorldServices } from "./api.js";
 import { createSpecGeometry } from "./spec-geometry.js";
 import { ResourceLedger, ResourceOwner, type Usage } from "./resources.js";
-import { LabelManager } from "./labels.js";
+import { LabelManager, projectLabel } from "./labels.js";
 import { hash, random } from "./land.js";
 
 interface NodeState { mesh: Mesh; base: Vector3; scale: Vector3; extent: Vector3; drift: Vector3; offset: Vector3; pulse: number }
@@ -92,9 +92,8 @@ export class SpecMaterializer {
         this.options.labels.append(label); entry.label = label;
         const order = ++this.sequence;
         entry.removeLabel = this.options.layout.add(`summon:${id}`, label, (candidate, _now, camera) => {
-          this.projection.copy(entry.anchor).project(camera);
-          if (this.projection.z <= -1 || this.projection.z >= 1) return undefined;
-          candidate.x=(this.projection.x+1)*960;candidate.y=(1-this.projection.y)*540;candidate.width=240;candidate.height=46;candidate.kind="summon";candidate.priority=1200+order;candidate.opacity=1;return true;
+          if(!projectLabel(entry.anchor,camera,candidate))return;
+          candidate.width=240;candidate.height=46;candidate.kind="summon";candidate.priority=1200+order;candidate.opacity=1;return true;
         });
       }
       if (!restore) { if (!metadata) this.options.effects.play("spawn", center); this.options.camera.focus(center, { duration: 2.5, priority: 3 }); }

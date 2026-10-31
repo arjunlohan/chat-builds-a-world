@@ -35,7 +35,7 @@ export interface CitizenState {
   readonly speechAt: number;
   readonly command: CitizenCommand | null;
   readonly commandAt: number;
-  readonly raid?: {readonly id:string;readonly channel:string;readonly arrivedAt:number;readonly order:number};
+  readonly entry?: {readonly from:readonly [number,number,number];readonly at:number;readonly delay:number};
 }
 export interface SummonState {
   id: string; spec: SceneSpec; requester: string; requestedAt: number; receipt: string; mode: "fixture" | "live";

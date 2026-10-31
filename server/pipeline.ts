@@ -1,4 +1,4 @@
-import { RAID_PARADE_MS } from "../world/shared/limits.js";
+import { inParade } from "../world/shared/limits.js";
 import { contentPolicy, DEFAULT_BLOCKLIST } from "./content-policy.js";
 import type { WorldVersion } from "./versions/index.js";
 import type { ChatEvent, RaidEvent, WorldEvent, LaneEvent } from "./contracts.js";
@@ -60,7 +60,7 @@ export class WorldPipeline {
     for (const listener of this.listeners) { try { listener(event, serialized); } catch { this.listeners.delete(listener); } }
   }
   snapshot(): Extract<WorldEvent, { type: "snapshot" }> {
-    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, arrival:this.arrival&&this.now()-this.arrival.at<RAID_PARADE_MS?this.arrival:null, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null, version: this.version };
+    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, arrival:this.arrival&&inParade(this.arrival.at,this.now())?this.arrival:null, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null, version: this.version };
   }
   private duplicate(key: string, now: number) {
     if (this.seen.has(key)) return true;
@@ -98,7 +98,8 @@ export class WorldPipeline {
     if (summonCommand) void this.summonLane?.submit({ ...event, timestamp: now }, { source: authority.source ?? "sim" });
     const result = this.roster.accept({ ...event, timestamp: now }, now);
     if (!result) return roundResult ?? (summonCommand ? { accepted: true, count: this.roster.size } : { accepted: false, reason: "capacity" });
-    this.emit({ type: "chat", revision: ++this.revision, now, chat: { ...event, timestamp: now }, ...result });
+    if(result.removed.length)this.emit({type:"remove",revision:++this.revision,now,ids:result.removed});
+    this.emit({ type: "chat", revision: ++this.revision, now, chat: { ...event, timestamp: now }, citizen:result.citizen,spawned:result.spawned });
     if (result.spawned && [1, 10, 25, 50, 80, 100, 150, 200, 250, 300].includes(this.roster.size))
       this.rounds?.toast("citizens", `${this.roster.size} citizens`, `Welcome, ${event.displayName}.`);
     return { accepted: true, count: this.roster.size };

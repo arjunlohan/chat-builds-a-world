@@ -4,6 +4,12 @@ export interface LabelCandidate {
   id: string; x: number; y: number; width: number; height: number;
   priority: number; kind: "speech" | "tag" | "quiet" | "summon"; opacity: number;
 }
+const projected = new Vector3();
+/** Shared fixed-OBS projection; callers keep their single pooled label candidate. */
+export function projectLabel(point: Readonly<Vector3>, camera: PerspectiveCamera, target: {x:number;y:number}, lift=0) {
+  projected.copy(point);projected.y+=lift;projected.project(camera);
+  if(Math.abs(projected.z)>=1)return false;target.x=(projected.x+1)*960;target.y=(1-projected.y)*540;return true;
+}
 export interface Rect { x: number; y: number; width: number; height: number }
 const intersects = (a: Rect, b: Rect) => a.x < b.x + b.width + 5 && a.x + a.width + 5 > b.x && a.y < b.y + b.height + 5 && a.y + a.height + 5 > b.y;
 const reserved: Rect[] = [

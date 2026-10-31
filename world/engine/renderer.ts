@@ -96,7 +96,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const base = engineResources.audit(environment);
   const ledger = new ResourceLedger(emptyUsage(), modulePool(base));
   const summonLedger = new ResourceLedger(emptyUsage(), SUMMON_POOL);
-  let moduleRoot = new Group();
+  const moduleRoot = new Group();
   moduleRoot.name = "world modules";
   scene.add(moduleRoot);
   const ack = (state: import("../../server/contracts.js").SummonState, error?: string) => {
@@ -113,11 +113,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       options.onStatus?.(event);
       if (event.state === "disabled" || event.state === "rejected") {
         stats.value.moduleError = `${event.id}: ${event.reason}`;
-        if (event.state === "disabled" && !pendingAck && activeVersion) post("/modules/fault", { version: activeVersion.version, receipt: activeVersion.receipt });
+        if (event.state === "disabled" && !pendingAck && !staging && activeVersion) post("/modules/fault", { version: activeVersion.version, receipt: activeVersion.receipt });
       }
     },
   };
-  let host = new ModuleHost(hostOptions);
+  const host = new ModuleHost(hostOptions);
+  let staging=false;
   let pendingAck: { version: WorldVersion; frames: number } | null = null;
   let activeVersion: WorldVersion | null = null;
   const moduleReceipt = (version: WorldVersion, ok: boolean) => post("/modules/ack", { version: version.version, receipt: version.receipt, ok });
@@ -135,18 +136,22 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   async function activate(version: WorldVersion | null) {
     const generation = ++activation; shadowDirty = true;
     try {
-      const factories = await Promise.all((version?.modules ?? []).map(async module => {
+      const oldHashes=new Map(activeVersion?.modules.map(m=>[m.id,m.hash])??[]);
+      const changed=(version?.modules??[]).filter(m=>oldHashes.get(m.id)!==m.hash||!host.ids.includes(m.id));
+      const factories = await Promise.all(changed.map(async module => {
         if (!/^\/modules\/[a-f0-9]{64}\.js$/.test(module.url)) throw new Error("Invalid module asset");
         const loaded = await import(/* @vite-ignore */ module.url) as { default: WorldModuleFactory };
         return { factory: loaded.default, id: module.id };
       }));
       if (generation !== activation) return;
-      const root = new Group(), candidate = new ModuleHost({ ...hostOptions, root });
-      stats.value.moduleError = "";
-      for (const item of factories) if (!candidate.load(item.factory)) { candidate.dispose(); throw new Error("Module activation rejected"); }
-      if (candidate.activeCount !== factories.length || factories.some(item => !candidate.ids.includes(item.id))) { candidate.dispose(); throw new Error("Module IDs did not match manifest"); }
-      host.dispose(); scene.remove(moduleRoot); moduleRoot = root; scene.add(root); host = candidate;
-      stats.value.moduleVersion = version?.version ?? 0; stats.value.moduleCount = factories.length; stats.value.moduleSwaps++;
+      const candidate = new ModuleHost({ ...hostOptions, root:new Group() });
+      stats.value.moduleError = "";staging=true;
+      try{
+        for(const item of factories)if(!candidate.load(item.factory))throw new Error("Module activation rejected");
+        if(candidate.activeCount!==factories.length||factories.some(item=>!candidate.ids.includes(item.id)))throw new Error("Module IDs did not match manifest");
+        host.adopt(candidate,version?.modules.map(m=>m.id)??[]);
+      }finally{candidate.dispose();staging=false;}
+      stats.value.moduleVersion = version?.version ?? 0; stats.value.moduleCount = host.activeCount; stats.value.moduleSwaps++;
       activeVersion = version; pendingAck = version ? { version, frames: 0 } : null;
     } catch {
       if (version) moduleReceipt(version, false);
@@ -157,12 +162,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   window.__worldStats = stats.value;
   let elapsed = 0, disposed = false, ready = false, frameId = 0, uiTime = 0;
   let serverOffset = 0;
-  const raidArrivals:import("../../server/contracts.js").CitizenState[]=[];
   const disconnect = options.playback ? () => {} : connectWorld(event => {
     serverOffset = event.now - Date.now();
     switch (event.type) {
     case "snapshot": {
-      raidArrivals.length=0;
       void activate(event.version);
       citizens.sync(event.citizens, event.now); stats.value.raidCount = event.raids;
       if(event.arrival)raidPortal.open(event.arrival.raid.broadcasterName,event.arrival.admitted,event.arrival.raid.viewerCount,elapsed-(event.now-event.arrival.at)/1000);
@@ -186,10 +189,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         if (citizen) director.notice(citizen.position, 1);
       }
       break; }
-    case "remove": {const removed=new Set(event.ids);for(let i=raidArrivals.length-1;i>=0;i--)if(removed.has(raidArrivals[i]!.id))raidArrivals.splice(i,1);citizens.remove(event.ids);break;}
+    case "remove": citizens.remove(event.ids);break;
     case "raid": {
-      stats.value.raidCount++;raidPortal.open(event.raid.broadcasterName,event.citizens.length,event.raid.viewerCount,elapsed);
-      for(const state of event.citizens)raidArrivals.push(state);
+      stats.value.raidCount++;effects.play("portal",raidPortal.root.position);raidPortal.open(event.raid.broadcasterName,event.citizens.length,event.raid.viewerCount,elapsed);
+      for(const state of event.citizens){const spawned=citizens.upsert(state,event.now);if(spawned)host.onCitizenSpawn(spawned);}
       director.focus(raidPortal.root.position,{priority:2,duration:2.8});host.onRaid(event.raid);break;
     }
     case "summon": {
@@ -212,7 +215,6 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     // Reduced motion keeps composition still but retains rendered, measurable frames.
     const visualTime = reducedMotion.matches ? 0 : elapsed;
     try {
-      for(let i=0;i<6&&raidArrivals.length;i++){const spawned=citizens.upsert(raidArrivals.shift()!,Date.now()+serverOffset);if(spawned)host.onCitizenSpawn(spawned);}
       stats.value.citizenCount=citizens.count;
       renderer.info.reset();
       const cpuStart = performance.now();
