@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import {atomicJson} from "../persistence/atomic.js";
+import {atomicJson,readJson} from "../persistence/atomic.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 export interface ModuleArtifact { id: string; url: string; hash: string; file: string }
@@ -9,13 +9,11 @@ interface Stored { baseline?: string; counter: number; current: WorldVersion | n
 export class Versions {
   private data: Stored = { counter: 0, current: null, history: [] };
   private replayJson:string|undefined;
-  private writing:Promise<void>=Promise.resolve();
   private readonly bundles = new Map<string, string>();
   private waiters = new Map<string, { resolve(ok: boolean): void; timer: ReturnType<typeof setTimeout> }>();
   constructor(readonly root: string, private publish: (version: WorldVersion | null) => void) {}
   async init() {
-    try { this.data = JSON.parse(await readFile(join(this.root, "state/versions.json"), "utf8")) as Stored; }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw new Error("Version recovery state is invalid."); }
+    this.data = await readJson<Stored>(join(this.root,"state/versions.json")) ?? this.data;
     for (const version of this.data.history) for (const module of version.modules) {
       if (!/^[a-f0-9]{64}$/.test(module.hash) || module.url !== `/modules/${module.hash}.js`) throw new Error("Invalid persisted module artifact.");
       const code = await readFile(join(this.root, "state/modules", `${module.hash}.js`), "utf8");
@@ -36,8 +34,7 @@ export class Versions {
   get pending() { return this.data.pending; }
   async save() {
     this.replayJson=undefined;
-    const write=this.writing.then(()=>atomicJson(join(this.root,"state/versions.json"),this.data));
-    this.writing=write.catch(()=>{});await write;
+    await atomicJson(join(this.root,"state/versions.json"),this.data);
   }
   async reserve(minimum = 1) { return Math.max(this.data.counter + 1, minimum); }
   async setPending(value?: Stored["pending"]) { if (value) this.data.pending = value; else delete this.data.pending; await this.save(); }
@@ -60,7 +57,7 @@ export class Versions {
   }
   acknowledge(version: number, receipt: string, ok: boolean) {
     if (this.data.current?.version !== version || this.data.current.receipt !== receipt) return false;
-    const pending = this.waiters.get(receipt); if (pending) { clearTimeout(pending.timer); this.waiters.delete(receipt); pending.resolve(ok); }
+    const pending = this.waiters.get(receipt); if (pending) { this.data.current.healthy=ok;clearTimeout(pending.timer); this.waiters.delete(receipt); pending.resolve(ok); }
     return true;
   }
   /** Rollback is to the prior successful activation, with source content retained by its tag. */

@@ -1,3 +1,4 @@
+import {BUILD_TIMEOUT_MS} from "../runner/codex.js";
 import { rejected, reverted } from "../runtime/results.js";
 import type { BuildRequest, RunResult } from "../runner/index.js";
 import type { GuardResult } from "../guard/index.js";
@@ -5,9 +6,9 @@ import type { ChatEvent } from "../contracts.js";
 import type { BuildView, IdeaView, RoundState, SimulationOutcome, ToastView, VersionView } from "./types.js";
 export type { RoundState, SimulationOutcome } from "./types.js";
 
-export const ROUND_MS = Object.freeze({ ideas: 120_000, voting: 45_000, guarding: 45_000, building: 180_000, rollback: 30_000 });
+export const ROUND_MS = Object.freeze({ ideas: 120_000, voting: 45_000, guarding: 45_000, building: BUILD_TIMEOUT_MS, rollback: 30_000 });
 interface Idea { id: string; text: string; requester: string; order: number; normalized: string; supporters: Set<string> }
-export const DEMO_MS:Readonly<Record<RoundState["phase"],number>> = Object.freeze({ideas:20000,voting:10000,guarding:45000,building:180000,rollback:10000});
+export const DEMO_MS:Readonly<Record<RoundState["phase"],number>> = Object.freeze({...ROUND_MS,ideas:20000,voting:10000,rollback:10000});
 interface Options { timers?:Readonly<Record<RoundState["phase"],number>>; now?: () => number; publish(state: RoundState): void; simulationAllowed?: boolean; build?: (request: BuildRequest) => Promise<RunResult>; rollback?: (requester: string) => Promise<RunResult>; canRollback?: () => boolean; review?: (idea: string, context: { signal: AbortSignal }) => GuardResult | Promise<GuardResult> }
 const stop = new Set("a an the and or to of for please add build make give put some with on in it island".split(" "));
 export function normalizeIdea(text: string) {
@@ -82,17 +83,18 @@ export class Rounds {
   private ranked() { return this.ranking ??= [...this.ideas.values()].filter(i => i.supporters.size > 0).sort((a, b) => b.supporters.size - a.supporters.size || a.order - b.order); }
   private voteCounts(id: string) { return this.counts.get(id) ?? 0; }
   private rollbackTally() { return { yes: this.rollbackYes, no: this.rollbackVotes.size - this.rollbackYes }; }
-  checkpoint(){return {state:this.view(),ideas:[...this.ideas.values()].map(i=>({...i,supporters:[...i.supporters]})),votes:[...this.votes],shortlist:this.shortlist.map(i=>i.id),winner:this.winner?.id,order:this.order,serial:this.serial,version:this.version,rollbackVotes:[...this.rollbackVotes]};}
-  restore(saved: ReturnType<Rounds["checkpoint"]>){
-    const state=saved?.state;if(!state||!["ideas","voting","guarding","building","rollback"].includes(state.phase)||!Number.isSafeInteger(state.round)||state.round<1||typeof state.paused!=="boolean"||!Number.isFinite(state.clockRate)||state.clockRate<1||state.clockRate>15||!Number.isFinite(state.startedAt)||!Number.isFinite(state.now)||!Number.isFinite(state.endsAt)||!Array.isArray(saved.ideas)||saved.ideas.length>100||!Array.isArray(saved.votes)||saved.votes.length>5000)throw new Error("Invalid saved round");
+  checkpoint(){return structuredClone({phase:this.phase,round:this.round,startedAt:this.startedAt,endsAt:this.endsAt,now:this.now(),rate:this.rate,simulation:this.simulation,paused:this.paused,guard:this.guard,build:this.build,timeline:this.timeline,toasts:this.toasts,ideas:[...this.ideas.values()].map(({normalized:_normalized,supporters,...idea})=>({...idea,supporters:[...supporters]})),votes:[...this.votes],shortlist:this.shortlist.map(i=>i.id),winner:this.winner?.id,order:this.order,serial:this.serial,version:this.version,rollbackVotes:[...this.rollbackVotes],rollbackRequester:this.rollbackRequester});}
+  restore(saved: ReturnType<Rounds["checkpoint"]>|({state:RoundState}&Pick<ReturnType<Rounds["checkpoint"]>,"ideas"|"votes"|"shortlist"|"winner"|"order"|"serial"|"version"|"rollbackVotes">),savedAt=this.real()){
+    // Read Phase 9 files once; new checkpoints contain source state only.
+    const data="state" in saved?{...saved.state,...saved,rate:saved.state.clockRate,rollbackRequester:saved.state.rollback?.requester??""}:saved;
     this.ideas.clear();this.support.clear();this.votes.clear();this.counts.clear();
-    for(const raw of saved.ideas){if(typeof raw.id!=="string"||typeof raw.text!=="string"||!raw.text.trim()||raw.text.length>180||typeof raw.requester!=="string"||!Array.isArray(raw.supporters)||raw.supporters.length>5000)throw new Error("Invalid saved proposal");const idea={...raw,normalized:normalizeIdea(raw.text),supporters:new Set(raw.supporters)};this.ideas.set(idea.id,idea);for(const user of idea.supporters){if(typeof user!=="string"||this.support.has(user))throw new Error("Invalid saved support");this.support.set(user,idea.id);}}
-    this.shortlist=saved.shortlist.map(id=>{const idea=this.ideas.get(id);if(!idea)throw new Error("Invalid saved candidate");return idea;});if(this.shortlist.length>3)throw new Error("Invalid saved shortlist");
-    for(const [user,id] of saved.votes){if(typeof user!=="string"||!this.shortlist.some(i=>i.id===id))throw new Error("Invalid saved vote");this.votes.set(user,id);this.counts.set(id,this.voteCounts(id)+1);}
-    this.round=state.round;this.phase=state.phase;this.startedAt=state.startedAt;this.endsAt=state.endsAt;this.anchorLogical=state.now;this.anchorReal=this.real();this.rate=state.clockRate;this.simulation=state.simulation;this.paused=state.paused;this.guard=structuredClone(state.guard);this.build=structuredClone(state.build);this.timeline=structuredClone(state.timeline);this.toasts=structuredClone(state.toasts);this.order=saved.order;this.serial=saved.serial;this.version=saved.version;this.winner=saved.winner?this.ideas.get(saved.winner):undefined;this.ranking=undefined;
-    this.rollbackVotes=new Map(saved.rollbackVotes??[]);this.rollbackYes=[...this.rollbackVotes.values()].filter(v=>v==="yes").length;if(state.rollback)this.rollbackRequester=state.rollback.requester;
-    if(state.phase==="guarding"||state.phase==="building"){
-      this.enter("ideas",state.now);this.shortlist=[];this.votes.clear();this.counts.clear();this.winner=undefined;
+    for(const raw of data.ideas){const idea={...raw,normalized:normalizeIdea(raw.text),supporters:new Set(raw.supporters)};this.ideas.set(idea.id,idea);for(const user of idea.supporters)this.support.set(user,idea.id);}
+    this.shortlist=data.shortlist.map(id=>this.ideas.get(id)!);
+    for(const [user,id] of data.votes){this.votes.set(user,id);this.counts.set(id,this.voteCounts(id)+1);}
+    this.round=data.round;this.phase=data.phase;this.startedAt=data.startedAt;this.endsAt=data.endsAt;this.rate=data.rate;this.simulation=data.simulation;this.paused=data.paused;this.anchorLogical=data.now+(data.paused?0:Math.max(0,this.real()-savedAt)*data.rate);this.anchorReal=this.real();this.guard=structuredClone(data.guard);this.build=structuredClone(data.build);this.timeline=structuredClone(data.timeline);this.toasts=structuredClone(data.toasts);this.order=data.order;this.serial=data.serial;this.version=data.version;this.winner=data.winner?this.ideas.get(data.winner):undefined;this.ranking=undefined;
+    this.rollbackVotes=new Map(data.rollbackVotes);this.rollbackYes=[...this.rollbackVotes.values()].filter(v=>v==="yes").length;this.rollbackRequester=data.rollbackRequester;
+    if(data.phase==="guarding"||data.phase==="building"){
+      this.enter("ideas",this.now());this.shortlist=[];this.votes.clear();this.counts.clear();this.winner=undefined;
       this.guard={...this.guard,status:"rejected",reason:"Interrupted by server restart; no provider call was replayed."};this.build.status="failed";this.build.progress=0;this.feed("error","REVERTED · Server restarted; candidate discarded.");
     }
     this.emit(true);

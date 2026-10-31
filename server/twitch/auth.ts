@@ -1,5 +1,6 @@
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import {atomicJson} from "../persistence/atomic.js";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 export interface TwitchConfig {
   clientId: string; clientSecret: string; accessToken: string; refreshToken: string; broadcasterId: string;
@@ -26,10 +27,7 @@ export function tokenStore(config: TwitchConfig, directory = "state"): TokenStor
       return undefined;
     },
     async save(tokens) {
-      await mkdir(directory, { recursive: true, mode: 0o700 });
-      const temp = `${path}.${randomUUID()}.tmp`;
-      await writeFile(temp, JSON.stringify({ ...tokens, fingerprint, clientId: config.clientId, broadcasterId: config.broadcasterId }), { mode: 0o600, flag: "wx" });
-      await rename(temp, path);
+      await atomicJson(path,{...tokens,fingerprint,clientId:config.clientId,broadcasterId:config.broadcasterId});
     },
   };
 }

@@ -30,13 +30,13 @@ async function body(request: IncomingMessage): Promise<unknown> {
   });
 }
 
-async function post(request: IncomingMessage, response: ServerResponse, handler: (input: Record<string, unknown>) => Promise<void> | void) {
+async function post(request: IncomingMessage, response: ServerResponse, handler: (input: Record<string, unknown>) => Promise<{status:number;value:unknown;changed?:boolean}> | {status:number;value:unknown;changed?:boolean}, durable?: (changed?:boolean)=>Promise<void>) {
   if (request.method !== "POST") { response.setHeader("Allow","POST"); request.resume(); json(response,405,{error:"Use POST"}); return; }
-  try { const input=await body(request); if(!input||typeof input!=="object"||Array.isArray(input))throw new Error(); await handler(input as Record<string,unknown>); }
+  try { const input=await body(request); if(!input||typeof input!=="object"||Array.isArray(input))throw new Error(); const result=await handler(input as Record<string,unknown>);await durable?.(result.changed);json(response,result.status,result.value); }
   catch {request.resume();if(!response.headersSent)json(response,400,{error:"Invalid JSON event or body; maximum 8 KiB, application/json required"});}
 }
 
-export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { durable?:()=>Promise<void>; broadcasterId?:string; simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
+export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { durable?:(changed?:boolean)=>Promise<void>; broadcasterId?:string; simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
   const assets = await buildClient();
   const pages = new Map([
     ["/world", await readFile(new URL("../world/index.html", import.meta.url))],
@@ -61,36 +61,36 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       await post(request,response,async input=>{
         switch(path){
           case "/runner/live": {
-            if(!automation?.live||!rounds||rounds.snapshot().phase!=="ideas"||rounds.snapshot().totalIdeas){json(response,409,{error:"Live runner requires a key and an empty round."});return;}
+            if(!automation?.live||!rounds||rounds.snapshot().phase!=="ideas"||rounds.snapshot().totalIdeas){return {status:409,value:{error:"Live runner requires a key and an empty round."}};}
             if(typeof input.idea!=="string")throw new Error();const round=rounds.snapshot().round;
             const result=pipeline.chat({id:`live-${Date.now()}`,userId:"live-bench",displayName:"LiveBench",color:"#E5C775",text:`!idea ${input.idea}`},{moderator:false,source:"sim"});
-            if(!result.accepted){json(response,400,result);return;}rounds.skip();rounds.skip();await automation?.durable?.();json(response,200,{round});return;
+            if(!result.accepted){return {status:400,value:result};}rounds.skip();rounds.skip();return {status:200,value:{round}};
           }
           case "/modules/fault": {
             const current=versions?.current;
-            if(!primary(input.clientId)||!current||input.version!==current.version||input.receipt!==current.receipt){json(response,409,{accepted:false});return;}
-            json(response,202,{accepted:true});
-            if(!moduleFailures.has(current.receipt)){moduleFailures.add(current.receipt);if(moduleFailures.size>128)moduleFailures.delete(moduleFailures.values().next().value!);void automation?.fault().catch(()=>{});}return;
+            if(!primary(input.clientId)||!current||input.version!==current.version||input.receipt!==current.receipt){return {status:409,value:{accepted:false}};}
+            if(!moduleFailures.has(current.receipt)){moduleFailures.add(current.receipt);if(moduleFailures.size>128)moduleFailures.delete(moduleFailures.values().next().value!);void automation?.fault().catch(()=>{});}return {status:202,value:{accepted:true}};
           }
           case "/modules/ack": {
             const accepted=primary(input.clientId)&&typeof input.version==="number"&&typeof input.receipt==="string"&&typeof input.ok==="boolean"&&!!versions?.acknowledge(input.version,input.receipt,input.ok);
-            await automation?.durable?.();json(response,accepted?200:409,{accepted});return;
+            if(accepted)await versions!.save();return {status:accepted?200:409,value:{accepted},changed:accepted};
           }
           case "/summon/ack": {
             const accepted=typeof input.id==="string"&&typeof input.receipt==="string"&&!!await summons?.acknowledge(input.id,input.receipt,typeof input.error==="string"?input.error:undefined,primary(input.clientId));
-            await automation?.durable?.();json(response,accepted?200:409,{accepted});return;
+            return {status:accepted?200:409,value:{accepted},changed:accepted};
           }
           case "/sim/round": {
             if(typeof input.outcome!=="string"||!["ship","fail","timeout"].includes(input.outcome))throw new Error();
             automation?.setOutcome?.(input.outcome);
             const result=rounds?.startSimulation(input.outcome as "ship"|"fail"|"timeout")??{accepted:false,reason:"simulation-disabled"};
-            await automation?.durable?.();json(response,result.accepted?200:result.reason==="simulation-disabled"?403:409,result);return;
+            return {status:result.accepted?200:result.reason==="simulation-disabled"?403:409,value:result};
           }
-          case "/sim/chat": {const result=pipeline.chat(input,{moderator:false,source:"sim"});await automation?.durable?.();json(response,200,result);return;}
-          case "/sim/eventsub": {const raid=incomingRaid(input,automation?.broadcasterId??"sim-broadcaster");const result=raid?pipeline.raid(raid):{accepted:false,reason:"not-incoming-raid"};await automation?.durable?.();json(response,200,result);return;}
-          case "/sim/raid": {const result=pipeline.raid(input);await automation?.durable?.();json(response,200,result);return;}
+          case "/sim/chat": {const result=pipeline.chat(input,{moderator:false,source:"sim"});return {status:200,value:result};}
+          case "/sim/eventsub": {const raid=incomingRaid(input,automation?.broadcasterId??"sim-broadcaster");const result=raid?pipeline.raid(raid):{accepted:false,reason:"not-incoming-raid"};return {status:200,value:result};}
+          case "/sim/raid": {const result=pipeline.raid(input);return {status:200,value:result};}
         }
-      });return;
+        throw new Error("Unknown event");
+      },automation?.durable);return;
     }
     if (path.startsWith("/modules/") && path.endsWith(".js")) {
       if (request.method !== "GET") { json(response, 405, { error: "Use GET" }); return; }
@@ -104,7 +104,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     }
     if (path === "/api/rounds") { json(response, rounds ? 200 : 503, rounds?.snapshot() ?? { error: "Rounds unavailable" }); return; }
     if (path === "/api/history") { response.writeHead(200,{"Content-Type":"application/json; charset=utf-8"}).end(versions?.serializedHistory()??'{"versions":[]}');return; }
-    if (path === "/api/world") { await automation?.durable?.();json(response, 200, pipeline.snapshot()); return; }
+    if (path === "/api/world") { json(response, 200, pipeline.snapshot()); return; }
     if (path === "/events") {
       if (request.method === "HEAD") { response.writeHead(200).end(); return; }
       if (clients.size >= 16) { json(response, 503, { error: "Too many viewers on the local stream" }); return; }

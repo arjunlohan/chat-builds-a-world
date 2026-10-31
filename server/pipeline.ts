@@ -59,12 +59,11 @@ export class WorldPipeline {
     const serialized = JSON.stringify(event);
     for (const listener of this.listeners) { try { listener(event, serialized); } catch { this.listeners.delete(listener); } }
   }
-  checkpoint(){return {citizens:this.roster.list(),revision:this.revision,paused:this.paused,raids:this.raids,arrival:this.arrival,seen:[...this.seen],cooldowns:[...this.cooldowns],replies:[...this.replyAt],lastReply:Number.isFinite(this.lastReply)?this.lastReply:null};}
+  checkpoint(){return {citizens:this.roster.list(),revision:this.revision,paused:this.paused,raids:this.raids,arrival:this.arrival,seen:[...this.seen].filter(([,at])=>this.now()-at<60000),replies:[...this.replyAt],lastReply:Number.isFinite(this.lastReply)?this.lastReply:null};}
   restore(saved: ReturnType<WorldPipeline["checkpoint"]>){
-    if(!saved||!Number.isSafeInteger(saved.revision)||saved.revision<0||typeof saved.paused!=="boolean"||!Number.isSafeInteger(saved.raids)||saved.raids<0)throw new Error("Invalid saved world");
-    this.roster.restore(saved.citizens);this.revision=saved.revision;this.paused=saved.paused;this.raids=saved.raids;this.arrival=saved.arrival?{raid:parseRaid(saved.arrival.raid),admitted:saved.arrival.admitted,at:saved.arrival.at}:null;
-    if(this.arrival&&(!Number.isFinite(this.arrival.at)||!Number.isSafeInteger(this.arrival.admitted)||this.arrival.admitted<0||this.arrival.admitted>150))throw new Error("Invalid saved arrival");
-    for(const [target,entries] of [[this.seen,saved.seen],[this.cooldowns,saved.cooldowns],[this.replyAt,saved.replies]] as const){if(!Array.isArray(entries)||entries.length>10000||entries.some(pair=>typeof pair[0]!=="string"||!Number.isFinite(pair[1])))throw new Error("Invalid saved admission state");target.clear();for(const [key,value] of entries)target.set(key,value);}
+    this.roster.restore(saved.citizens);this.revision=saved.revision;this.paused=saved.paused;this.raids=saved.raids;this.arrival=saved.arrival;
+    this.seen.clear();for(const [id,at] of saved.seen)if(this.now()-at<60000)this.seen.set(id,at);
+    this.cooldowns.clear();this.replyAt.clear();for(const [id,at] of saved.replies)this.replyAt.set(id,at);
     this.lastReply=saved.lastReply??-Infinity;
   }
   snapshot(): Extract<WorldEvent, { type: "snapshot" }> {
