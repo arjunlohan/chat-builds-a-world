@@ -7,7 +7,7 @@ export function timeline() {
   const draw = cached<RoundState["timeline"]>(list, value => value.length ? value.slice(-2).reverse().map(version => {
     const row = el("li", `version ${version.kind}`); row.dataset.kind = version.kind;
     const copy = el("div"); copy.append(el("p", "version-title", version.title), el("p", "credit", version.requester));
-    row.append(el("span", "version-tag", version.kind === "ship" ? `v${version.version}` : `↶ v${version.version}`), copy, el("span", "version-status", version.kind === "ship" ? "STUB" : "KEPT"));
+    row.append(el("span", "version-tag", version.kind === "ship" ? `v${version.version}` : `↶ v${version.version}`), copy, el("span", "version-status", version.kind === "ship" ? (version.stub ? "STUB" : "LIVE") : "REVERT"));
     row.title = version.reason; return row;
   }) : []);
   return { root, update(state: RoundState) { root.hidden = !state.timeline.length; draw(state.timeline); } };

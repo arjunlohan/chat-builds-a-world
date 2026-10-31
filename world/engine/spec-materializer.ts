@@ -22,7 +22,7 @@ export interface MaterializerOptions {
   effects: WorldServices["effects"]; camera: WorldServices["camera"]; citizens: WorldServices["citizens"];
   onVisible?: (state: SummonState) => void;
 }
-export interface SpecHandle extends SpawnHandle { readonly usage: Usage }
+export interface SpecHandle extends SpawnHandle { readonly usage: Usage; readonly root: Group }
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
 export class SpecMaterializer {
@@ -36,7 +36,7 @@ export class SpecMaterializer {
     const spec = parseSceneSpec(JSON.stringify(input));
     if (this.entries.size >= 24) throw new Error("capacity");
     const id = metadata?.id ?? `module-spec-${++this.sequence}`;
-    if (this.entries.has(id)) return { id, usage: this.entries.get(id)!.usage, dispose: () => this.remove(id) };
+    if (this.entries.has(id)) return { id, root: this.entries.get(id)!.root, usage: this.entries.get(id)!.usage, dispose: () => this.remove(id) };
     const root = new Group(), owner = new ResourceOwner();
     root.name = `scene-spec:${id}`;
     try {
@@ -97,7 +97,7 @@ export class SpecMaterializer {
         });
       }
       if (!restore) { if (!metadata) this.options.effects.play("spawn", center); this.options.camera.focus(center, { duration: 2.5, priority: 3 }); }
-      return { id, usage, dispose: () => this.remove(id) };
+      return { id, root, usage, dispose: () => this.remove(id) };
     } catch {
       this.entries.get(id)?.removeLabel?.();
       this.options.ledger.release(`spec:${id}`); owner.audit(root); owner.dispose(root); this.entries.delete(id);

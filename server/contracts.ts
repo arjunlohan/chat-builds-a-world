@@ -1,3 +1,4 @@
+import type { WorldVersion } from "./versions/index.js";
 import type { RoundState } from "./rounds/types.js";
 import type { SceneSpec } from "./summon/scene-spec.js";
 
@@ -38,9 +39,9 @@ export interface CitizenState {
 export interface SummonState {
   id: string; spec: SceneSpec; requester: string; requestedAt: number; receipt: string; mode: "fixture" | "live";
 }
-export type LaneEvent = { type: "rounds"; state: RoundState } | { type: "summon"; summon: SummonState } | { type: "summon-remove"; ids: string[] } | { type: "reply"; message: string };
+export type LaneEvent = { type: "version"; version: WorldVersion | null } | { type: "rounds"; state: RoundState } | { type: "summon"; summon: SummonState } | { type: "summon-remove"; ids: string[] } | { type: "reply"; message: string };
 export type WorldEvent = (LaneEvent & { revision: number; now: number }) |
-  { type: "snapshot"; revision: number; now: number; citizens: CitizenState[]; paused: boolean; raids: number; summons: SummonState[]; rounds: RoundState | null } |
+  { type: "snapshot"; revision: number; now: number; citizens: CitizenState[]; paused: boolean; raids: number; summons: SummonState[]; rounds: RoundState | null; version: WorldVersion | null } |
   { type: "chat"; revision: number; now: number; chat: ChatEvent; citizen: CitizenState; spawned: boolean } |
   { type: "remove"; revision: number; now: number; ids: string[] } |
   { type: "raid"; revision: number; now: number; raid: RaidEvent } |

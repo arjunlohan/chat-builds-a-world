@@ -11,28 +11,25 @@ const chat = (userId: string, text: string): ChatEvent => ({ id: `round-event-${
 function harness(allow = false) {
   let time = 0; const states: RoundState[] = [];
   const review = (): GuardResult => ({ verdict: "accept", reason: "Unit fixture", title: "Small module", spec: { moduleId: "unit", description: "Small local visual", steps: ["One module"], checks: ["Cleanup"], estimatedSeconds: 90 }, files: ["world/modules/unit.ts"], latencyMs: 0, mode: "fixture" });
-  const rounds = new Rounds({ review, now: () => time, publish: state => states.push(state), simulationAllowed: allow });
-  return { rounds, states, advance(ms: number) { time += ms; rounds.tick(); }, time: () => time };
+  let finish!: (result: import("../server/runner/index.js").RunResult) => void;
+  const rounds = new Rounds({ build: () => new Promise(resolve => { finish = resolve; }), review, now: () => time, publish: state => states.push(state), simulationAllowed: allow });
+  return { rounds, states, async complete(ok: boolean) { finish({ ok, outcome: ok ? "SHIPPED" : "REVERTED", reason: ok ? "Checks passed" : "Candidate check failed", durationMs: 10, tokens: { input: 1, output: 2, total: 3 }, ...(ok ? { version: 1, tag: "v1" } : {}) }); await new Promise(resolve => setImmediate(resolve)); }, advance(ms: number) { time += ms; rounds.tick(); }, time: () => time };
 }
 function choices(rounds: Rounds) {
   rounds.command(chat("Moss", "!idea Grow a lantern orchard"));
   rounds.command(chat("Fern", "!idea Build a cloud observatory"));
   rounds.command(chat("Wisp", "!idea Tiny creatures race together"));
 }
-test("production rounds keep exact 120/45/180-second windows, stream progress and start the next round", () => {
+test("production rounds use exact windows and finish only when the runner reports its checked result", async () => {
   const h = harness(), r = h.rounds; choices(r);
-  assert.equal(r.snapshot().endsAt, 120_000);
-  h.advance(119_999); assert.equal(r.snapshot().phase, "ideas");
+  assert.equal(r.snapshot().endsAt, 120_000); h.advance(119_999); assert.equal(r.snapshot().phase, "ideas");
   h.advance(1); assert.equal(r.snapshot().phase, "voting"); assert.equal(r.snapshot().endsAt, 165_000);
   r.command(chat("voter", "!vote 2")); h.advance(45_000);
-  let s = r.snapshot(); assert.equal(s.phase, "building"); assert.equal(s.endsAt - s.startedAt, 180_000);
-  assert.equal(s.winner?.requester, "Fern"); assert.equal(s.build.lines.length, 1);
-  h.advance(60_000); s = r.snapshot(); assert.equal(s.build.lines.length, 5); assert.ok(s.build.progress > 50);
-  h.advance(30_000); s = r.snapshot(); assert.equal(s.phase, "ideas"); assert.equal(s.round, 2);
-  assert.equal(s.build.status, "shipped"); assert.equal(s.timeline[0]?.version, 1); assert.equal(s.timeline[0]?.stub, true);
-  assert.equal(s.timeline[0]?.requester, "Fern"); assert.ok(s.build.lines.at(-1)?.text.includes("No code or Git tag"));
-  assert.ok(h.states.filter(state => state.build.status === "shipped").every(state => state.phase === "ideas"), "Completion and next phase publish atomically");
-  assert.ok(h.states.some(state => state.phase === "building")); assert.equal(s.clockRate, 1);
+  assert.equal(r.snapshot().phase, "building"); assert.equal(r.snapshot().endsAt - r.snapshot().startedAt, 180_000);
+  assert.equal(r.snapshot().winner?.requester, "Fern"); r.feed("edit", "Edited world/modules/unit.ts"); r.feed("check", "Independent checks running");
+  assert.equal(r.snapshot().build.lines.length, 2); assert.equal(r.snapshot().build.stub, false);
+  await h.complete(true); const s = r.snapshot(); assert.equal(s.phase, "ideas"); assert.equal(s.timeline[0]?.version, 1);
+  assert.equal(s.timeline[0]?.stub, false); assert.equal(s.timeline[0]?.requester, "Fern");
 });
 test("near-identical ideas coalesce with original attribution and distinct backers", () => {
   const r = harness().rounds;
@@ -74,21 +71,17 @@ test("pause freezes countdown/progress, resume preserves remaining time, empty r
   r.setPaused(false); h.advance(89_999); assert.equal(r.snapshot().phase, "ideas");
   h.advance(1); assert.equal(r.snapshot().round, 2); assert.equal(r.snapshot().phase, "ideas");
 });
-test("sim-only accelerated rehearsal uses the same windows and state machine; fail retains the previous version", () => {
-  const h = harness(true), r = h.rounds;
-  assert.equal(r.startSimulation("ship").accepted, true); choices(r);
-  assert.equal(r.startSimulation("fail").reason, "round-busy");
-  h.advance(8000); assert.equal(r.snapshot().phase, "voting"); h.advance(3000); assert.equal(r.snapshot().phase, "building");
-  h.advance(6000); assert.equal(r.snapshot().timeline[0]?.version, 1); assert.equal(r.snapshot().clockRate, 1);
-  r.startSimulation("fail"); choices(r); h.advance(8000); h.advance(3000); h.advance(6000);
-  const s = r.snapshot(); assert.equal(s.timeline.at(-1)?.kind, "revert"); assert.equal(s.timeline.at(-1)?.version, 1); assert.equal(s.build.status, "failed");
-  assert.equal(harness().rounds.startSimulation("ship").reason, "simulation-disabled");
+test("rehearsals accelerate collection/voting but use real-time runner deadlines and preserve a failed version", async () => {
+  const h = harness(true), r = h.rounds; r.startSimulation("ship"); choices(r); h.advance(8000); assert.equal(r.snapshot().phase,"voting");
+  h.advance(3000); assert.equal(r.snapshot().phase,"building"); assert.equal(r.snapshot().clockRate,1); await h.complete(true);
+  r.startSimulation("fail"); choices(r); h.advance(8000); h.advance(3000); await h.complete(false);
+  assert.equal(r.snapshot().timeline.at(-1)?.kind,"revert"); assert.equal(r.snapshot().timeline.at(-1)?.version,1);
+  assert.equal(harness().rounds.startSimulation("ship").reason,"simulation-disabled");
 });
-test("hung stub build is failed at the 180-second deadline and moderator skip fails safely", () => {
-  const h = harness(true), r = h.rounds; r.startSimulation("timeout"); choices(r); h.advance(11_000);
-  h.advance(11_999); assert.equal(r.snapshot().phase, "building");
-  h.advance(1); assert.equal(r.snapshot().phase, "ideas"); assert.match(r.snapshot().timeline[0]!.reason, /180-second/);
-  choices(r); r.skip(); r.skip(); r.skip(); assert.match(r.snapshot().timeline.at(-1)!.reason, /moderator/);
+test("runner is cancelled at its 180-second deadline and moderator skip fails safely", () => {
+  const h = harness(true), r = h.rounds; r.startSimulation("timeout"); choices(r); h.advance(8000); h.advance(3000);
+  h.advance(179_999); assert.equal(r.snapshot().phase,"building"); h.advance(1); assert.equal(r.snapshot().phase,"ideas");
+  assert.match(r.snapshot().timeline[0]!.reason,/180-second/); choices(r); r.skip(); r.skip(); r.skip(); assert.match(r.snapshot().timeline.at(-1)!.reason,/moderator/);
 });
 test("idea, vote, timeline and toast buffers are bounded", () => {
   const r = harness().rounds;

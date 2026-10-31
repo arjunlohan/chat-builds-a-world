@@ -9,7 +9,7 @@ export async function scriptedRound(base: string, run: string, outcome: StubOutc
     if (!response.ok || !result.accepted) throw new Error("Round rehearsal event rejected");
   }
   async function state() { return await (await fetch(`${base}/api/rounds`, { signal: AbortSignal.timeout(5000) })).json() as RoundState; }
-  async function wait(test: (value: RoundState) => boolean, timeout = 25_000) {
+  async function wait(test: (value: RoundState) => boolean, timeout = 205_000) {
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) { const value = await state(); if (test(value)) return value; await delay(100); }
     throw new Error("Round rehearsal deadline exceeded");
@@ -41,5 +41,5 @@ export async function scriptedRound(base: string, run: string, outcome: StubOutc
   const done = await wait(s => (s.timeline.at(-1)?.id ?? 0) > previous);
   const result = done.timeline.at(-1)!;
   if (result.kind !== (outcome === "ship" ? "ship" : "revert") || result.requester !== "Comet04") throw new Error("Stub build result mismatch");
-  console.log(`Round rehearsal: 7 proposals → 4 distinct ideas → 3 candidates; 13 ballots → 12 voters [1,9,2]; ${outcome === "ship" ? `stub shipped v${result.version}` : `stub ${outcome}, retained v${result.version}`} for ${result.requester}. Timings 120/45/180 s at 15×.`);
+  console.log(`Round rehearsal: 7 proposals → 4 distinct ideas → 3 candidates; 13 ballots → 12 voters [1,9,2]; ${outcome === "ship" ? `fixture shipped v${result.version}` : `fixture ${outcome}, retained v${result.version}`} for ${result.requester}. Timings 120/45/180 s at 15×.`);
 }

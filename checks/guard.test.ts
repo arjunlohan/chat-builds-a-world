@@ -87,7 +87,7 @@ test("45-second ceiling uses a hard kill, kills descendants and supports cancell
 });
 function roundHarness(review?: (idea: string, context: { fixture: boolean; signal: AbortSignal }) => GuardResult | Promise<GuardResult>) {
   let now = 0;
-  const r = new Rounds({ now: () => now, publish() {}, ...(review ? { review } : {}) });
+  const r = new Rounds({ build: async () => ({ ok: true, outcome: "SHIPPED", reason: "Unit builder", durationMs: 0, tokens: { input: 0, output: 0, total: 0 }, version: 1 }), now: () => now, publish() {}, ...(review ? { review } : {}) });
   r.command({ id: "idea", userId: "viewer", displayName: "Moss", color: "#ABCDEF", text: "!idea Grow a lantern orchard by the lake", timestamp: 0 });
   r.skip(); r.skip();
   return { r, advance(ms: number) { now += ms; r.tick(); } };
@@ -97,8 +97,8 @@ test("voting winner must pass the asynchronous real subprocess adapter before th
   const h = roundHarness((idea, ctx) => pending = guard().review(idea, ctx.signal));
   assert.equal(h.r.snapshot().phase, "guarding"); assert.equal(h.r.snapshot().build.status, "reviewing");
   await pending; await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.r.snapshot().guard.status, "accepted"); assert.equal(h.r.snapshot().phase, "building");
-  assert.equal(h.r.snapshot().winner?.requester, "Moss"); h.advance(90_000); assert.equal(h.r.snapshot().timeline.length, 1);
+  assert.equal(h.r.snapshot().guard.status, "accepted"); assert.equal(h.r.snapshot().phase, "ideas");
+  assert.equal(h.r.snapshot().timeline[0]?.requester, "Moss"); h.advance(90_000); assert.equal(h.r.snapshot().timeline.length, 1);
 });
 test("guard rejection, missing adapter and timeout never start or ship the builder", () => {
   const rejected: GuardResult = { verdict: "reject", reason: "Networking is disallowed.", title: "Rejected", spec: null, files: [], latencyMs: 1, mode: "live" };

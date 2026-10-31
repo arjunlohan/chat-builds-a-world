@@ -1,3 +1,4 @@
+import type { WorldVersion } from "./versions/index.js";
 import type { ChatEvent, RaidEvent, WorldEvent, LaneEvent } from "./contracts.js";
 import type { SummonService } from "./summon/index.js";
 import type { Rounds } from "./rounds/index.js";
@@ -26,10 +27,12 @@ export class WorldPipeline {
   private readonly cooldowns = new Map<string, number>();
   private readonly listeners = new Set<(event: WorldEvent) => void>();
   private summonLane: SummonService | undefined;
+  private version: WorldVersion | null = null;
   private rounds: Rounds | undefined;
   attachRounds(rounds: Rounds) { this.rounds = rounds; }
   attachSummon(lane: SummonService) { this.summonLane = lane; }
   publish(event: LaneEvent) {
+    if (event.type === "version") this.version = event.version;
     this.emit({ ...event, revision: ++this.revision, now: this.now() });
     if (event.type === "summon") this.rounds?.toast("summon", event.summon.spec.name, `Summoned by ${event.summon.requester}`);
     if (event.type === "summon-remove") this.rounds?.toast("notice", "Summon cleared", "Summon removed.");
@@ -45,7 +48,7 @@ export class WorldPipeline {
     for (const listener of this.listeners) { try { listener(event); } catch { this.listeners.delete(listener); } }
   }
   snapshot(): Extract<WorldEvent, { type: "snapshot" }> {
-    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null };
+    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null, version: this.version };
   }
   private duplicate(key: string, now: number) {
     if (this.seen.has(key)) return true;
@@ -75,7 +78,7 @@ export class WorldPipeline {
     if (this.window !== second) { this.window = second; this.messages = 0; }
     if (now - (this.cooldowns.get(event.userId) ?? -Infinity) < 250 || this.messages >= 200) return { accepted: false, reason: "rate-limited" };
     this.messages++; this.cooldowns.set(event.userId, now);
-    const roundCommand = /^!(idea|vote)(?:\s|$)/i.test(event.text.trim());
+    const roundCommand = /^!(idea|vote|rollback)(?:\s|$)/i.test(event.text.trim());
     const roundResult = roundCommand ? this.rounds?.command(event) : undefined;
     if (roundResult && !roundResult.accepted) return roundResult;
     const result = this.roster.accept({ ...event, timestamp: now }, now);

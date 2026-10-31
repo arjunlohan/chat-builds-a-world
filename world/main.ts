@@ -23,6 +23,8 @@ function fail(message: string) {
 try {
   if (!canvas) throw new Error("World canvas is missing");
   const world = createRenderer(canvas, {
+    checkMode: query.get("check") === "1",
+    probeId: query.get("probe") ?? "",
     ...(labels ? { labels } : {}),
     onReply(message) { if (fault) { fault.hidden = false; fault.textContent = message; } },
     onConnection(connected) { if (connection) connection.hidden = connected; },

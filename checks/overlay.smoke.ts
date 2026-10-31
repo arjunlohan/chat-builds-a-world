@@ -33,7 +33,7 @@ try {
   await page.screenshot({ path: "test-results/phase6-overlay-idle.png" });
   const start = await page.evaluate(() => ({ frame: window.__worldStats.frame, now: performance.now() }));
   let simError: unknown;
-  const sim = promisify(execFile)("pnpm", ["sim"], { cwd: process.cwd(), timeout: 75_000 }).catch(error => { simError = error; return { stdout: "", stderr: "Simulator failed" }; });
+  const sim = promisify(execFile)("pnpm", ["sim"], { cwd: process.cwd(), timeout: 110_000 }).catch(error => { simError = error; return { stdout: "", stderr: "Simulator failed" }; });
   await overlay.waitForFunction(() => document.querySelectorAll(".toast.citizens").length > 0, undefined, { timeout: 15_000 });
   await page.screenshot({ path: "test-results/overlay-milestone.png" });
   await overlay.waitForFunction(() => [...document.querySelectorAll(".toast.summon")].length > 0, undefined, { timeout: 20_000 });
@@ -55,7 +55,7 @@ try {
   assert.equal(await overlay.locator(".feed-panel h2").textContent(), "Codex is building");
   assert.ok((await overlay.locator(".build-idea").textContent())?.includes("lantern orchard"));
   assert.ok((await overlay.locator(".feed-panel .credit").textContent())?.includes("Comet04"));
-  assert.ok((await overlay.locator(".feed-lines").textContent())?.includes("Simulating"));
+  assert.ok((await overlay.locator(".feed-lines").textContent())?.match(/checks|compil/i));
   const layout = await overlay.evaluate(() => {
     const center = { x: 400, y: 150, right: 1520, bottom: 910 };
     const boxes = [...document.querySelectorAll<HTMLElement>(".panel:not([hidden]), .toast")].map(node => {
@@ -77,7 +77,7 @@ try {
   const measuredFps = (end.frame - start.frame) * 1000 / (end.now - start.now);
   assert.equal(end.citizenCount, 80); assert.equal(end.summonCount, 3);
   assert.ok(end.avgFps >= 50); assert.ok(measuredFps >= 50);
-  const failed = await promisify(execFile)("pnpm", ["sim", "--round-only", "--outcome=fail"], { cwd: process.cwd(), timeout: 35_000 }); console.log(failed.stdout.trim());
+  const failed = await promisify(execFile)("pnpm", ["sim", "--round-only", "--outcome=fail"], { cwd: process.cwd(), timeout: 60_000 }); console.log(failed.stdout.trim());
   await overlay.waitForSelector('.version[data-kind="revert"]'); await overlay.waitForSelector(".toast.revert");
   assert.equal(await overlay.locator(".version.revert .version-tag").textContent(), "↶ v1");
   assert.equal(await overlay.locator(".version.ship").count(), 1);

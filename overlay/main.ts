@@ -19,10 +19,11 @@ root.append(left, right, moments.root);
 let state: RoundState | null = null, received = 0, toastKey = "";
 function update(value: RoundState) {
   state = value; received = performance.now();
-  title.textContent = value.paused ? "Paused" : value.phase === "ideas" ? "Ideas" : value.phase === "voting" ? "Vote" : value.phase === "guarding" ? "Guard review" : "Build";
-  command.textContent = value.paused ? "Awaiting moderator" : value.phase === "ideas" ? "!idea <wish>" : value.phase === "voting" ? "!vote 1|2|3" : value.phase === "guarding" ? "Safety + scope check" : "Stub runner";
+  title.textContent = value.paused ? "Paused" : value.phase === "ideas" ? "Ideas" : value.phase === "voting" ? "Vote" : value.phase === "rollback" ? "Rollback vote" : value.phase === "guarding" ? "Guard review" : "Build";
+  command.textContent = value.paused ? "Awaiting moderator" : value.phase === "ideas" ? "!idea <wish>" : value.phase === "voting" ? "!vote 1|2|3" : value.phase === "rollback" ? "!vote yes|no" : value.phase === "guarding" ? "Safety + scope check" : "Codex runner";
   kicker.textContent = `ROUND ${value.round}`;
   mode.textContent = value.simulation ? `REHEARSAL · ${value.clockRate}×` : "LIVE ROUNDS";
+  if (value.phase === "rollback" && value.rollback) command.textContent = `!vote yes|no · ${value.rollback.yes}–${value.rollback.no}`;
   phase.dataset.phase = value.phase;
   ideaQueue.update(value); voteBars.update(value); feed.update(value); history.update(value); clock();
 }

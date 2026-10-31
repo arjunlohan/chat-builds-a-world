@@ -13,7 +13,9 @@
     "sim": "tsx server/sim/index.ts",
     "check": "tsx checks/generate-validator.ts --check && tsc --noEmit && tsx --test checks/*.test.ts && tsx checks/build.ts",
     "summon:bench": "tsx server/summon/bench.ts",
-    "guard:eval": "tsx server/guard/eval.ts"
+    "guard:eval": "tsx server/guard/eval.ts",
+    "runner:live": "tsx server/runner/live.ts",
+    "runner:sim": "tsx checks/runner.sim.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0",
@@ -28,6 +30,7 @@
     "@types/ws": "^8.18.2",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "typescript-api": "npm:typescript@5.9.3"
   }
 }

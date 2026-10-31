@@ -4,7 +4,7 @@ Twitch chat builds a living 3D world on stream. Every chatter becomes a creature
 small wishes become objects, bigger ideas become live-coded systems, and raids
 arrive through a portal. A Codex x TwitchCon Hackathon entry by Arjun.
 
-This is **Phase 6 of 10: overlay fixes and guard**. `/world` renders the Lantern Garden: an
+This is **Phase 7 of 10: runner and checks**. `/world` renders the Lantern Garden: an
 original procedural island with jade terrain, layered basalt cliffs, coral trees,
 a spring and waterfall, a moon gate and glowing lanterns. The painted sky follows
 a ten-minute day/night cycle. Soft shadows, shader ripples, GPU fireflies and bloom
@@ -21,9 +21,9 @@ with name tags and speech bubbles. `!jump`, `!dance`, `!follow <name>` and `!hom
 animate them. The server caps the roster at 300; six instanced draws render the
 creatures, which fade five seconds after becoming idle for 20 minutes. Automatic
 arrival/action camera shots coalesce and are at least eight seconds apart.
-The Summon fast lane now materializes validated data; live-coded modules and
-version playback remain future work. `/overlay` now shows live rounds and
-explicitly labelled stub builds; `/history` remains a placeholder. Integration stubs fail explicitly if called.
+The Summon fast lane now materializes validated data; checked live-coded modules now ship through isolated worktrees;
+version playback remains future work. `/overlay` now shows live rounds and
+checked builds and explicit offline fixtures; `/history` remains a placeholder. Integration stubs fail explicitly if called.
 
 ## Run from a fresh clone
 
@@ -40,7 +40,8 @@ In a second terminal at the repository root, run `pnpm sim`. It replays 80 named
 chatters in varied colors, 80 chat lines, 80 commands (20 of each kind), and one
 raid through the same pipeline as Twitch. It also adds three hand-written fixture
 summons at 5.1-second intervals, then runs a complete 15× round rehearsal in about
-17 seconds (roughly 34 seconds for the whole demo). Expect
+about 11 seconds of accelerated voting plus the real candidate gate (roughly
+50 seconds for the full crowd + checked ship). Expect
 **184 accepted events, 80 citizens and three fixture summons**, including seven
 round proposals and 13 ballots. A dev-server restart
 clears the in-memory roster/scenes. Repeat runs reuse those identities and respect
@@ -75,7 +76,7 @@ Never commit `.env` or put secrets into browser bundles.
 
 ## Checks and local simulation
 
-- `pnpm check`: generated-validator consistency, strict TypeScript checks and 119
+- `pnpm check`: generated-validator consistency, strict TypeScript checks and 129
   contract/engine/integration tests covering lifecycle,
   budgets, queues, cleanup, roster/cap/expiry, HTTP/SSE, Twitch reconnect/refresh,
   camera and FPS, round deadlines/dedup/vote replacement/ties/pause/failure/timeout,
@@ -107,9 +108,8 @@ pnpm exec tsx checks/world.performance.ts
 This identifies the WebGL renderer, warms up, measures 15 seconds of actual frames,
 checks for near-60 FPS (minimum 55), checks console errors and saves a screenshot.
 On macOS it uses ANGLE/Metal; it rejects software backends. Hardware results depend
-on the machine and load. The later 300-citizen/module candidate gate from
-`AGENTS.md`, including freeze/black-frame and external watchdog checks, remains
-future work.
+on the machine and load. The separate 300-citizen SwiftShader candidate gate is
+implemented in Phase 7 and described below.
 
 ## Crowd performance verification
 
@@ -128,17 +128,103 @@ The previous M1 Pro/Metal development run held about 60 FPS at 1920×1080 with 8
 citizens; the Phase 4 check also verifies fixture effects, credits, camera focus,
 render receipts and zero label overlaps. Performance depends on hardware and load.
 
+## Runner, candidate checks and rollback
+
+The accepted guard plan creates a **detached `worktrees/vN` from clean master**.
+Codex runs there via CODEX_BIN, workspace-write sandbox, medium effort, JSON events
+and ephemeral mode. The child inherits only PATH, HOME, the Bedrock bearer token
+and dedicated CODEX_HOME in the project's `.codex-runtime`. No Twitch credentials
+are inherited. The approved plan and locked World Module API become the prompt;
+no runtime dependencies are installed. The overlay shows short plan/file/check
+lines, never raw JSON, shell commands, private reasoning or stderr.
+
+Before and after checks, a complete file inventory (including ignored/untracked
+files) rejects changes outside the exact approved `.ts` files under world/modules,
+symlinks, deletions, renames, executable/mode changes and altered builder HEAD.
+A conservative AST policy rejects ambient browser/server/network authority and
+unsafe hooks; every approved source is type-checked against the engine API.
+The host uses the TypeScript 5.9 compiler API alias for this analysis because the
+project's TypeScript 7 CLI package does not expose that JavaScript API.
+
+The headless gate starts Chromium with **SwiftShader, a real 1920×1080 canvas and
+300 citizens**, warms up, then samples **15 seconds**. It fails on console/hook
+errors, measured or rolling average FPS below **40**, a >1-second frame gap,
+unchanging/black pixels or no visible pixels from the candidate itself. An
+external **24-second watchdog** keeps the entire headless check under 25 seconds
+and kills the browser/worker groups if JavaScript freezes.
+
+The explicit software profile caches static island color/depth, omits base
+bloom/shadows and label painting, and renders the 300 citizens as simple single-body
+proxies. All citizen simulations still update, and original full-detail resource
+headroom remains reserved. Candidate geometry/materials/hooks are unchanged.
+This is an admission check for module cost, **not a full-effects OBS benchmark**;
+normal `/world` keeps the original renderer and detailed creatures. Full-quality
+physical-GPU checks remain separate. The existing world alone averaged only about
+6.6 FPS with full effects in SwiftShader on the development machine, so using that
+base cost would reject every candidate independently of its behavior.
+
+On pass, commit `vN: <title> (requested by @user)` in the worktree, recheck master,
+fast-forward it and tag vN. Immutable local module bundles share the engine's
+Three.js instance. The browser imports checked hash URLs and stages a fresh host
+before disposing the previous host. A receipt after eight stable frames confirms
+the hot swap **without reloading the page**, then the server announces the ship.
+Failure before promotion leaves master unchanged; failed live activation restores
+the old module tree with a new forward commit, never a reset. Owned worktrees are
+removed on every path. Dirty session files or a changed master refuse promotion;
+the runner never stashes, resets, cleans or checks out the main working tree.
+
+`!rollback` starts a **30-second** `!vote yes|no` vote. One ballot per viewer; later
+votes replace earlier ones. A strict yes majority restores the previous tag's
+module tree through a new forward commit/tag, then hot-swaps its stored checked
+artifacts. Ties/no votes retain the current world. Runtime disabled-module faults
+also request restoration. Hooks remain cooperative JavaScript; the guard, static
+policy and timed gate reduce risk but do not prove arbitrary code safe.
+
+`state/versions.json`, `state/modules/` and `state/runner-metrics.jsonl` store recovery,
+artifacts, durations and input/output/total tokens. Missing usage stays null;
+fixture token counts are synthetic, labelled fixture, and spend no provider tokens.
+No raw prompts, JSON event streams, stderr or credentials are logged.
+
+Run the **10-round isolated rehearsal** (no dev server/key needed):
+
+```sh
+pnpm runner:sim
+```
+
+It uses fake guard and builder executables, hand-written good/throwing/slow/empty
+modules and an out-of-scope edit. It also exercises a guard reject, timeout, three
+ships and rollback. It snapshots sources into a disposable Git repository, keeps
+one world page open, verifies activation receipts, checks cleanup after each run,
+and asserts that this checkout's HEAD, status and source hashes never changed.
+Results are saved to `state/runner-sim-results.json`; a screenshot is saved to
+`test-results/runner-ten-rounds.png`. The 120/45/30-second voting windows use a
+simulated clock; subprocesses, headless checks, Git promotion and hot swap are real.
+
+For an actual paid guard + builder round after configuring the key and CODEX_BIN,
+start `pnpm dev` on a **clean master**, then explicitly run:
+
+```sh
+pnpm runner:live "Add one small original amber crystal above the ridge"
+```
+
+This local administrative test advances an empty round's idea/voting timers, uses
+the real guard and Codex + Bedrock builder, opens a browser for activation receipts,
+and intentionally commits/tags on success. It refuses missing credentials or a
+busy round. Live provider generation remains unverified by the offline fixtures.
+`pnpm sim` now also uses the real runner pipeline with a labelled fake builder;
+it can create fixture commits/tags, so use a disposable clean clone for demos.
+
 ## Read-only idea guard
 
-After voting, the winning idea enters a **guard review**, then reaches the stub
-builder only on acceptance. Rejections, malformed output, missing configuration
+After voting, the winning idea enters a **guard review**, then reaches the isolated
+runner only on acceptance. Rejections, malformed output, missing configuration
 and timeout start a new idea round with a clear reason toast; they never ship.
 Guard results include a short title, reason, small module plan and allowed files.
 Plans have **at most two TypeScript files**, four implementation steps/checks,
 and an estimated **1..119 seconds** of builder work. File paths stay under
 `world/modules/`, with canonical-path and symlink checks. The closed schema is
 `server/guard/guard.schema.json`; this plan is separate from the Summon Scene Spec.
-An estimate is not a guarantee of actual future runner duration.
+An estimate is not a guarantee of actual runner duration.
 
 The server invokes the CLI without a shell, passing the idea as JSON-quoted data
 on stdin. The fixed policy rejects injection, networking, private data, real
@@ -157,7 +243,7 @@ The subprocess receives only **PATH, HOME, AWS_BEARER_TOKEN_BEDROCK**, plus the
 required absolute **CODEX_HOME** pointing at `.codex-runtime`. No Twitch tokens,
 OpenAI keys or ambient Codex configuration variables are inherited. Read-only
 restricts model filesystem writes; it is not a general secret/code sandbox.
-The guard emits data only, and the real builder is still disabled.
+The guard emits data only. The workspace-write builder runs only after acceptance.
 
 `CODEX_BIN` defaults to `codex`. On this machine, the installed CLI is
 `/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`
@@ -210,19 +296,15 @@ the earliest original idea. Empty rounds restart collection. Verified Twitch mod
 can `!pause` to freeze/resume deadlines and `!skip` to advance the phase or fail a build.
 Commands go through the same chat pipeline even when all 300 citizen slots are full.
 
-The build phase has a **180-second timeout**. The current runner is a **stub**:
-progress lines simulate a plan, module edits and checks, with a result at 90 seconds.
-The feed always says **STUB RUNNER**; ships, retained versions and requester credits
-are rehearsal state. The stub builder does not call Codex, change code/Git or activate modules; the
-read-only guard runs separately before it.
-Failure/timeout shows a revert and keeps the previous successful stub version.
-The state, queue and timeline are in memory and reset on restart. The real builder, persistence and rollback votes are later phases.
-
+The build phase has a **180-second timeout** and now runs the real isolated
+runner/check/promotion pipeline below. Failures show REVERTED and retain the prior
+world. Offline mode uses explicit fake CLI fixtures, not a simulated ship timer.
+Rounds/queue are in memory; versions, artifacts and metrics persist in ignored state/.
 `pnpm sim` starts an explicit offline-only **15× rehearsal** using those same
 120/45/180-second windows. It submits seven proposals → four distinct ideas → three
 candidates, then 13 ballots → 12 voters with counts **[1,9,2]**. The lantern-orchard
 winner is credited to **Comet04**. On completion normal-speed collection resumes.
-Rehearsal acceleration is disabled when Twitch is configured. Run alternate stub
+Rehearsal acceleration is disabled when Twitch is configured. Run alternate fixture
 outcomes without repeating the crowd/summons:
 
 ```sh
@@ -231,7 +313,7 @@ pnpm sim --round-only --outcome=timeout
 ```
 
 Start from an empty collection phase; existing ideas cause a clear simulator failure.
-The timeout rehearsal takes about 23 seconds. The overlay reconnects with a full
+The timeout fixture waits for the real 180-second deadline. The overlay reconnects with a full
 snapshot, including the latest build and timeline. All viewer text uses textContent;
 arrays and send buffers are bounded. Summons, citizen milestones, ships and retained
 versions produce moment toasts, with at most two visible at once.
@@ -248,8 +330,7 @@ three vote bars, replacement counts, requester credit, progress, retained v1,
 reconnect state, a clear island center, unclipped panels and zero console errors.
 It requires ≥50 measured and rolling-average FPS with 80 citizens and three summons.
 Screenshots of ideas, voting, building, ship and revert are saved in ignored
-`test-results/phase6-overlay-*.png` (the voting screenshot shows the compact mid-round view). This is a rehearsal integration check, not the future
-runtime-module candidate gate. The M1 Pro/Metal composite verification held
+`test-results/phase6-overlay-*.png` (the voting screenshot shows the compact mid-round view). This verifies the overlay; the separate runtime-module gate runs during builds. The M1 Pro/Metal composite verification held
 59.8 measured FPS and a 59.5 rolling average with 80 citizens and three fixture
 summons, with zero console errors.
 
@@ -373,7 +454,7 @@ requests. No simulator body can claim moderator privileges. Incoming chat is
 limited to one accepted message/user/250 ms and 200 messages/second globally.
 Only server-verified Twitch broadcaster/moderator roles may invoke `!pause`,
 `!skip`, `!clear`. Pause gates new actions, clear removes the latest active summon, and skip
-advances the round or fails a running stub build. Current blocklist filtering is basic. Command messages never become speech bubbles: movement commands keep their
+advances the round or fails a running build. Current blocklist filtering is basic. Command messages never become speech bubbles: movement commands keep their
 animations, and other admitted commands get a small pooled sparkle. Normal speech is always textContent,
 never HTML; at most eight recent bubbles are visible and each expires after 5.5s.
 
@@ -390,14 +471,14 @@ world/engine/ procedural world, renderer, camera, bounded module host
 world/modules/ only runtime Codex edit surface
 overlay/      queue, votes, Codex feed, timeline and toasts
 checks/       contracts, browser bundling and Playwright/SwiftShader smoke
-state/        future persisted world/round/version data (ignored; created at runtime)
+state/        version manifests, checked modules, metrics and recovery (ignored)
 .codex-runtime/config.toml  nonsecret runtime model configuration
 ```
 
 Build the independently demo-able tiers in order: world/citizens, Summon,
 Build, then raids/history. The live server routes Twitch EventSub events to the world over same-origin SSE;
 the overlay consumes the same revisioned stream. Summon generates validated data via Bedrock Responses (or explicit local fixtures);
-Build now guards proposals; the future runner will write isolated world modules, check them and activate
+Build guards proposals, writes isolated world modules, checks them and activates
 versioned changes.
 
 Later-phase model settings from the product contract are retained in `AGENTS.md`
@@ -412,11 +493,10 @@ fixtures and a mocked Responses adapter cover the complete data path.
 - Fast lane runs data, never code. The schema and server parser enforce payload,
   count, numeric, reference and size constraints. Moderation, cooldowns, global
   rate limits, full geometry bounds and resource admission are now enforced for Summon.
-- Runtime code changes are confined to `world/modules/**`; the future runner must
-  reject every diff outside that path, including path escapes and symlinks.
+- Runtime code changes are confined to `world/modules/**`; the runner rejects every diff outside that path, including path escapes and symlinks.
 - Runtime Codex receives an allowlisted environment with no secrets except the
   Bedrock key and its own `CODEX_HOME=.codex-runtime`. Guard uses a read-only
-  sandbox; builder uses workspace-write in a fresh worktree. The read-only guard runs when configured; the builder does not run yet.
+  sandbox; builder uses workspace-write in a fresh worktree. The guard and builder run when configured, with explicit fake CLIs for offline checks.
 - The module host catches each hook, rejects async hooks, clamps dt, limits each
   module to 2 ms/frame and all modules to 4 ms/frame, and disables a module after
   three overruns in 60 frames. Queues hold at most 128 events and dispatch at most
@@ -425,7 +505,7 @@ fixtures and a mocked Responses adapter cover the complete data path.
   draw, light and particle admission shares world caps with the base environment.
   Host-tracked resources are cleaned even when a hook throws; service calls are
   scoped and rate limited. JS timing is cooperative, not a sandbox: arbitrary code
-  still needs the guard plus the future external headless/watchdog gate before live
+  passes the guard, static policy and external headless/watchdog gate before live
   activation. It cannot preempt an infinite loop or prevent malicious global access.
 - The served world has `default-src 'self'` and `connect-src 'self'` CSP for
   the event stream/local API, locally bundled assets, no inline scripts and no

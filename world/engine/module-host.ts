@@ -14,7 +14,7 @@ type Event = { kind: "onChat"; value: Readonly<ChatEvent> } |
 export interface ModuleStatus { id: string; state: "active" | "disabled" | "rejected" | "disposed"; reason: string }
 interface RecordState {
   module: WorldModule; id: string; key: string; root: Group; owner: ResourceOwner;
-  queue: Event[]; overruns: number[]; handles: Set<SpawnHandle>; spawnUsage: Map<SpawnHandle, Usage>; active: boolean; cleaned: boolean;
+  queue: Event[]; overruns: number[]; handles: Set<SpawnHandle>; spawnUsage: Map<SpawnHandle, Usage>; spawnRoots: Map<SpawnHandle, Group>; active: boolean; cleaned: boolean;
   window: number; effects: number; logs: number; lastFocus: number; lastQueueWarning: number;
 }
 interface HostOptions {
@@ -35,7 +35,9 @@ const position = (p: Readonly<Vector3>) => {
 };
 
 /** Cooperative hook isolation; candidate code still requires the external guard/check gate. */
+let hostSerial = 0;
 export class ModuleHost {
+  private readonly namespace = ++hostSerial;
   private readonly records = new Map<string, RecordState>();
   private readonly now: () => number;
   private readonly ledger: ResourceLedger;
@@ -85,9 +87,10 @@ export class ModuleHost {
         const usage = (handle as SpawnHandle & { usage?: Usage }).usage ?? emptyUsage();
         const owned: SpawnHandle = { id: handle.id, dispose: () => {
           if (!record.handles.delete(owned)) return;
-          record.spawnUsage.delete(owned); handle.dispose();
+          record.spawnUsage.delete(owned); record.spawnRoots.delete(owned); handle.dispose();
         } };
         record.handles.add(owned); record.spawnUsage.set(owned, usage);
+        const root = (handle as SpawnHandle & { root?: Group }).root; if (root) record.spawnRoots.set(owned, root);
         try { this.audit(record); } catch { owned.dispose(); throw new Error("module spawn allocation limit exceeded"); }
         return Object.freeze(owned);
       },
@@ -138,9 +141,9 @@ export class ModuleHost {
     const root = new Group();
     root.name = `module:${module.id}`;
     const record: RecordState = {
-      module, id: module.id, root, key: `${module.id}:${++this.serial}`, owner: new ResourceOwner(this.options.protectedResources),
+      module, id: module.id, root, key: `${this.namespace}:${module.id}:${++this.serial}`, owner: new ResourceOwner(this.options.protectedResources),
       queue: [], overruns: [], handles: new Set<SpawnHandle>(), active: false, cleaned: false,
-      spawnUsage: new Map(), window: -1, effects: 0, logs: 0, lastFocus: -Infinity, lastQueueWarning: -Infinity,
+      spawnUsage: new Map(), spawnRoots: new Map(), window: -1, effects: 0, logs: 0, lastFocus: -Infinity, lastQueueWarning: -Infinity,
     };
     const services = this.services(record);
     try {
@@ -247,6 +250,8 @@ export class ModuleHost {
     for (const record of disabled) { this.cleanup(record); this.records.delete(record.id); }
   }
 
+  get ids() { return [...this.records.keys()]; }
+  visualRoots(id: string) { const record = this.records.get(id); return record ? [record.root, ...record.spawnRoots.values()] : []; }
   get activeCount() { return this.records.size; }
   dispose() { for (const id of this.records.keys()) this.unload(id); }
 }

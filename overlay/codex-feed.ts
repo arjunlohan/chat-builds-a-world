@@ -12,10 +12,10 @@ export function codexFeed() {
   }));
   return { root, update(state: RoundState) {
     const build = state.build;
-    root.hidden = build.status === "idle" || (state.phase !== "building" && state.phase !== "guarding");
-    header.querySelector("h2")!.textContent = build.status === "reviewing" ? "Guard review" : "Codex is building";
+    root.hidden = build.status === "idle" || (state.phase !== "building" && state.phase !== "guarding" && !(build.status === "failed" && state.realNow - (build.completedAt ?? 0) < 8000));
+    header.querySelector("h2")!.textContent = build.status === "failed" ? "REVERTED" : build.status === "reviewing" ? "Guard review" : "Codex is building";
     root.dataset.status = build.status;
-    badge.textContent = build.status === "reviewing" ? (state.guard.mode === "fixture" ? "FIXTURE GUARD" : "READ-ONLY GUARD") : (state.guard.mode === "fixture" ? "FIXTURE · STUB RUNNER" : "STUB RUNNER");
+    badge.textContent = build.status === "reviewing" ? (state.guard.mode === "fixture" ? "FIXTURE GUARD" : "READ-ONLY GUARD") : (state.guard.mode === "fixture" ? "FIXTURE RUNNER" : "CODEX RUNNER");
     title.textContent = build.idea;
     credit.textContent = build.requester ? `by ${build.requester}` : "";
     fill.style.transform = `scaleX(${build.progress / 100})`; percent.textContent = `${build.progress}%`;

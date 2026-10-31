@@ -1,6 +1,6 @@
 import { isChatCommand } from "../../server/commands.js";
 import {
-  Color, ConeGeometry, DynamicDrawUsage, Group, IcosahedronGeometry,
+  BufferGeometry, TetrahedronGeometry, Color, ConeGeometry, DynamicDrawUsage, Group, IcosahedronGeometry,
   InstancedBufferAttribute, InstancedMesh, MeshStandardMaterial, Object3D, Sphere, Vector3,
   type PerspectiveCamera,
 } from "three";
@@ -20,6 +20,7 @@ interface Part { mesh: InstancedMesh; fade: InstancedBufferAttribute; copies: nu
 /** Six shared instanced meshes for the entire crowd; no per-citizen Three objects. */
 export class Citizens {
   readonly root = new Group();
+  triangleReserve = 0;
   private readonly items: Creature[] = [];
   private readonly byId = new Map<string, Creature>();
   private readonly parts: Part[] = [];
@@ -36,9 +37,14 @@ export class Citizens {
   private readonly paws: Part;
   private readonly tails: Part;
 
-  constructor(private readonly labels: HTMLElement, private readonly layout: LabelManager) {
+  constructor(private readonly labels: HTMLElement, private readonly layout: LabelManager, lowDetail = false) {
     this.root.name = "citizens • 300 reserved creature slots";
-    const make = (geometry: IcosahedronGeometry | ConeGeometry, color: string, copies: number, name: string, shadows = false) => {
+    const make = (geometry: BufferGeometry, color: string, copies: number, name: string, shadows = false) => {
+      if (lowDetail) {
+        const triangles = (geometry.index?.count ?? geometry.getAttribute("position").count) / 3;
+        geometry.dispose(); geometry = new TetrahedronGeometry(1);
+        this.triangleReserve += (triangles - 4) * LIMIT * copies;
+      }
       const material = new MeshStandardMaterial({ color, roughness: 0.9, flatShading: true });
       material.onBeforeCompile = shader => {
         shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute float aFade; varying float vFade;")
@@ -66,6 +72,7 @@ export class Citizens {
     this.eyes = make(new IcosahedronGeometry(1, 0), "#283b42", 2, "eyes");
     this.paws = make(new IcosahedronGeometry(1, 0), "#eee1bf", 2, "paws");
     this.tails = make(new IcosahedronGeometry(1, 0), "#ffffff", 1, "colored tails");
+    if (lowDetail) for (const part of this.parts) part.mesh.visible = part === this.body;
     // Counts initially reserve all 300 slots in the global resource ledger.
     // The first update sets each draw count to the actual roster before rendering.
   }

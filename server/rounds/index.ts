@@ -1,12 +1,13 @@
+import type { BuildRequest, RunResult } from "../runner/index.js";
 import type { GuardResult } from "../guard/index.js";
 import type { ChatEvent } from "../contracts.js";
 import { allowedWish } from "../summon/index.js";
 import type { BuildView, IdeaView, RoundState, StubOutcome, ToastView, VersionView } from "./types.js";
 export type { RoundState, StubOutcome } from "./types.js";
 
-export const ROUND_MS = Object.freeze({ ideas: 120_000, voting: 45_000, guarding: 45_000, building: 180_000, stubComplete: 90_000 });
+export const ROUND_MS = Object.freeze({ ideas: 120_000, voting: 45_000, guarding: 45_000, building: 180_000, rollback: 30_000 });
 interface Idea { id: string; text: string; requester: string; order: number; normalized: string; supporters: Set<string> }
-interface Options { now?: () => number; publish(state: RoundState): void; simulationAllowed?: boolean; review?: (idea: string, context: { fixture: boolean; signal: AbortSignal }) => GuardResult | Promise<GuardResult> }
+interface Options { now?: () => number; publish(state: RoundState): void; simulationAllowed?: boolean; build?: (request: BuildRequest) => Promise<RunResult>; rollback?: (requester: string) => Promise<RunResult>; canRollback?: () => boolean; review?: (idea: string, context: { fixture: boolean; signal: AbortSignal }) => GuardResult | Promise<GuardResult> }
 const stop = new Set("a an the and or to of for please add build make give put some with on in it island".split(" "));
 export function normalizeIdea(text: string) {
   return text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(w => w && !stop.has(w)).join(" ");
@@ -53,8 +54,12 @@ export class Rounds {
   private reviewSequence = 0;
   private reviewAbort: AbortController | undefined;
   private pendingReview: GuardResult | undefined;
-  private outcome: StubOutcome = "ship";
-  private build: BuildView = { stub: true, status: "idle", progress: 0, idea: "", requester: "", lines: [] };
+  private runAbort: AbortController | undefined;
+  private runSequence = 0;
+  private rollbackVotes = new Map<string, "yes" | "no">();
+  private rollbackRequester = "";
+  private fixtureOutcome: StubOutcome = "ship";
+  private build: BuildView = { stub: false, status: "idle", progress: 0, idea: "", requester: "", lines: [] };
   private timeline: VersionView[] = [];
   private toasts: ToastView[] = [];
   private serial = 0;
@@ -71,6 +76,7 @@ export class Rounds {
   snapshot(): RoundState {
     return structuredClone({ round: this.round, phase: this.phase, startedAt: this.startedAt, endsAt: this.endsAt,
       now: this.now(), realNow: this.real(), clockRate: this.rate, simulation: this.simulation, paused: this.paused,
+      rollback: this.phase === "rollback" ? { yes: [...this.rollbackVotes.values()].filter(v => v === "yes").length, no: [...this.rollbackVotes.values()].filter(v => v === "no").length, requester: this.rollbackRequester } : null,
       guard: this.guard, totalIdeas: this.ranked().length, ideas: this.ranked().slice(0, 8).map(ideaView),
       candidates: this.shortlist.map((i, index) => ({ ...ideaView(i), slot: index + 1, votes: [...this.votes.values()].filter(id => id === i.id).length })),
       totalVotes: this.votes.size, winner: this.winner ? ideaView(this.winner) : null, build: this.build,
@@ -90,6 +96,18 @@ export class Rounds {
   command(chat: ChatEvent) {
     this.tick();
     if (this.paused) return { accepted: false, reason: "round-paused" };
+    if (/^!rollback$/i.test(chat.text.trim())) {
+      if (this.phase !== "ideas") return { accepted: false, reason: "round-busy" };
+      if (!this.options.canRollback?.()) return { accepted: false, reason: "no-previous-version" };
+      this.phase = "rollback"; this.startedAt = this.now(); this.endsAt = this.startedAt + ROUND_MS.rollback;
+      this.rollbackVotes.clear(); this.rollbackRequester = chat.displayName; this.emit(true); return { accepted: true };
+    }
+    if (this.phase === "rollback") {
+      const ballot = /^!vote\s+(yes|no)$/i.exec(chat.text.trim());
+      if (!ballot) return { accepted: false, reason: "use-vote-yes-or-no" };
+      if (!this.rollbackVotes.has(chat.userId) && this.rollbackVotes.size >= 5000) return { accepted: false, reason: "vote-capacity" };
+      this.rollbackVotes.set(chat.userId, ballot[1]!.toLowerCase() as "yes" | "no"); this.emit(); return { accepted: true };
+    }
     const idea = /^!idea(?:\s+(.*))?$/is.exec(chat.text.trim());
     if (idea) {
       if (this.phase !== "ideas") return { accepted: false, reason: "ideas-closed" };
@@ -130,7 +148,7 @@ export class Rounds {
     if (!this.winner) { this.collect(at); return; }
     this.phase = "guarding"; this.startedAt = at; this.endsAt = at + ROUND_MS.guarding;
     this.guard = { status: "reviewing", mode: this.simulation ? "fixture" : "live", reason: "", title: "", latencyMs: null };
-    this.build = { stub: true, status: "reviewing", progress: 0, idea: this.winner.text, requester: this.winner.requester,
+    this.build = { stub: false, status: "reviewing", progress: 0, idea: this.winner.text, requester: this.winner.requester,
       lines: [{ id: ++this.serial, kind: "check", text: this.simulation ? "Fixture safety + scope review." : "Read-only safety + scope review." }] };
     const sequence = ++this.reviewSequence, controller = new AbortController(); this.reviewAbort = controller;
     this.emit(true);
@@ -158,40 +176,47 @@ export class Rounds {
     this.emit(true);
   }
   private resetSimulation() {
-    if (this.simulation) { const logical = this.now(); this.anchorLogical = logical; this.anchorReal = this.real(); this.rate = 1; this.simulation = false; this.outcome = "ship"; }
+    if (this.simulation) { const logical = this.now(); this.anchorLogical = logical; this.anchorReal = this.real(); this.rate = 1; this.simulation = false; }
   }
   private cancelReview() { this.reviewSequence++; this.reviewAbort?.abort(); this.reviewAbort = undefined; this.pendingReview = undefined; }
-  private startBuild(at: number) {
-    if (!this.approved?.spec || !this.winner) return;
+  feed(kind: "plan" | "edit" | "check" | "ship" | "error", text: string) {
+    this.build.lines.push({ id: ++this.serial, kind, text: text.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 180) });
+    this.build.lines = this.build.lines.slice(-64);
+    this.build.progress = kind === "check" ? 75 : kind === "edit" ? 40 : kind === "ship" ? 95 : this.build.progress;
+    this.emit();
+  }
+  private startBuild(at: number, rollback = false) {
+    if (!rollback && (!this.approved?.spec || !this.winner)) return;
     this.phase = "building"; this.startedAt = at; this.endsAt = at + ROUND_MS.building;
-    this.build = { stub: true, status: "running", progress: 0, idea: this.winner.text, requester: this.winner.requester, lines: [] };
-    this.progress(0);
+    const approved = this.approved ? structuredClone(this.approved) : undefined;
+    if (this.simulation && approved?.mode === "fixture" && approved.spec) approved.spec.description = this.fixtureOutcome === "fail" ? "throws" : this.fixtureOutcome === "timeout" ? "timeout" : "good";
+    // Rehearsals accelerate voting, never the subprocess/check deadline.
+    this.resetSimulation(); this.startedAt = this.now(); this.endsAt = this.startedAt + ROUND_MS.building;
+    this.build = { stub: false, status: "running", progress: 0, idea: rollback ? "Restore previous tag" : this.winner!.text, requester: rollback ? this.rollbackRequester : this.winner!.requester, lines: [] };
+    const controller = new AbortController(), sequence = ++this.runSequence; this.runAbort = controller;
+    const unavailable: RunResult = { ok: false, outcome: "REVERTED", reason: "Runner is not configured.", durationMs: 0, tokens: { input: null, output: null, total: null } };
+    const job = rollback ? this.options.rollback?.(this.rollbackRequester) : this.options.build?.({ decision: approved!, requester: this.winner!.requester, signal: controller.signal });
+    void (job ?? Promise.resolve(unavailable)).then(result => {
+      if (sequence !== this.runSequence) return;
+      this.runAbort = undefined; this.finishRun(result);
+    }, () => { if (sequence === this.runSequence) this.finishRun({ ...unavailable, reason: "Runner failed; candidate discarded." }); });
+    this.emit(true);
   }
-  private progress(elapsed: number) {
-    const steps = [
-      [0, "plan", `Guard accepted: ${this.approved?.title ?? "small module"}. Stub build started.`],
-      [15_000, "plan", "Stub plan ready. Engine files stay locked."],
-      [30_000, "edit", "Simulating module edits in world/modules/."],
-      [45_000, "edit", "Simulating lifecycle hooks and resource cleanup."],
-      [60_000, "check", "Simulating type, frame-budget and browser checks."],
-      [75_000, "check", "Stub checks complete. Preparing the result."],
-    ] as const;
-    for (let i = this.build.lines.length; i < steps.length; i++) {
-      const step = steps[i]!; if (elapsed < step[0]) break;
-      this.build.lines.push({ id: ++this.serial, kind: step[1], text: step[2] }); this.dirty = true;
-    }
-    this.build.progress = Math.min(94, Math.floor(elapsed / ROUND_MS.stubComplete * 94));
+  private finishRun(result: RunResult) {
+    const requester = this.build.requester, title = this.build.idea;
+    this.build.status = result.ok ? "shipped" : "failed"; this.build.progress = result.ok ? 100 : 0; this.build.completedAt = this.real();
+    this.feed(result.ok ? "ship" : "error", `${result.outcome} · ${result.reason}`);
+    if (result.version) this.version = result.version;
+    this.timeline.push({ id: ++this.serial, version: this.version, kind: result.ok && result.outcome === "SHIPPED" ? "ship" : "revert", title, requester, reason: result.reason, stub: false });
+    this.timeline = this.timeline.slice(-12); this.collect(this.now()); this.resetSimulation();
+    this.toast(result.ok && result.outcome === "SHIPPED" ? "ship" : "revert", result.ok ? result.outcome === "ROLLED BACK" ? "ROLLED BACK" : `v${this.version} SHIPPED` : "REVERTED", result.ok ? `${requester}: ${title}` : result.reason);
+    this.emit(true);
   }
-  private finish(success: boolean, at: number, reason = "Stub check failed; previous version retained.") {
-    const title = this.winner?.text ?? this.build.idea, requester = this.winner?.requester ?? this.build.requester;
-    this.build.status = success ? "shipped" : "failed"; this.build.progress = success ? 100 : this.build.progress;
-    this.build.lines.push({ id: ++this.serial, kind: success ? "ship" : "error", text: success ? "Stub ship complete. No code or Git tag was changed." : reason });
-    if (success) this.version++;
-    this.timeline.push({ id: ++this.serial, version: this.version, kind: success ? "ship" : "revert", title, requester, reason: success ? "Rehearsal ship" : reason, stub: true });
-    this.timeline = this.timeline.slice(-12);
-    this.collect(at);
-    this.resetSimulation();
-    this.toast(success ? "ship" : "revert", success ? `v${this.version} shipped · stub` : `Build reverted · kept v${this.version}`, `${requester}: ${title}`);
+  private endRollback() {
+    const yes = [...this.rollbackVotes.values()].filter(v => v === "yes").length;
+    const no = this.rollbackVotes.size - yes;
+    if (yes > no) this.startBuild(this.now(), true);
+    else { this.collect(this.now()); this.toast("notice", "Rollback vote declined", `${yes} yes · ${no} no`); }
   }
   tick() {
     const now = this.now();
@@ -200,11 +225,8 @@ export class Rounds {
       else if (this.phase === "voting" && now >= this.endsAt) this.startReview(this.endsAt);
       else if (this.phase === "guarding" && now >= this.endsAt) {
         this.cancelReview(); this.applyReview({ verdict: "reject", reason: "Guard timed out after 45 seconds.", title: "Review timeout", spec: null, files: [], mode: this.guard.mode, latencyMs: ROUND_MS.guarding });
-      } else if (this.phase === "building") {
-        this.progress(now - this.startedAt);
-        if (this.outcome !== "timeout" && now >= this.startedAt + ROUND_MS.stubComplete) this.finish(this.outcome === "ship", this.startedAt + ROUND_MS.stubComplete);
-        else if (now >= this.endsAt) this.finish(false, this.endsAt, "180-second build timeout; previous version retained.");
-        else break;
+      } else if (this.phase === "rollback" && now >= this.endsAt) this.endRollback();
+      else if (this.phase === "building" && now >= this.endsAt) { this.runSequence++; this.runAbort?.abort(); this.finishRun({ ok: false, outcome: "REVERTED", reason: "180-second build timeout.", durationMs: ROUND_MS.building, tokens: { input: null, output: null, total: null } });
       } else break;
       this.dirty = true;
     }
@@ -223,14 +245,17 @@ export class Rounds {
     if (this.phase === "ideas") this.startVote(now);
     else if (this.phase === "voting") this.startReview(now);
     else if (this.phase === "guarding") { this.cancelReview(); this.applyReview({ verdict: "reject", reason: "Guard review skipped by a moderator.", title: "Review skipped", spec: null, files: [], mode: this.guard.mode, latencyMs: 0 }); }
-    else this.finish(false, now, "Build skipped by a moderator; previous version retained.");
+    else if (this.phase === "rollback") this.endRollback();
+    else { this.runSequence++; this.runAbort?.abort(); this.finishRun({ ok: false, outcome: "REVERTED", reason: "Build skipped by a moderator.", durationMs: 0, tokens: { input: null, output: null, total: null } }); }
     this.emit(true);
   }
-  dispose() { this.cancelReview(); }
+  cancelForRevert() { this.cancelReview(); this.runSequence++; this.runAbort?.abort(); }
+  externalResult(result: RunResult) { this.build.idea = "Restore previous world"; this.build.requester = "system"; this.finishRun(result); }
+  dispose() { this.cancelReview(); this.runSequence++; this.runAbort?.abort(); }
   startSimulation(outcome: StubOutcome) {
     if (!this.options.simulationAllowed) return { accepted: false, reason: "simulation-disabled" };
     if (this.phase !== "ideas" || this.ranked().length || this.paused) return { accepted: false, reason: "round-busy" };
-    this.anchorLogical = this.now(); this.anchorReal = this.real(); this.rate = 15; this.simulation = true; this.outcome = outcome;
+    this.anchorLogical = this.now(); this.anchorReal = this.real(); this.rate = 15; this.simulation = true; this.fixtureOutcome = outcome;
     this.startedAt = this.now(); this.endsAt = this.startedAt + ROUND_MS.ideas; this.emit(true);
     return { accepted: true, round: this.round };
   }

@@ -20,6 +20,10 @@ process.stdin.on('end', () => {
   const cases = JSON.parse(fs.readFileSync(path.join(__dirname,'../../server/guard/ideas.json'),'utf8'));
   const match = cases.find(c => c.idea === idea);
   if (match?.expected === 'reject') answer = reject(`Fixture policy rejection: ${match.category}.`);
+  if (idea.startsWith('runner:')) {
+    const [,kind,id] = idea.split(':');
+    answer = kind === 'guard-reject' ? reject('Fixture guard rejected the idea.') : { ...answer, title: `Fixture ${kind}`, spec: { ...answer.spec, moduleId:id, description:kind }, files:[`world/modules/${id}.ts`] };
+  }
   if (idea === '__FAKE_ENV__') answer = reject(`Allowed keys: ${keys}; required CLI flags verified.`);
   if (idea === '__FAKE_TIMEOUT__') { setInterval(() => {},1000); return; }
   if (idea === '__FAKE_TREE__') {
