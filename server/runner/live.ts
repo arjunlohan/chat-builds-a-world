@@ -1,7 +1,7 @@
 import { readConfig } from "../config.js";
 import { config as loadEnv } from "dotenv";
 import { readFile } from "node:fs/promises";
-import { chromium } from "@playwright/test";
+import {launchWorldPage} from "../../checks/browser.js";
 /** One polling path observes promotion before waiting for its live acknowledgement. */
 async function waitForLiveRound(base: string, round: number, initialVersion: number, resume: () => Promise<unknown>) {
   const deadline=Date.now()+240_000;let resumed=false;
@@ -19,9 +19,8 @@ if (!process.env.AWS_BEARER_TOKEN_BEDROCK?.trim()) {
   console.error("runner:live requires AWS_BEARER_TOKEN_BEDROCK. No request or Git operation was started."); process.exitCode = 1;
 } else {
   const base = `http://127.0.0.1:${readConfig().port}`;
-  const browser = await chromium.launch({ headless: true, args: process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu"] : ["--enable-gpu"] });
+  let reloads=0;const {browser,page}=await launchWorldPage(base,"",{onPage(page){page.on("framenavigated",frame=>{if(frame===page.mainFrame())reloads++;});}});reloads=0;
   try {
-    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } }); let reloads=0; page.on("framenavigated",frame=>{if(frame===page.mainFrame())reloads++;}); await page.goto(`${base}/world`); await page.waitForSelector('canvas[data-ready="true"]'); reloads=0;
     // Benchmark orchestration owns suspension; production renderer needs no test-only mode.
     await page.waitForFunction(()=>window.__worldStats.moduleSwaps>0);
     const initialVersion=await page.evaluate(()=>window.__worldStats.moduleVersion);

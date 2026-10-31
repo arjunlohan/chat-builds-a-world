@@ -2,17 +2,12 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { promisify } from "node:util";
-import { chromium } from "@playwright/test";
+import { launchWorldPage, measureFps } from "./browser.js";
 
 // Run against a fresh pnpm dev. Composite the two actual OBS sources, not a mock.
-const browser = await chromium.launch({ headless: true, args: process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu"] : ["--enable-gpu"] });
-await mkdir("test-results", { recursive: true });
+const errors:string[]=[];const {browser,page,gpu}=await launchWorldPage("http://127.0.0.1:3000","overlay=1&time=day",{onPage(page){page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});}});
+await mkdir("test-results",{recursive:true});
 try {
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } }), errors: string[] = [];
-  page.on("pageerror", error => errors.push(error.message));
-  page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
-  await page.goto("http://127.0.0.1:3000/world?overlay=1&time=day");
-  await page.waitForSelector("canvas[data-ready='true']", { timeout: 60_000 });
   assert.equal(await page.locator(".world-heading").isVisible(), false);
   assert.equal(await page.locator(".world-label").isVisible(), false);
   assert.equal(await page.locator(".world-hint").isVisible(), false);
@@ -31,7 +26,6 @@ try {
   assert.equal(await overlay.locator(".idea-panel").isVisible(), false);
   assert.ok(await overlay.locator(".phase-panel").evaluate(node => node.getBoundingClientRect().height <= 128));
   await page.screenshot({ path: "test-results/phase6-overlay-idle.png" });
-  const start = await page.evaluate(() => ({ frame: window.__worldStats.frame, now: performance.now() }));
   let simError: unknown;
   const sim = promisify(execFile)("pnpm", ["sim"], { cwd: process.cwd(), timeout: 110_000 }).catch(error => { simError = error; return { stdout: "", stderr: "Simulator failed" }; });
   await overlay.waitForFunction(() => document.querySelectorAll(".toast.citizens").length > 0, undefined, { timeout: 15_000 });
@@ -73,8 +67,7 @@ try {
   await overlay.waitForSelector('.version[data-kind="ship"]');
   await overlay.waitForSelector(".toast.ship"); await page.waitForTimeout(350); await page.screenshot({ path: "test-results/overlay-shipped.png" });
   assert.ok((await overlay.locator(".version.ship .credit").textContent())?.includes("Comet04"));
-  const end = await page.evaluate(() => ({ ...window.__worldStats, now: performance.now() }));
-  const measuredFps = (end.frame - start.frame) * 1000 / (end.now - start.now);
+  const measurement=await measureFps(page,15000),end=measurement.stats,measuredFps=measurement.fps;
   assert.equal(end.citizenCount, 104); assert.equal(end.summonCount, 3);
   assert.ok(end.avgFps >= 50); assert.ok(measuredFps >= 50);
   const failed = await promisify(execFile)("pnpm", ["sim", "--round-only", "--outcome=fail"], { cwd: process.cwd(), timeout: 60_000 }); console.log(failed.stdout.trim());

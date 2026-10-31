@@ -1,44 +1,51 @@
-import { spawn } from "node:child_process";
-import { mkdtemp, symlink, appendFile, mkdir, writeFile, rm } from "node:fs/promises";
-import { createServer } from "node:net";
-import { tmpdir } from "node:os";
-import { join, resolve, dirname } from "node:path";
-import { chromium } from "@playwright/test";
-import { git } from "../server/runner/git.js";
-
-// Disposable clone, explicit offline adapters, physical GPU. No dotenv or provider credentials.
-const argument=(name:string)=>process.argv.find(v=>v.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
-const seconds=Number(argument("seconds")??600);if(!Number.isInteger(seconds)||seconds<10||seconds>3600)throw new Error("Use 10..3600 seconds");
-const source=process.cwd(),root=await mkdtemp(join(tmpdir(),"world-soak-"));
-const output=resolve(argument("output")??"state/soak.json"),ref=argument("ref")??"HEAD";
+import {spawn} from "node:child_process";
+import {parseArgs} from "node:util";
+import {mkdtemp,symlink,appendFile,mkdir,writeFile,rm} from "node:fs/promises";
+import {createServer} from "node:net";
+import {tmpdir} from "node:os";
+import {join,resolve,dirname} from "node:path";
+import WebSocket from "ws";
+import {git} from "../server/runner/git.js";
+import {runBounded} from "../server/runtime/process.js";
+import {launchWorldPage,measureFps} from "./browser.js";
+import type {CitizenState} from "../server/contracts.js";
+const {values}=parseArgs({options:{seconds:{type:"string",default:"7200"},interval:{type:"string",default:"900"},sample:{type:"string",default:"10"},output:{type:"string",default:"state/soak.json"},ref:{type:"string",default:"HEAD"}}});
+const seconds=Number(values.seconds),interval=Number(values.interval),sampleSeconds=Number(values.sample);
+if(!Number.isInteger(seconds)||seconds<10||seconds>86400||interval<10||sampleSeconds<1||sampleSeconds>60)throw new Error("Use 10..86400 seconds, interval >=10 and a 1..60 second FPS sample");
+const source=process.cwd(),root=await mkdtemp(join(tmpdir(),"world-soak-")),output=resolve(values.output),delay=(ms:number)=>new Promise<void>(r=>setTimeout(r,ms));
 const socket=createServer();await new Promise<void>(r=>socket.listen(0,"127.0.0.1",r));const port=(socket.address() as {port:number}).port;await new Promise<void>(r=>socket.close(()=>r()));
 const env={PATH:process.env.PATH??"/usr/bin:/bin",HOME:process.env.HOME??"",PORT:String(port),SIMULATION_ALLOWED:"1",SIMULATION_MODE:"fixture"};
-let server:ReturnType<typeof spawn>|undefined,browser:Awaited<ReturnType<typeof chromium.launch>>|undefined;
+interface Heap {heapUsed:number;heapTotal:number;rss:number;external:number}
+interface Sample {minute:number;at:string;fps:number;avgFps:number;serverHeap:Heap;serverRawHeap:Heap;browserHeap:{usedSize:number;totalSize:number};browserRawHeap:{usedSize:number;totalSize:number};dom:number;citizens:number;frame:number}
+const report={status:"starting",startedAt:new Date().toISOString(),pid:process.pid,serverPid:0,root,port,commit:"",renderer:"",samples:[] as Sample[],health:[] as {at:string;heapUsed:number;fps:number;citizens:number}[],errors:[] as string[],sim:[] as {code:number|null;output:string}[],worktrees:0,finishedAt:""};
+await mkdir(dirname(output),{recursive:true});const save=()=>writeFile(output,JSON.stringify(report,null,2),{mode:0o600});
+let server:ReturnType<typeof spawn>|undefined,world:Awaited<ReturnType<typeof launchWorldPage>>|undefined,inspector:WebSocket|undefined;
+let aborted=false;for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{aborted=true;});
 try{
- await git(source,"clone","--quiet","--no-hardlinks",source,root);await git(root,"switch","-C","master",ref);
- await symlink(join(source,"node_modules"),join(root,"node_modules"));await appendFile(join(root,".git/info/exclude"),"\nnode_modules\n");
- server=spawn(process.execPath,["--import","tsx","server/index.ts"],{cwd:root,env,detached:true,stdio:"ignore"});
- const base=`http://127.0.0.1:${port}`;let ready=false;
- for(let i=0;i<100;i++){try{if((await fetch(base+"/api/world")).ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,100));}if(!ready)throw new Error("Soak server did not start");
- browser=await chromium.launch({headless:true,args:process.platform==="darwin"?["--use-angle=metal","--enable-gpu"]:["--enable-gpu"]});
- const page=await browser.newPage({viewport:{width:1920,height:1080}}),errors:string[]=[];
- page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});
- await page.goto(base+"/world?overlay=1");await page.waitForSelector('canvas[data-ready="true"]');
- // Measure the render loop without a concurrent SwiftShader builder gate or provider calls.
- for(let i=0;i<300;i++){
-  if(i&&i%100===0)await new Promise(r=>setTimeout(r,1100));
-  const response=await fetch(base+"/sim/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:`soak-${i}`,userId:`soak-${i}`,displayName:`Neighbor${i}`,color:["#79D7CF","#F2A96B","#D49BE8"][i%3],text:i%13===0&&i>0?`!follow Neighbor${i-1}`:i%9===0?"!dance":"hello island"})});
-  if(!response.ok||!(await response.json() as {accepted:boolean}).accepted)throw new Error("Soak crowd admission failed");
+ await git(source,"clone","--quiet","--no-hardlinks",source,root);await git(root,"switch","-C","master",values.ref);report.commit=await git(root,"rev-parse","HEAD");await symlink(join(source,"node_modules"),join(root,"node_modules"));await appendFile(join(root,".git/info/exclude"),"\nnode_modules\n");
+ let inspectorUrl="",stderr="";server=spawn(process.execPath,["--inspect=127.0.0.1:0","--import","tsx","server/index.ts"],{cwd:root,env,detached:true,stdio:["ignore","ignore","pipe"]});report.serverPid=server.pid??0;
+ server.stderr!.on("data",chunk=>{stderr=(stderr+String(chunk)).slice(-8192);inspectorUrl=/ws:\/\/127\.0\.0\.1:\d+\/[a-f0-9-]+/.exec(stderr)?.[0]??inspectorUrl;});await save();
+ const base=`http://127.0.0.1:${port}`;let ready=false;for(let i=0;i<200;i++){try{if((await fetch(base+"/api/world")).ok&&inspectorUrl){ready=true;break;}}catch{}await delay(100);}if(!ready)throw new Error("Soak server did not start");
+ inspector=new WebSocket(inspectorUrl);await new Promise<void>((r,j)=>{inspector!.once("open",r);inspector!.once("error",j);});let serial=0;
+ const pending=new Map<number,{resolve:(value:unknown)=>void;reject:(error:Error)=>void}>();
+ inspector.on("message",raw=>{const value=JSON.parse(String(raw)) as {id?:number;result:unknown;error?:{message:string}};if(value.id){const callback=pending.get(value.id);if(callback){pending.delete(value.id);if(value.error)callback.reject(new Error(value.error.message));else callback.resolve(value.result);}}});
+ const command=<T,>(method:string,params:object={})=>new Promise<T>((r,j)=>{const id=++serial;pending.set(id,{resolve:value=>r(value as T),reject:j});inspector!.send(JSON.stringify({id,method,params}));});
+ const memory=async()=> (await command<{result:{value:Heap}}>("Runtime.evaluate",{expression:"process.memoryUsage()",returnByValue:true})).result.value;
+ world=await launchWorldPage(base,"overlay=1",{onPage(page){page.on("pageerror",e=>report.errors.push(e.message));page.on("console",e=>{if(e.type()==="error")report.errors.push(e.text());});}});const {page,gpu}=world;report.renderer=gpu;if(/swiftshader|llvmpipe|software|unknown/i.test(gpu))throw new Error("Soak needs a physical GPU");
+ async function sim(crowdOnly=false){const result=await runBounded({bin:"pnpm",args:["sim",...(crowdOnly?["--crowd-only"]:[])],cwd:root,env,timeoutMs:180000,maxBytes:65536});report.sim.push({code:result.code,output:result.output});if(result.code!==0||result.error)throw new Error("pnpm sim failed: "+(result.error??result.output.slice(-300)));}
+ await sim();let sequence=0;
+ const snapshot=async()=>await(await fetch(base+"/api/world")).json() as {citizens:CitizenState[]};
+ const post=async(c:Pick<CitizenState,"id"|"displayName"|"color">)=>{const response=await fetch(base+"/sim/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:`pulse-${sequence++}`,userId:c.id,displayName:c.displayName,color:c.color,text:"hello island"})});if(!response.ok)throw new Error("Soak admission failed");};
+ async function replenish(){const {citizens}=await snapshot();for(let i=citizens.length;i<300;i++){await post({id:`soak-guest-${sequence}`,displayName:`Guest${sequence}`,color:"#DCA777"});if(i%80===0)await delay(1100);}}
+ await replenish();await page.waitForFunction(()=>window.__worldStats.citizenCount===300);await delay(5000);const cdp=await page.context().newCDPSession(page),start=Date.now();report.status="running";await save();
+ async function sample(minute:number){const serverRawHeap=await memory();await command("HeapProfiler.collectGarbage");const serverHeap=await memory(),browserRawHeap=await cdp.send("Runtime.getHeapUsage");await cdp.send("HeapProfiler.collectGarbage");const browserHeap=await cdp.send("Runtime.getHeapUsage"),timing=await measureFps(page,sampleSeconds*1000),dom=await page.locator("*").count();report.samples.push({minute,at:new Date().toISOString(),fps:timing.fps,avgFps:timing.avgFps,serverHeap,serverRawHeap,browserHeap,browserRawHeap,dom,citizens:timing.stats.citizenCount,frame:timing.stats.frame});await save();console.log(JSON.stringify(report.samples.at(-1)));}
+ await sample(0);let next=interval,lastHeartbeat=Date.now(),lastHealth=Date.now();
+ while(!aborted&&(Date.now()-start)/1000<seconds){
+  const elapsed=(Date.now()-start)/1000;if(elapsed>=next){await sim(true);await replenish();await page.waitForTimeout(1500);await sample(Math.round(next/60));next+=interval;}
+  if(Date.now()-lastHeartbeat>=60000){lastHeartbeat=Date.now();for(const citizen of (await snapshot()).citizens.filter(c=>!c.entry)){await post(citizen);if(sequence%80===0)await delay(1100);}await replenish();}
+  if(Date.now()-lastHealth>=60000){lastHealth=Date.now();const heap=await memory(),stats=await page.evaluate(()=>window.__worldStats);const value={at:new Date().toISOString(),heapUsed:heap.heapUsed,fps:stats.avgFps,citizens:stats.citizenCount};report.health.push(value);await save();console.log(JSON.stringify({health:value}));}
+  await delay(1000);
  }
- await page.waitForFunction(()=>window.__worldStats.citizenCount===300);await page.waitForTimeout(5000);
- const renderer=await page.evaluate(()=>{const gl=document.querySelector("canvas")!.getContext("webgl2")!,info=gl.getExtension("WEBGL_debug_renderer_info");return info?String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)):"";});
- if(/swiftshader|llvmpipe|software/i.test(renderer)||!renderer)throw new Error("Soak needs a physical GPU");
- await page.evaluate(`(() => { const state={times:[],cpu:[],render:[],last:0,start:performance.now(),frame:window.__worldStats.frame};window.__soak=state;function sample(now){if(state.last){state.times.push(now-state.last);state.cpu.push(window.__worldStats.updateMs);state.render.push(window.__worldStats.renderMs);}state.last=now;requestAnimationFrame(sample);}requestAnimationFrame(sample);})()`);
- const start=performance.now();while(performance.now()-start<seconds*1000)await new Promise(r=>setTimeout(r,Math.min(5000,seconds*1000-(performance.now()-start))));
- const measured=await page.evaluate(()=>{const s=(window as unknown as {__soak:{times:number[];cpu:number[];render:number[];start:number;frame:number}}).__soak,total=s.times.reduce((a,b)=>a+b,0),sorted=s.times.sort((a,b)=>a-b);return {meanUpdateMs:s.cpu.reduce((sum,v)=>sum+v,0)/s.cpu.length,p95UpdateMs:s.cpu.sort((a,b)=>a-b)[Math.floor(s.cpu.length*.95)],meanRenderMs:s.render.reduce((sum,v)=>sum+v,0)/s.render.length,p95RenderMs:s.render.sort((a,b)=>a-b)[Math.floor(s.render.length*.95)],seconds:(performance.now()-s.start)/1000,avgFps:1000*s.times.length/total,p95FrameMs:sorted[Math.floor(sorted.length*.95)],frames:window.__worldStats.frame-s.frame,stats:window.__worldStats};});
- await mkdir("test-results",{recursive:true});await page.screenshot({path:"test-results/soak-world.png"});
- const worktrees=(await git(root,"worktree","list","--porcelain")).split("worktree ").length-1;
- const result={commit:await git(root,"rev-parse","HEAD"),sourceRef:ref,renderer,...measured,seededCitizens:300,errors,worktrees};
- await mkdir(dirname(output),{recursive:true});await writeFile(output,JSON.stringify(result,null,2),{mode:0o600});console.log(JSON.stringify(result));
- if(errors.length||worktrees!==1||measured.avgFps<50)process.exitCode=1;
-}finally{await browser?.close();if(server?.pid)try{process.kill(-server.pid,"SIGTERM");}catch{}await new Promise(r=>setTimeout(r,500));await rm(root,{recursive:true,force:true});}
+ await sample(Math.round(seconds/60));report.status=aborted?"cancelled":"complete";report.finishedAt=new Date().toISOString();report.worktrees=(await git(root,"worktree","list","--porcelain")).split("worktree ").length-1;await page.screenshot({path:output.replace(/\.json$/,".png")});await save();
+ if(report.errors.length||report.worktrees!==1||report.samples.some(s=>s.fps<50||s.citizens!==300))process.exitCode=1;
+}catch(error){report.status="failed";report.errors.push(error instanceof Error?error.message:"Soak failed");await save();process.exitCode=1;}finally{inspector?.close();await world?.browser.close();if(server?.pid)try{process.kill(-server.pid,"SIGTERM");}catch{}await delay(500);await rm(root,{recursive:true,force:true});}

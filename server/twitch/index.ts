@@ -16,7 +16,7 @@ export interface TwitchOptions {
   setTimer?: (callback: () => void, milliseconds: number) => Timer; clearTimer?: (timer: Timer) => void;
 }
 interface Connection { socket: WebSocket; transfer: boolean; welcomed: boolean; healthySince: number; timeout: number; timer?: Timer }
-interface Envelope {
+export interface Envelope {
   metadata?: { message_type?: string; message_id?: string };
   payload?: { session?: { id?: string; keepalive_timeout_seconds?: number; reconnect_url?: string };
     subscription?: { type?: string }; event?: Record<string, unknown> };

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, copyFile, chmod, rm, readdir, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
-import { chromium } from "@playwright/test";
+import {launchWorldPage} from "./browser.js";
 import { git } from "../server/runner/git.js";
 import { Runner, type RunResult } from "../server/runner/index.js";
 import { Versions } from "../server/versions/index.js";
@@ -36,12 +36,10 @@ let lastReal = Date.now(); const clock = setInterval(() => { const real = Date.n
 for (let i=0;i<80;i++) pipeline.roster.accept({ id:`seed-${i}`,userId:`sim-${i}`,displayName:`Neighbor${i}`,color:"#79D7CF",text:"hello",timestamp:now },now);
 const app = await createWorldServer(pipeline, undefined, rounds, versions, {live:false, simulationAllowed:true, async fault(){}}); await new Promise<void>(r => app.server.listen(0,"127.0.0.1",r));
 const port = (app.server.address() as {port:number}).port;
-const browser = await chromium.launch({ headless:true, args: process.platform === "darwin" ? ["--use-angle=metal","--enable-gpu"] : ["--enable-gpu"] });
+const errors:string[]=[];let navigations=0;const {browser,page}=await launchWorldPage(`http://127.0.0.1:${port}`,"overlay=1",{onPage(page){page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});page.on("framenavigated",frame=>{if(frame===page.mainFrame())navigations++;});}});navigations=0;
 const results: { round:number; verdict:string; outcome:string; durationMs:number; reason:string; tag?:string; check?:unknown }[]=[];
 try {
- const page=await browser.newPage({viewport:{width:1920,height:1080}}), errors:string[]=[]; let navigations=0;
- page.on("framenavigated",f=>{if(f===page.mainFrame())navigations++});page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text())});
- await page.goto(`http://127.0.0.1:${port}/world?overlay=1`); await page.waitForSelector('canvas[data-ready="true"]');
+
  await page.evaluate(() => { const frame=document.createElement("iframe");frame.id="runner-overlay";frame.src="/overlay";Object.assign(frame.style,{position:"fixed",inset:"0",width:"1920px",height:"1080px",border:"0",pointerEvents:"none",zIndex:"20"});document.body.append(frame); });
  const overlay=(await(await page.waitForSelector("#runner-overlay")).contentFrame())!;await overlay.waitForSelector(".connection.connected",{state:"attached"});
  const post = async (user:string,text:string) => {

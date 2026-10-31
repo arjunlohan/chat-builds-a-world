@@ -1,25 +1,12 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { chromium } from "@playwright/test";
+import { launchWorldPage, measureFps } from "./browser.js";
 import type { CitizenState } from "../server/contracts.js";
 
 // pnpm dev must already be running. This executes the same pnpm sim a judge uses.
-const browser = await chromium.launch({ headless: true,
-  args: process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu"] : ["--enable-gpu"],
-});
+const errors:string[]=[];const {browser,page,gpu}=await launchWorldPage("http://127.0.0.1:3000","debug=1",{onPage(page){page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});}});
 try {
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-  const errors: string[] = [];
-  page.on("pageerror", error => errors.push(error.message));
-  page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
-  await page.goto("http://127.0.0.1:3000/world?debug=1");
-  await page.waitForSelector("canvas[data-ready='true']", { timeout: 60_000 });
-  const gpu = await page.evaluate(() => {
-    const gl = document.querySelector("canvas")!.getContext("webgl2")!;
-    const info = gl.getExtension("WEBGL_debug_renderer_info");
-    return info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "unknown";
-  });
   assert.ok(!/swiftshader|llvmpipe|software|unknown/i.test(gpu), `Physical GPU required, found ${gpu}`);
   const simRun = promisify(execFile)("pnpm", ["sim"], { cwd: process.cwd(), timeout: 100_000 });
   await page.waitForFunction(() => window.__worldStats.citizenCount === 80);
@@ -70,10 +57,7 @@ try {
   assert.ok(bubbles <= 8);
   await page.screenshot({ path: "test-results/crowd-active.png" });
   await page.waitForTimeout(2500);
-  const start = await page.evaluate(() => ({ frame: window.__worldStats.frame, now: performance.now() }));
-  await page.waitForTimeout(15_000);
-  const stats = await page.evaluate(() => ({ ...window.__worldStats, now: performance.now() }));
-  const measuredFps = (stats.frame - start.frame) * 1000 / (stats.now - start.now);
+  const measurement=await measureFps(page,15000),stats=measurement.stats,measuredFps=measurement.fps;
   assert.equal(stats.citizenCount, 104);
   assert.equal(stats.raidCount, snapshot.raids);
   assert.ok(stats.raidCount >= 1);

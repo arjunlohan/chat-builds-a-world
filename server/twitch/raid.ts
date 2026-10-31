@@ -1,7 +1,8 @@
+import type { Envelope } from "./index.js";
 import { parseRaid } from "../pipeline.js";
 /** Shared EventSub decoding/filtering for the live socket and explicit local raid simulator. */
 export function incomingRaid(message: unknown, broadcasterId: string) {
- const value=message as {metadata?:{message_type?:string;message_id?:string};payload?:{subscription?:{type?:string};event?:Record<string,unknown>}};
+ const value=message as Envelope;
  if(value?.metadata?.message_type!=="notification"||value.payload?.subscription?.type!=="channel.raid"||value.payload.event?.to_broadcaster_user_id!==broadcasterId)return;
  const event=value.payload.event;
  try{return parseRaid({id:value.metadata.message_id,broadcasterId:event.from_broadcaster_user_id,broadcasterName:event.from_broadcaster_user_name,viewerCount:event.viewers});}catch{return;}

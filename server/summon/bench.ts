@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { chromium } from "@playwright/test";
+import {launchWorldPage} from "../../checks/browser.js";
 import { setTimeout as delay } from "node:timers/promises";
 import { readConfig } from "../config.js";
 import type { SummonJob } from "./index.js";
@@ -11,10 +11,8 @@ async function main() {
   const base = `http://127.0.0.1:${config.port}`;
   const snapshot = await (await fetch(`${base}/api/world`)).json() as { summons: unknown[] };
   if (snapshot.summons.length) throw new Error("Start a fresh dev server before benchmarking");
-  const browser = await chromium.launch({ headless: true, args: process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu"] : ["--enable-gpu"] });
+  const {browser}=await launchWorldPage(base,"debug=1");
   try {
-    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-    await page.goto(`${base}/world?debug=1`); await page.waitForSelector("canvas[data-ready='true']", { timeout: 60_000 });
     console.log("# | mode | valid | status | provider ms | request-to-screen ms | input/output/total/reasoning tokens");
     const rows: SummonJob[] = [];
     const run = Date.now().toString(36); let previous = -Infinity;
