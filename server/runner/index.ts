@@ -28,8 +28,6 @@ export class Runner {
   private readonly record: NonNullable<Options["record"]>;
   readonly root: string;
   constructor(private options: Options) { this.root = resolve(options.root); this.record = options.record ?? metricWriter(join(this.root, "state"), "runner-metrics.jsonl"); }
-  get isBusy() { return this.queue.busy; }
-  idle() { return this.queue.idle(); }
   async recover() {
     const pending = this.options.versions.pending;
     if (pending && pending.path === join(this.root, "worktrees", `v${pending.version}`)) {

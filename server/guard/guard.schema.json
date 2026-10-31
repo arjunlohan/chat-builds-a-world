@@ -25,7 +25,7 @@
       ]
     },
     "files": {
-      "type": "array", "maxItems": 2,
+      "type": "array", "maxItems": 2, "uniqueItems": true,
       "items": { "type": "string", "maxLength": 240, "pattern": "^world/modules/(?:[a-zA-Z][a-zA-Z0-9_-]*/)*[a-zA-Z][a-zA-Z0-9_-]*\\.ts$" }
     }
   }

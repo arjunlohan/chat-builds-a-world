@@ -1,7 +1,6 @@
-import { runBounded, withCodexHome, minimalEnvironment, codexArgs, cliFailure, isCliWarning, protectedValues, redact } from "../runtime/process.js";
+import { runBounded, withCodexHome, minimalEnvironment, codexArgs, turnFailure, boundedFailure, protectedValues, redact } from "../runtime/process.js";
 import { metricWriter } from "../runtime/metrics.js";
 import { lstat, realpath } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -16,10 +15,6 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const validate = new Ajv2020({ strict: true, allErrors: false }).compile<GuardDecision>(schema);
 const failed = (reason: string): GuardDecision => ({ verdict: "reject", reason, title: "Idea rejected", spec: null, files: [] });
 
-/** Exactly three inherited variables plus the required isolated Codex home. No ambient auth/config. */
-export function guardEnvironment(env: NodeJS.ProcessEnv, root = REPO): NodeJS.ProcessEnv {
-  return minimalEnvironment(env, root);
-}
 export function buildGuardPrompt(idea: string) {
   if (!idea.trim() || [...idea].length > 1000 || Buffer.byteLength(idea) > 4096) throw new Error("Invalid idea size");
   return `You are the read-only safety and scope guard for Chat Builds a World.
@@ -40,7 +35,6 @@ export async function validateDecision(value: unknown, root = REPO): Promise<Gua
   if (value.verdict === "reject") {
     if (value.spec !== null || value.files.length) throw new Error("Rejected decision contains a build");
   } else if (!value.spec || !value.files.length) throw new Error("Accepted decision needs a bounded spec and files");
-  if (new Set(value.files).size !== value.files.length) throw new Error("Duplicate guard file");
   const serialized = JSON.stringify(value);
   const strings = [value.title, value.reason, ...value.files, ...(value.spec ? [value.spec.moduleId, value.spec.description, ...value.spec.steps, ...value.spec.checks] : [])];
   if (Buffer.byteLength(serialized) > 8192 || strings.some(text => !text.trim() || /[\u0000-\u001f\u007f]/.test(text))) throw new Error("Invalid guard text");
@@ -61,16 +55,17 @@ export async function validateDecision(value: unknown, root = REPO): Promise<Gua
 
 /** Parse only the completed final agent message, never reasoning/tool output. */
 export function parseGuardStream(stdout: string): unknown {
-  let final: string | undefined, completed = false;
+  let final: string | undefined, completed = false, failure: string | undefined;
   for (const line of stdout.trim().split(/\r?\n/)) {
     const event = JSON.parse(line) as { type?: string; item?: { type?: string; text?: string } };
     if (!event || typeof event.type !== "string") throw new Error("Invalid Codex event");
-    const failure = cliFailure(event); if (failure) throw new Error(failure);
-    if (isCliWarning(event)) continue;
+    failure ??= turnFailure(event);
+    if (event.type === "error" || event.item?.type === "error") continue;
     if (event.item && !["agent_message", "reasoning"].includes(event.item.type ?? "")) throw new Error("Guard used a tool");
     if (event.type === "item.completed" && event.item?.type === "agent_message") { final = event.item.text; completed = false; }
     if (event.type === "turn.completed") completed = true;
   }
+  if (failure) throw new Error(failure);
   if (!completed || !final || Buffer.byteLength(final) > 8192) throw new Error("Missing structured guard result");
   return JSON.parse(final);
 }
@@ -84,7 +79,7 @@ export class IdeaGuard {
   private readonly record: ReturnType<typeof metricWriter>;
   constructor(options: Options = {}) {
     const source = options.env ?? process.env; this.secrets = protectedValues(source);
-    this.root = resolve(options.root ?? REPO); this.record = metricWriter(join(this.root, "state"), "guard-metrics.jsonl"); this.env = guardEnvironment(source, this.root);
+    this.root = resolve(options.root ?? REPO); this.record = metricWriter(join(this.root, "state"), "guard-metrics.jsonl"); this.env = minimalEnvironment(source, this.root);
     this.bin = options.bin?.trim() || source.CODEX_BIN?.trim() || "codex";
     this.timeout = Math.max(1, Math.min(GUARD_TIMEOUT_MS, options.timeoutMs ?? GUARD_TIMEOUT_MS));
   }
@@ -94,14 +89,9 @@ export class IdeaGuard {
     if (!this.env.AWS_BEARER_TOKEN_BEDROCK?.trim()) return result(failed("Guard unavailable: AWS_BEARER_TOKEN_BEDROCK is missing."));
     let prompt: string; try { prompt = buildGuardPrompt(idea); } catch { return result(failed("Guard rejected an empty or oversized idea.")); }
     if (signal?.aborted) return result(failed("Guard review cancelled."));
-    const raw = await withCodexHome(this.root,this.env,async env => runBounded({ bin: this.bin, args: await codexArgs(this.root, "read-only", "low", GUARD_SCHEMA), cwd: this.root, env, input: prompt, signal, timeoutMs: this.timeout, maxBytes: 1_048_576 }));
-    if (raw.reason) return result(failed(({ timeout: "Guard timed out after 45 seconds.", cancelled: "Guard review cancelled.", start: "Guard could not start the configured Codex CLI.", "output-limit": "Guard output exceeded its limit." } as Record<string,string>)[raw.reason] ?? "Guard returned malformed events."));
+    const raw = await withCodexHome(this.root,this.env,async (env, runtime) => runBounded({ bin: this.bin, onSpawn: runtime.onSpawn, secrets: this.secrets, args: codexArgs(runtime.config, "read-only", "low", GUARD_SCHEMA), cwd: this.root, env, input: prompt, signal, timeoutMs: this.timeout, maxBytes: 1_048_576 }));
+    if (raw.reason) return result(failed(boundedFailure(raw.reason, "Guard", 45)));
     try {
-      if (this.secrets.some(secret => raw.output.includes(secret))) {
-        // Failure events may carry provider diagnostics; redact them before surfacing.
-        for (const line of raw.output.trim().split(/\r?\n/)) { const detail = cliFailure(JSON.parse(line)); if (detail) throw new Error(redact(detail, this.secrets)); }
-        return result(failed("Guard output contained protected data."));
-      }
       const parsed = parseGuardStream(raw.output);
       if (raw.code !== 0) throw new Error("Guard CLI exited without completing.");
       return result(await validateDecision(parsed, this.root), true);

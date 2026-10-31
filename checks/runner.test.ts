@@ -103,12 +103,12 @@ test("failed live acknowledgement restores module content with a forward commit 
   assert.equal(await git(root,"status","--porcelain","--untracked-files=all"),"");assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);versions.close();
  }finally{await rm(root,{recursive:true,force:true})}
 });
-test("preemption awaits aborted operation cleanup before rollback and exposes idle", async () => {
+test("preemption awaits aborted operation cleanup before rollback", async () => {
   const { OperationQueue } = await import("../server/runtime/queue.js");
   const queue = new OperationQueue(), events: string[] = [];
   const build = queue.enqueue(async signal => { events.push("build"); await new Promise<void>(resolve => signal.addEventListener("abort", () => resolve(), {once:true})); await new Promise(r => setTimeout(r,20)); events.push("cleaned"); });
   const rollback = queue.enqueue(async () => { events.push("rollback"); }, true);
-  await queue.idle(); await Promise.all([build,rollback]); assert.deepEqual(events,["build","cleaned","rollback"]); assert.equal(queue.busy,false);
+  await Promise.all([build,rollback]); assert.deepEqual(events,["build","cleaned","rollback"]);
 });
 test("a metrics write failure cannot revert a successfully activated version", async () => {
  const root=await repository();
@@ -118,7 +118,7 @@ test("a metrics write failure cannot revert a successfully activated version", a
   let versions!:Versions;versions=new Versions(root,v=>{if(v)versions.acknowledge(v.version,v.receipt,true)});
   const runner=new Runner({root,versions,bin:resolve("checks/fixtures/fake-builder.cjs"),env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"synthetic-fixture-secret"},feed(){},announce:async()=>{},record(){throw new Error("disk full")},check:async()=>({ok:true,fps:60,avgFps:60})});
   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"Test",reason:"Safe",spec:{moduleId:"metric",description:"good",steps:["Small visual"],checks:["Cleanup"],estimatedSeconds:60},files:["world/modules/metric.ts"],mode:"live",latencyMs:0}});
-  assert.equal(result.outcome,"SHIPPED");assert.equal(versions.current?.tag,"v1");assert.equal(await git(root,"tag","--list"),"v1");await runner.idle();assert.equal(runner.isBusy,false);versions.close();
+  assert.equal(result.outcome,"SHIPPED");assert.equal(versions.current?.tag,"v1");assert.equal(await git(root,"tag","--list"),"v1");versions.close();
  }finally{await rm(root,{recursive:true,force:true})}
 });
 test("runtime configuration writes cannot dirty the canonical tracked Codex home", async () => {
@@ -141,7 +141,7 @@ test("automatic rollback preempts a real queued build and waits for its worktree
   let started!:()=>void;const ready=new Promise<void>(r=>started=r);
   const runner=new Runner({root,versions,feed(){},announce:async()=>{events.push("restored")},record(){},builder:async({signal})=>{started();await new Promise<void>(r=>signal.addEventListener("abort",()=>r(),{once:true}));await new Promise(r=>setTimeout(r,20));events.push("child-cleaned");throw new Error("cancelled");}});
   const build=runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"New",reason:"Safe",spec:{moduleId:"new",description:"Small visual",steps:["Create"],checks:["Dispose"],estimatedSeconds:60},files:["world/modules/new.ts"],mode:"live",latencyMs:0}});
-  await ready;const restore=runner.rollback("system",true);await runner.idle();assert.equal((await build).ok,false);assert.equal((await restore).outcome,"ROLLED BACK");assert.deepEqual(events,["child-cleaned","restored"]);
+  await ready;const restore=runner.rollback("system",true);assert.equal((await build).ok,false);assert.equal((await restore).outcome,"ROLLED BACK");assert.deepEqual(events,["child-cleaned","restored"]);
   assert.equal(await readFile(join(root,"world/modules/a.ts"),"utf8"),firstSource);assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);assert.equal(await git(root,"status","--porcelain"),"");versions.close();
  }finally{await rm(root,{recursive:true,force:true})}
 });

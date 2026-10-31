@@ -78,7 +78,7 @@
         "pattern": "^world/modules/(?:[a-zA-Z][a-zA-Z0-9_-]*/)*[a-zA-Z][a-zA-Z0-9_-]*\\.ts$",
         "description": "maxLength: 240"
       },
-      "description": "maxItems: 2"
+      "description": "maxItems: 2, uniqueItems: true"
     }
   }
 }

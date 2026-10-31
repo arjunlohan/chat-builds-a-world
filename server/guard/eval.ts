@@ -1,9 +1,7 @@
-import { cleanupStaleCodexHomes } from "../runtime/process.js";
 import { config as loadEnv } from "dotenv";
 import { IdeaGuard } from "./index.js";
 import ideas from "./ideas.json" with { type: "json" };
 loadEnv({ quiet: true });
-await cleanupStaleCodexHomes(process.cwd());
 if (!process.env.AWS_BEARER_TOKEN_BEDROCK?.trim()) {
   console.error("Guard eval needs AWS_BEARER_TOKEN_BEDROCK. No Codex process or provider request was started.");
   process.exitCode = 1;

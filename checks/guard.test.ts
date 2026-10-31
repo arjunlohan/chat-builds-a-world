@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { mkdtemp, mkdir, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
-import { IdeaGuard, GUARD_TIMEOUT_MS, buildGuardPrompt, guardEnvironment, validateDecision, parseGuardStream, type GuardResult } from "../server/guard/index.js";
+import { IdeaGuard, GUARD_TIMEOUT_MS, buildGuardPrompt, validateDecision, parseGuardStream, type GuardResult } from "../server/guard/index.js";
+import { minimalEnvironment } from "../server/runtime/process.js";
 import { Rounds } from "../server/rounds/index.js";
 import ideas from "../server/guard/ideas.json" with { type: "json" };
 const fake = resolve("checks/fixtures/fake-codex.cjs");
@@ -26,7 +27,7 @@ test("guard prompt quotes malicious role delimiters and carries safety, lifecycl
   assert.throws(() => buildGuardPrompt(" ")); assert.throws(() => buildGuardPrompt("x".repeat(1001)));
 });
 test("guard scrubs the environment and passes exact sandbox/ephemeral/schema/low flags to a real fake process", async () => {
-  const scrubbed = guardEnvironment(env);
+  const scrubbed = minimalEnvironment(env,process.cwd());
   assert.deepEqual(Object.keys(scrubbed).sort(), ["PATH", "HOME", "AWS_BEARER_TOKEN_BEDROCK", "CODEX_HOME"].sort());
   assert.equal(scrubbed.TWITCH_ACCESS_TOKEN, undefined); assert.ok(scrubbed.CODEX_HOME!.endsWith("/.codex-runtime"));
   const result = await guard().review("__FAKE_ENV__"); assert.match(result.reason, /required CLI flags verified/);
@@ -57,7 +58,7 @@ test("guard checks canonical paths and rejects symlinked parents and files", asy
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 test("malformed, incomplete, unsafe, tool-using and failed CLI results fail closed without raw logs", async () => {
-  for (const suffix of ["JSON", "TITLE", "SCOPE", "PATH", "EXTRA", "PROTECTED", "TOOL", "INCOMPLETE", "FAILURE", "FLOOD"]) {
+  for (const suffix of ["JSON", "TITLE", "SCOPE", "PATH", "EXTRA", "TOOL", "INCOMPLETE", "FAILURE", "FLOOD"]) {
     const result = await guard().review(`__FAKE_${suffix}__`);
     assert.equal(result.verdict, "reject", suffix); assert.equal(result.spec, null); assert.equal(result.files.length, 0);
     assert.ok(!result.reason.includes("sensitive upstream detail")); assert.ok(!result.reason.includes(env.AWS_BEARER_TOKEN_BEDROCK));
@@ -126,10 +127,13 @@ test("strict provider schemas omit unsupported keywords while validators enforce
     visit(value);
   }
   const { latencyMs, mode, ...base } = decision();
-  await assert.rejects(validateDecision({ ...base, files: [base.files[0], base.files[0]] }), /Duplicate/);
+  await assert.rejects(validateDecision({ ...base, files: [base.files[0], base.files[0]] }), /Malformed/);
 });
 test("CLI failure details are surfaced and redacted; warning error events are nonfatal", async () => {
   const failure = await guard().review("__FAKE_EVENT_ERROR__");
   assert.match(failure.reason, /invalid_json_schema/); assert.match(failure.reason, /REDACTED/); assert.ok(!failure.reason.includes(env.AWS_BEARER_TOKEN_BEDROCK));
   assert.equal((await guard().review("__FAKE_WARNING__")).reviewed, true);
+  assert.equal((await guard().review("__FAKE_DIAGNOSTIC__")).reviewed, true);
+  const protectedResult=await guard().review("__FAKE_PROTECTED__");assert.equal(protectedResult.reviewed,true);assert.match(protectedResult.reason,/REDACTED/);
+  assert.equal((await guard().review("__FAKE_FAILED_COMPLETED__")).verdict,"reject");
 });

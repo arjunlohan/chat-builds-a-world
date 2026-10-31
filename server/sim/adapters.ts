@@ -10,6 +10,6 @@ export function simulationAdapters() {
     reviewer: (idea: string) => fixtureReview(idea),
     summonProvider: fixtureProvider,
     builder: async (options: BuilderOptions) => runCodex({ ...options, prompt: (await runnerPrompt(options.root, options.decision)) + `\nSIMULATION_FIXTURE_KIND: ${kind}`, bin: fileURLToPath(new URL("../../checks/fixtures/fake-builder.cjs", import.meta.url)),
-      env: { PATH: options.env.PATH, HOME: options.env.HOME, AWS_BEARER_TOKEN_BEDROCK: "offline-fixture-not-a-key" } }),
+      env: { ...options.env, AWS_BEARER_TOKEN_BEDROCK: "offline-fixture-not-a-key" } }),
   };
 }
