@@ -3,18 +3,17 @@ import {join} from "node:path";
 import {fileURLToPath} from "node:url";
 import {randomUUID} from "node:crypto";
 import {compileModule} from "./policy.js";
-import {runBounded,minimalEnvironment,redact,protectedValues} from "../runtime/process.js";
+import {redact,protectedValues} from "../runtime/process.js";
 import type {Usage} from "../../world/shared/limits.js";
 import {typescriptArgs} from "../runtime/typescript.js";
+import {jsonWorker,isVerdict} from "../runtime/json-worker.js";
 export const SELF_CHECK_TIMEOUT_MS=12_000;
 export interface ResourceContext {base?:Usage;retained:{id:string;file:string;code:string}[]}
 export interface SelfCheckInput extends ResourceContext {file:string;id:string;files:string[]}
 export interface SelfCheckResult {ok:boolean;reason?:string;retryable?:boolean;usage?:Usage;pool?:Usage;retained?:Usage;available?:Usage}
 export async function resourceCheck(input:ResourceContext,modules:ResourceContext["retained"],signal:AbortSignal,candidateId?:string):Promise<SelfCheckResult>{
- let browserPid=0;
- const raw=await runBounded({bin:process.execPath,args:typescriptArgs(fileURLToPath(new URL("./resources.worker.ts",import.meta.url))),cwd:fileURLToPath(new URL("../..",import.meta.url)),env:minimalEnvironment(process.env),signal,timeoutMs:SELF_CHECK_TIMEOUT_MS,maxBytes:65536,input:JSON.stringify({...input,modules,candidateId}),onLine(line){const e=JSON.parse(line) as {browserPid?:number};if(Number.isSafeInteger(e.browserPid))browserPid=e.browserPid!;},onKill(){if(browserPid)try{process.kill(process.platform==="win32"?browserPid:-browserPid,"SIGKILL");}catch{}}});
- if(raw.error)return {ok:false,reason:`Resource check ${raw.error}`,retryable:false};
- try{return JSON.parse(raw.output.trim().split("\n").at(-1)!) as SelfCheckResult;}catch{return {ok:false,reason:"Resource checker returned invalid output.",retryable:false};}
+ const raw=await jsonWorker<SelfCheckResult>({script:fileURLToPath(new URL("./resources.worker.ts",import.meta.url)),signal,timeoutMs:SELF_CHECK_TIMEOUT_MS,input:JSON.stringify({...input,modules,candidateId}),verdict:isVerdict});
+ return raw.verdict??{ok:false,reason:`Resource check ${raw.error}`,retryable:false};
 }
 export async function selfCheck(tree:string,input:SelfCheckInput,signal:AbortSignal){
  const compiled=await compileModule(tree,input.file,input.id,fileURLToPath(new URL("../../node_modules",import.meta.url)),input.files);

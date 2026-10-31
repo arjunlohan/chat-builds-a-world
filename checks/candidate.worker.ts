@@ -1,5 +1,4 @@
-import { readFile, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { chromium, type Page } from "@playwright/test";
 import { createWorldServer } from "../server/http.js";
@@ -8,7 +7,7 @@ import { Versions } from "../server/versions/index.js";
 import { frameVerdict, visibilityVerdict, CANDIDATE_THRESHOLDS, type FrameEvidence } from "./candidate-policy.js";
 import { VISIBILITY_PROBE, type Footprint } from "../world/engine/visibility.js";
 const path=process.argv[2]!,directory=dirname(path),input=JSON.parse(await readFile(path,"utf8")) as {modules:{id:string;file:string;code:string}[];probeId:string};
-const state=await mkdtemp(join(tmpdir(),"world-candidate-")),pipeline=new WorldPipeline(),versions=new Versions(state,v=>pipeline.publish({type:"version",version:v}));
+const state=join(directory,"runtime"),pipeline=new WorldPipeline(),versions=new Versions(state,v=>pipeline.publish({type:"version",version:v}));
 const modules=await Promise.all(input.modules.map(m=>versions.artifact(m.id,m.file,m.code)));
 await versions.activate({version:1,tag:"candidate",commit:"candidate",title:"Candidate",requester:"check",modules},false);
 for(let i=0;i<300;i++)pipeline.roster.accept({id:`check-${i}`,userId:`check-${i}`,displayName:`Neighbor${i}`,color:"#79D7CF",text:"hello",timestamp:Date.now()},Date.now());
