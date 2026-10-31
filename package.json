@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "tsx watch server/index.ts",
     "sim": "tsx server/sim/index.ts",
+    "sim:raid": "tsx server/sim/raid.ts",
+    "check:raid": "tsx checks/phase8.raid.ts",
     "check": "tsx checks/generate-validator.ts --check && tsc --noEmit && tsx --test checks/*.test.ts && tsx checks/build.ts",
     "summon:bench": "tsx server/summon/bench.ts",
     "guard:eval": "tsx server/guard/eval.ts",

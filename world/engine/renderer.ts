@@ -18,6 +18,7 @@ import { createGarden } from "./garden.js";
 import { createWater, createMotes } from "./water.js";
 import { createSky } from "./sky.js";
 import { createEffects } from "./effects.js";
+import { createRaidPortal } from "./raid-portal.js";
 import { FrameStats } from "./stats.js";
 import { ModuleHost, type ModuleStatus } from "./module-host.js";
 import { ResourceLedger, ResourceOwner } from "./resources.js";
@@ -73,11 +74,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const labelLayer = options.labels ?? document.createElement("div");
   const labelManager = new LabelManager();
   const citizens = new Citizens(labelLayer, labelManager);
+  const raidPortal=createRaidPortal(labelLayer,labelManager);
   const resizeLabels = new ResizeObserver(entries => {
     labelLayer.style.transform = `scale(${entries[0]!.contentRect.width / 1920})`;
   });
   resizeLabels.observe(canvas);
-  environment.add(terrain, garden, water.root, motes.root, sky.root, effects.root, citizens.root);
+  environment.add(terrain, garden, water.root, motes.root, sky.root, effects.root, raidPortal.root, citizens.root);
 
   const composer = new EffectComposer(renderer);
   const renderPass = new RenderPass(scene, camera);
@@ -155,12 +157,15 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   window.__worldStats = stats.value;
   let elapsed = 0, disposed = false, ready = false, frameId = 0, uiTime = 0;
   let serverOffset = 0;
+  const raidArrivals:import("../../server/contracts.js").CitizenState[]=[];
   const disconnect = options.playback ? () => {} : connectWorld(event => {
     serverOffset = event.now - Date.now();
     switch (event.type) {
     case "snapshot": {
+      raidArrivals.length=0;
       void activate(event.version);
       citizens.sync(event.citizens, event.now); stats.value.raidCount = event.raids;
+      if(event.arrival)raidPortal.open(event.arrival.raid.broadcasterName,event.arrival.admitted,event.arrival.raid.viewerCount,elapsed-(event.now-event.arrival.at)/1000);
       for (const failure of materializer.sync(event.summons)) ack(failure.state, failure.code);
       break; }
     case "version": void activate(event.version); break;
@@ -181,8 +186,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         if (citizen) director.notice(citizen.position, 1);
       }
       break; }
-    case "remove": citizens.remove(event.ids); break;
-    case "raid": stats.value.raidCount++; host.onRaid(event.raid); break;
+    case "remove": {const removed=new Set(event.ids);for(let i=raidArrivals.length-1;i>=0;i--)if(removed.has(raidArrivals[i]!.id))raidArrivals.splice(i,1);citizens.remove(event.ids);break;}
+    case "raid": {
+      stats.value.raidCount++;raidPortal.open(event.raid.broadcasterName,event.citizens.length,event.raid.viewerCount,elapsed);
+      for(const state of event.citizens)raidArrivals.push(state);
+      director.focus(raidPortal.root.position,{priority:2,duration:2.8});host.onRaid(event.raid);break;
+    }
     case "summon": {
       try { materializer.spawn(event.summon.spec, event.summon); stats.value.summonFocuses++; }
       catch (error) { ack(event.summon, error instanceof RenderFailure ? error.code : "render-error"); }
@@ -203,12 +212,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     // Reduced motion keeps composition still but retains rendered, measurable frames.
     const visualTime = reducedMotion.matches ? 0 : elapsed;
     try {
+      for(let i=0;i<6&&raidArrivals.length;i++){const spawned=citizens.upsert(raidArrivals.shift()!,Date.now()+serverOffset);if(spawned)host.onCitizenSpawn(spawned);}
+      stats.value.citizenCount=citizens.count;
       renderer.info.reset();
       const cpuStart = performance.now();
       sky.update(visualTime);
       water.update(visualTime, sky.day);
       motes.update(visualTime, 1 - sky.day);
-      effects.update(elapsed);
+      effects.update(elapsed);stats.value.raidPortalActive=raidPortal.update(elapsed,reducedMotion.matches);
       director.update(dt);
       citizens.update(dt, elapsed, Date.now() + serverOffset, camera, reducedMotion.matches);
       materializer.update(dt, camera, reducedMotion.matches); moduleMaterializer.update(dt, camera, reducedMotion.matches);
@@ -287,7 +298,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       document.removeEventListener("visibilitychange", visibility);
       canvas.removeEventListener("pointerup", explore);
       canvas.removeEventListener("webglcontextlost", contextLost);
-      disconnect(); resizeLabels.disconnect(); citizens.dispose(); labelManager.dispose();
+      disconnect(); resizeLabels.disconnect(); citizens.dispose(); raidPortal.dispose(); labelManager.dispose();
       host.dispose(); materializer.dispose(); moduleMaterializer.dispose();
       engineResources.dispose(environment);
       probe?.target.dispose();probe?.hdr.dispose();

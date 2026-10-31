@@ -1,3 +1,4 @@
+import { RAID_PARADE_MS } from "../world/shared/limits.js";
 import { contentPolicy, DEFAULT_BLOCKLIST } from "./content-policy.js";
 import type { WorldVersion } from "./versions/index.js";
 import type { ChatEvent, RaidEvent, WorldEvent, LaneEvent } from "./contracts.js";
@@ -43,6 +44,7 @@ export class WorldPipeline {
   private revision = 0;
   private paused = false;
   private raids = 0;
+  private arrival: {raid:RaidEvent;admitted:number;at:number}|null=null;
   private window = -1;
   private messages = 0;
   constructor(private readonly now = () => Date.now(), private readonly blocklist = DEFAULT_BLOCKLIST, private readonly sendRejection?: (message: string, source: "sim" | "twitch") => Promise<void>) {}
@@ -58,7 +60,7 @@ export class WorldPipeline {
     for (const listener of this.listeners) { try { listener(event, serialized); } catch { this.listeners.delete(listener); } }
   }
   snapshot(): Extract<WorldEvent, { type: "snapshot" }> {
-    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null, version: this.version };
+    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, arrival:this.arrival&&this.now()-this.arrival.at<RAID_PARADE_MS?this.arrival:null, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null, version: this.version };
   }
   private duplicate(key: string, now: number) {
     if (this.seen.has(key)) return true;
@@ -104,9 +106,12 @@ export class WorldPipeline {
   raid(input: unknown) {
     const raid = parseRaid(input), now = this.now();
     if (this.duplicate(`raid:${raid.id}`, now)) return { accepted: false, reason: "duplicate" };
-    this.raids++;
-    this.emit({ type: "raid", revision: ++this.revision, now, raid });
-    return { accepted: true, count: this.roster.size };
+    const {citizens,removed}=this.roster.arrive(raid,now);
+    if(removed.length)this.emit({type:"remove",revision:++this.revision,now,ids:removed});
+    this.raids++;this.arrival={raid,admitted:citizens.length,at:now};
+    this.emit({ type: "raid", revision: ++this.revision, now, raid, citizens });
+    this.rounds?.toast("notice",`Raid from ${raid.broadcasterName}`,`${raid.viewerCount} viewers · ${citizens.length} arriving`);
+    return { accepted: true, count: this.roster.size, admitted:citizens.length, replaced:removed.length };
   }
   prune() {
     const now = this.now();

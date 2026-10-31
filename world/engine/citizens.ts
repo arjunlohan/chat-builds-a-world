@@ -11,6 +11,7 @@ import type { Citizen, WorldServices } from "./api.js";
 import type { CitizenState } from "../../server/contracts.js";
 import { hash, terrainHeight } from "./land.js";
 import { LabelManager, citizenLabelMode } from "./labels.js";
+import { RAID_ENTRY, RAID_PARADE_MS } from "./raid-portal.js";
 import { stepOnLand } from "./navigation.js";
 
 const LIMIT = CITIZEN_CAP;
@@ -90,11 +91,12 @@ export class Citizens {
       label.dataset.userId = state.id; label.hidden = true;
       label.append(bubble, name); this.labels.append(label);
       const phase = hash(state.id) / 4294967296 * Math.PI * 2;
-      c = { snapshot:undefined, cos:1, sin:0, commandSpeech:false, fullWidth: 160, quietWidth: 80, removeLabel: () => {}, state, position: new Vector3(...state.home), phase, yaw: phase, born: now, label, name, bubble };
+      c = { snapshot:undefined, cos:1, sin:0, commandSpeech:false, fullWidth: 160, quietWidth: 80, removeLabel: () => {}, state, position: state.raid&&now-state.raid.arrivedAt<RAID_PARADE_MS?new Vector3(RAID_ENTRY.x,RAID_ENTRY.y,RAID_ENTRY.z):new Vector3(...state.home), phase, yaw: phase, born: state.raid?state.raid.arrivedAt+state.raid.order*45:now, label, name, bubble };
       const matrix=this.body.mesh.instanceMatrix.array as Float32Array,offset=this.items.length*16;matrix.fill(0,offset,offset+16);matrix[offset+15]=1;
       this.items.push(c); this.byId.set(state.id, c);
       const creature = c;
       creature.removeLabel = this.layout.add(`citizen:${state.id}`, label, (candidate, time, camera, focus) => {
+        if(time<creature.born)return;
         this.projection.copy(creature.position); this.projection.y += 1.0; this.projection.project(camera);
         if (this.projection.z <= -1 || this.projection.z >= 1) return undefined;
         const s = creature.state, spokeAge = time - s.speechAt;
@@ -152,7 +154,8 @@ export class Citizens {
       const c = this.items[i]!, s = c.state; c.snapshot = undefined;
       const age = Math.max(0, (now - s.commandAt) / 1000);
       const command = s.command;
-      let targetX = s.home[0], targetZ = s.home[2], speed = 0.35;
+      let targetX = s.home[0], targetZ = s.home[2], speed = s.raid&&now-s.raid.arrivedAt<RAID_PARADE_MS?1.35:0.35;
+      const waiting=now<c.born;
       if (command?.kind === "follow") {
         const target = this.byId.get(command.targetId);
         if (target) {
@@ -165,7 +168,7 @@ export class Citizens {
       } else if (command?.kind === "home") speed = 1.4;
       else if (!reducedMotion) { targetX += Math.sin(time * 0.18 + c.phase) * 0.22; targetZ += Math.cos(time * 0.15 + c.phase) * 0.22; }
       const dx = targetX - c.position.x, dz = targetZ - c.position.z, length = Math.hypot(dx, dz);
-      const moving = length > 0.04;
+      const moving = !waiting&&length > 0.04;
       if (moving) {
         const beforeX = c.position.x, beforeZ = c.position.z;
         stepOnLand(c.position, targetX, targetZ, speed * dt);
@@ -175,12 +178,12 @@ export class Citizens {
       const jumping = command?.kind === "jump" && age < 1.15;
       const dancing = command?.kind === "dance" && age < 8;
       const jump = jumping && !reducedMotion ? Math.sin(age / 1.15 * Math.PI) * 0.85 : 0;
-      const bob = reducedMotion ? 0 : moving ? Math.abs(Math.sin(time * 8 + c.phase)) * 0.035 : Math.sin(time * 2 + c.phase) * 0.012;
+      const bob = reducedMotion||waiting ? 0 : moving ? Math.abs(Math.sin(time * 8 + c.phase)) * 0.035 : Math.sin(time * 2 + c.phase) * 0.012;
       const yaw = c.yaw + (dancing && !reducedMotion ? Math.sin(age * 9) * 0.6 : 0);
       c.position.y = terrainHeight(c.position.x, c.position.z) + jump + bob;
       c.cos = Math.cos(yaw); c.sin = Math.sin(yaw);
       const fade = idleFade(now, s.lastActive);
-      const arrival = reducedMotion ? 1 : 0.9 + Math.max(0, Math.min(1, (now - c.born) / 400)) * 0.1;
+      const arrival = waiting ? 0 : reducedMotion ? 1 : 0.9 + Math.max(0, Math.min(1, (now - c.born) / 400)) * 0.1;
       const bounce = dancing && !reducedMotion ? Math.sin(age * 12) * 0.025 : 0;
       this.place(i,c,arrival,fade);
       if(this.body.bounce.getX(i)!==Math.fround(bounce)){this.body.bounce.setX(i,bounce);this.body.bounceChanged=true;}

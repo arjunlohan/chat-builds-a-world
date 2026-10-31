@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
+import { raidAdmission } from "./raid-policy.js";
 import { CITIZEN_CAP, IDLE_MS, FADE_MS } from "../../world/shared/limits.js";
 import { isChatCommand } from "../commands.js";
-import type { ChatEvent, CitizenCommand, CitizenState } from "../contracts.js";
+import type { ChatEvent, CitizenCommand, CitizenState, RaidEvent } from "../contracts.js";
 import { hash, isWalkable, terrainHeight } from "../../world/engine/land.js";
 
 export const CITIZEN_LIMIT = CITIZEN_CAP;
@@ -54,15 +56,20 @@ export class CitizenRoster {
     return { citizen, spawned: !existing };
   }
 
-  prune(now: number) {
-    const removed: string[] = [];
-    for (const citizen of this.citizens.values()) {
-      if (now - citizen.lastActive < IDLE_MS + FADE_MS) continue;
-      this.citizens.delete(citizen.id);
-      const seat = this.seats.get(citizen.id)!;
-      this.occupied.delete(seat); this.seats.delete(citizen.id);
-      removed.push(citizen.id);
+  remove(ids: readonly string[]) {
+    for(const id of ids){this.citizens.delete(id);const seat=this.seats.get(id);if(seat!==undefined)this.occupied.delete(seat);this.seats.delete(id);}
+  }
+  arrive(raid: RaidEvent, now: number) {
+    const plan=raidAdmission(this.list(),raid.viewerCount,now);this.remove(plan.evictIds);
+    const citizens:CitizenState[]=[],prefix=createHash("sha256").update(raid.id).digest("hex").slice(0,24);
+    for(let i=0;i<plan.count;i++){
+      const userId=`raid-${prefix}-${i}`;
+      const result=this.accept({id:userId,userId,displayName:`${raid.broadcasterName} · ${i+1}`.slice(0,64),color:chatColor("",raid.broadcasterId),text:"",timestamp:now},now)!;
+      const citizen=Object.freeze({...result.citizen,speechAt:0,raid:Object.freeze({id:raid.id,channel:raid.broadcasterName,arrivedAt:now,order:i})});this.citizens.set(userId,citizen);citizens.push(citizen);
     }
-    return removed;
+    return {citizens,removed:plan.evictIds};
+  }
+  prune(now: number) {
+    const removed=this.list().filter(c=>now-c.lastActive>=IDLE_MS+FADE_MS).map(c=>c.id);this.remove(removed);return removed;
   }
 }

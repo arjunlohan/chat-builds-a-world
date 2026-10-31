@@ -73,7 +73,7 @@ test("welcome creates the exact chat and incoming raid subscriptions, then feeds
     to_broadcaster_user_id: "42", from_broadcaster_user_id: "friend", from_broadcaster_user_name: "CloudGarden", viewers: 20,
   } }, "raid-1");
   await settle();
-  assert.equal(f.world.roster.size, 1); assert.equal(f.world.roster.get("100")!.color, "#79D7CF");
+  assert.equal(f.world.roster.size, 21); assert.equal(f.world.roster.get("100")!.color, "#79D7CF");
   assert.equal(f.world.roster.get("100")!.command?.kind, "jump"); assert.equal(f.world.snapshot().raids, 1);
   assert.equal(await f.client.sendChat("hello"), "sent");
   assert.deepEqual(f.requests.find(r => r.path.endsWith("messages"))!.body, { broadcaster_id: "42", sender_id: "42", message: "hello" });

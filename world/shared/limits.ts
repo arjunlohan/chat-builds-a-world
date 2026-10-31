@@ -4,6 +4,7 @@ export const GLOBAL_CAP: Readonly<Usage> = Object.freeze({ nodes: 1024, triangle
 export const MODULE_CAP: Readonly<Usage> = Object.freeze({ nodes: 64, triangles: 50_000, draws: 64, lights: 4, particles: 512 });
 export const SUMMON_COUNT = 24;
 export const CITIZEN_CAP = 300;
+export const RAID_PARADE_MS = 30_000;
 export const IDLE_MS = 20 * 60_000, FADE_MS = 5000;
 export const ACTIVE_MODULE_CAP = 8;
 export const WORLD_BOUNDS = Object.freeze({ minX: -64, maxX: 64, minY: -8, maxY: 48, minZ: -64, maxZ: 64 });

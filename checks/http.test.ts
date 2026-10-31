@@ -80,6 +80,13 @@ test("fixture Summon HTTP uses the shared lane, validates receipts and enforces 
 });
 test("all simulator and live automation routes are disabled without wiring permission", async () => {
  const app=await createWorldServer(new WorldPipeline());await new Promise<void>(r=>app.server.listen(0,"127.0.0.1",r));const base=`http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
- try { for(const route of ["/sim/chat","/sim/raid","/sim/round","/runner/live"])assert.equal((await fetch(base+route,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})).status,403); }
+ try { for(const route of ["/sim/chat","/sim/raid","/sim/eventsub","/sim/round","/runner/live"])assert.equal((await fetch(base+route,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})).status,403); }
  finally{app.closeStreams();await new Promise<void>(r=>app.server.close(()=>r()))}
+});
+
+test("raid EventSub endpoint uses the live target filter and does not accept forged chat authority",async()=>{
+ const {raidFixture}=await import("../server/twitch/raid.js");const p=new WorldPipeline(),app=await createWorldServer(p,undefined,undefined,undefined,{live:false,simulationAllowed:true,broadcasterId:"target",async fault(){}});await new Promise<void>(r=>app.server.listen(0,"127.0.0.1",r));const base=`http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+ const send=(value:unknown)=>fetch(base+"/sim/eventsub",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(value)});
+ try{assert.equal((await (await send(raidFixture("wrong",150,"Clouds","wrong"))).json()).accepted,false);const raw=raidFixture("target",150,"Clouds","correct");assert.equal((await (await send(raw)).json()).admitted,150);assert.equal((await (await send(raw)).json()).reason,"duplicate");const fake={...raw,payload:{...raw.payload,subscription:{type:"channel.chat.message"}}};assert.equal((await (await send(fake)).json()).accepted,false);assert.equal(p.roster.size,150);}
+ finally{app.closeStreams();await new Promise<void>(r=>app.server.close(()=>r()));}
 });
