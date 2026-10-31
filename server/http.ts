@@ -30,13 +30,13 @@ async function body(request: IncomingMessage): Promise<unknown> {
   });
 }
 
-async function post(request: IncomingMessage, response: ServerResponse, handler: (input: Record<string, unknown>) => Promise<{status:number;value:unknown;changed?:boolean}> | {status:number;value:unknown;changed?:boolean}, durable?: (changed?:boolean)=>Promise<void>) {
+async function post(request: IncomingMessage, response: ServerResponse, handler: (input: Record<string, unknown>) => Promise<{status:number;value:unknown;changed?:boolean}> | {status:number;value:unknown;changed?:boolean}, durable?: ()=>Promise<void>) {
   if (request.method !== "POST") { response.setHeader("Allow","POST"); request.resume(); json(response,405,{error:"Use POST"}); return; }
-  try { const input=await body(request); if(!input||typeof input!=="object"||Array.isArray(input))throw new Error(); const result=await handler(input as Record<string,unknown>);if(result.changed)await durable?.(true);json(response,result.status,result.value); }
+  try { const input=await body(request); if(!input||typeof input!=="object"||Array.isArray(input))throw new Error(); const result=await handler(input as Record<string,unknown>);if(result.changed)await durable?.();json(response,result.status,result.value); }
   catch {request.resume();if(!response.headersSent)json(response,400,{error:"Invalid JSON event or body; maximum 8 KiB, application/json required"});}
 }
 
-export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { durable?:(changed?:boolean)=>Promise<void>; broadcasterId?:string; simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
+export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { durable?:()=>Promise<void>; broadcasterId?:string; simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
   const assets = await buildClient();
   const pages = new Map([
     ["/world", await readFile(new URL("../world/index.html", import.meta.url))],

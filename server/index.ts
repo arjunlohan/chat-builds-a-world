@@ -1,6 +1,6 @@
 import {cleanupStaleCodexHomes,protectedValues,redact} from "./runtime/process.js";
 import {acquireLock} from "./runtime/lock.js";
-import {validateWorldCheckpoint,migrateWorldCheckpoint} from "./persistence/world-schema.js";
+import {CHECKPOINT_FORMAT,checkpointFailure,validateWorldCheckpoint,migrateWorldCheckpoint} from "./persistence/world-schema.js";
 import {Checkpoint} from "./persistence/checkpoint.js";
 import {simulationAdapters} from "./sim/adapters.js";
 import {bedrockProvider} from "./summon/provider.js";
@@ -26,14 +26,14 @@ async function start(){
   const summons=new SummonService({config:config.summon,provider:simulation?.summonProvider??bedrockProvider(config.summon),mode:simulation?"fixture":"live",publish:event=>pipeline.publish(event),reply:(_chat,message,source)=>pipeline.reply(_chat,message,()=>sendTwitch(message,source))});pipeline.attachSummon(summons);
   const versions=new Versions(root,version=>pipeline.publish({type:"version",version}));await versions.init();
   const runner=new Runner({root,versions,...(simulation?.builder?{builder:simulation.builder}:{}),feed:(kind,text)=>rounds.feed(kind,text),announce:async message=>{pipeline.publish({type:"reply",message});await sendTwitch(message);}});
-  const rounds=new Rounds({...(config.demoMode?{timers:DEMO_MS}:{}),build:request=>runner.build(request),rollback:requester=>runner.rollback(requester),canRollback:()=>!!versions.previous(),review:simulation?.reviewer??((idea,context)=>guard.review(idea,context.signal)),publish:state=>pipeline.publish({type:"rounds",state}),simulationAllowed:config.simulationAllowed});pipeline.attachRounds(rounds);
+  const rounds=new Rounds({...(config.demoMode?{timers:DEMO_MS}:{}),build:request=>runner.build(request),rollback:requester=>runner.rollback(requester),canRollback:()=>!!versions.fallbackTarget({allowBaseline:false}),review:simulation?.reviewer??((idea,context)=>guard.review(idea,context.signal)),publish:state=>pipeline.publish({type:"rounds",state}),simulationAllowed:config.simulationAllowed});pipeline.attachRounds(rounds);
   let warned=false;const onError=(_error:unknown)=>{if(!warned){warned=true;console.error("World checkpoint could not be saved; check state/ permissions.");}};
-  const checkpoint=new Checkpoint(join(root,"state/world.json"),()=>({world:pipeline.checkpoint(),rounds:rounds.checkpoint(),summons:summons.checkpoint()}),onError);
-  const saved=await checkpoint.load({validate:validateWorldCheckpoint,migrate:migrateWorldCheckpoint});if(saved){pipeline.restore(saved.world);summons.restore(saved.summons);rounds.restore(saved.rounds,checkpoint.savedAt);}
+  const checkpoint=new Checkpoint(join(root,"state/world.json"),()=>({world:pipeline.checkpoint(),rounds:rounds.checkpoint(),summons:summons.checkpoint()}),CHECKPOINT_FORMAT,onError);
+  const saved=await checkpoint.load({validate:checkpointFailure,migrate:migrateWorldCheckpoint});if(saved){pipeline.restore(saved.world);summons.restore(saved.summons);rounds.restore(saved.rounds,checkpoint.savedAt);}
   await runner.recover();await cleanupStaleCodexHomes(root);if(versions.current)pipeline.publish({type:"version",version:versions.current});
   let phaseKey=key(rounds.snapshot());
-  const durable=async(changed=false)=>{if(changed)checkpoint.changed();await checkpoint.flush();};
-  const unsubscribe=pipeline.subscribe(event=>{checkpoint.changed();if(event.type==="rounds"){const next=key(event.state);if(next!==phaseKey)void durable().catch(onError);phaseKey=next;}});
+  const durable=async()=>{checkpoint.changed();await checkpoint.flush();};
+  const unsubscribe=pipeline.subscribe(event=>{checkpoint.changed();if(event.type==="rounds"){const next=key(event.state);if(next!==phaseKey)void checkpoint.flush().catch(onError);phaseKey=next;}});
   checkpoint.changed();await checkpoint.flush();
   const app=await createWorldServer(pipeline,summons,rounds,versions,{durable,broadcasterId:config.broadcasterId,simulationAllowed:config.simulationAllowed,...(simulation?{setOutcome:simulation.setOutcome}:{}),live:!!config.summon.key&&!simulation,fault:async()=>{if(versions.current)await versions.invalidate(versions.current.version);rounds.cancelForRevert();rounds.externalResult(await runner.rollback("system",true));}});
   await new Promise<void>((resolve,reject)=>{app.server.once("error",reject);app.server.listen(config.port,config.host,resolve);});

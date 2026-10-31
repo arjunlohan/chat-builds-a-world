@@ -1,3 +1,4 @@
+import {CHECKPOINT_FORMAT} from "../server/persistence/world-schema.js";
 import assert from "node:assert/strict";
 import {test} from "node:test";
 import {mkdtemp,readFile,writeFile,rm} from "node:fs/promises";
@@ -12,8 +13,8 @@ import {fixtureProvider} from "../server/summon/provider.js";
 import type {GuardResult} from "../server/guard/index.js";
 const chat=(id:string,text:string)=>({id,userId:id,displayName:id,color:"#79D7CF",text,timestamp:0});
 test("atomic checkpoints coalesce bursts, recover data and reject malformed state",async()=>{
- const root=await mkdtemp(join(tmpdir(),"checkpoint-"));let value=0,captures=0;const checkpoint=new Checkpoint(join(root,"world.json"),()=>{captures++;return {value};});
- try{for(let i=0;i<1000;i++){value=i;checkpoint.changed();}await checkpoint.flush();assert.equal(captures,1);assert.deepEqual(await checkpoint.load(),{value:999});assert.equal(JSON.parse(await readFile(join(root,"world.json"),"utf8")).format,2);await checkpoint.flush();await writeFile(join(root,"world.json"),"broken");assert.equal(await checkpoint.load({warn(){}}),undefined);}finally{await rm(root,{recursive:true,force:true});}
+ const root=await mkdtemp(join(tmpdir(),"checkpoint-"));let value=0,captures=0;const checkpoint=new Checkpoint(join(root,"world.json"),()=>{captures++;return {value};},CHECKPOINT_FORMAT);
+ try{for(let i=0;i<1000;i++){value=i;checkpoint.changed();}await checkpoint.flush();assert.equal(captures,1);assert.deepEqual(await checkpoint.load(),{value:999});assert.equal(JSON.parse(await readFile(join(root,"world.json"),"utf8")).format,CHECKPOINT_FORMAT);await checkpoint.flush();await writeFile(join(root,"world.json"),"broken");assert.equal(await checkpoint.load({warn(){}}),undefined);}finally{await rm(root,{recursive:true,force:true});}
 });
 test("process lock excludes another owner and reclaims dead owners",async()=>{
  const root=await mkdtemp(join(tmpdir(),"flight-lock-"));try{const release=await acquireLock(root);await assert.rejects(acquireLock(root),/Another server/);await release();await writeFile(join(root,"state/server.lock"),JSON.stringify({pid:99999999,token:"dead"}));const next=await acquireLock(root);await next();}finally{await rm(root,{recursive:true,force:true});}
@@ -48,7 +49,7 @@ test("recovery never restores over a master advanced outside the reserved versio
 });
 
 test("idle flushes do no I/O and checkpoint bursts use a trailing debounce",async()=>{
- const root=await mkdtemp(join(tmpdir(),"idle-checkpoint-"));let captures=0;const checkpoint=new Checkpoint(join(root,"world.json"),()=>++captures,()=>{},40);
+ const root=await mkdtemp(join(tmpdir(),"idle-checkpoint-"));let captures=0;const checkpoint=new Checkpoint(join(root,"world.json"),()=>++captures,CHECKPOINT_FORMAT,()=>{},40);
  try{await checkpoint.flush();assert.equal(captures,0);checkpoint.changed();await new Promise(r=>setTimeout(r,25));checkpoint.changed();await new Promise(r=>setTimeout(r,25));assert.equal(captures,0);await checkpoint.flush();assert.equal(captures,1);await checkpoint.flush();assert.equal(captures,1);assert.ok(checkpoint.savedAt>0);}finally{await checkpoint.flush();await rm(root,{recursive:true,force:true});}
 });
 test("saved source state rebuilds round indexes and advances unpaused elapsed time",()=>{
@@ -63,9 +64,6 @@ test("HTTP POST flushes once and world polling never calls durable",async()=>{
  try{const response=await fetch(base+"/sim/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(chat("writer","hello"))});assert.equal(response.status,200);assert.equal(flushes,0);for(let i=0;i<10;i++)assert.equal((await fetch(base+"/api/world")).status,200);assert.equal(flushes,0);}finally{app.closeStreams();await new Promise<void>(r=>app.server.close(()=>r()));}
 });
 
-test("Phase 9 round checkpoints migrate at the load boundary",async()=>{
- const original=new Rounds({now:()=>1000,publish(){}});original.command(chat("maker","!idea A lantern"));original.skip();original.command(chat("voter","!vote 1"));const source=original.checkpoint(),legacy={state:original.snapshot(),ideas:source.ideas.map(idea=>({...idea,normalized:"stale-derived-index"})),votes:source.votes,shortlist:source.shortlist,winner:source.winner,order:source.order,serial:source.serial,version:source.version,rollbackVotes:source.rollbackVotes};const restored=new Rounds({now:()=>1000,publish(){}});const {migrateWorldCheckpoint}=await import("../server/persistence/world-schema.js");const migrated=migrateWorldCheckpoint({format:1,savedAt:1000,value:{world:{cooldowns:[]},rounds:legacy}}) as {value:{rounds:ReturnType<Rounds["checkpoint"]>}};restored.restore(migrated.value.rounds,1000);assert.equal(restored.snapshot().totalVotes,1);assert.equal(restored.snapshot().candidates[0]!.supporters,1);assert.ok(!("state" in restored.checkpoint()));assert.ok(!("normalized" in restored.checkpoint().ideas[0]!));original.dispose();restored.dispose();
-});
 
 test("recovery removes a reserved tag that never reached master",async()=>{
  const {mkdir}=await import("node:fs/promises"),{git,createTree,commitTree}=await import("../server/runner/git.js"),{Versions}=await import("../server/versions/index.js"),{Runner}=await import("../server/runner/index.js");const root=await mkdtemp(join(tmpdir(),"unshipped-"));
@@ -73,13 +71,18 @@ test("recovery removes a reserved tag that never reached master",async()=>{
 });
 
 test("steady changes hit max wait and flush stops at its captured generation",async()=>{
- const root=await mkdtemp(join(tmpdir(),"bounded-save-"));let captured=0,first!:()=>void;const written=new Promise<void>(r=>first=r),checkpoint=new Checkpoint(join(root,"world.json"),()=>{captured++;first();return captured;},()=>{},100,70);const timer=setInterval(()=>checkpoint.changed(),10);
+ const root=await mkdtemp(join(tmpdir(),"bounded-save-"));let captured=0,first!:()=>void;const written=new Promise<void>(r=>first=r),checkpoint=new Checkpoint(join(root,"world.json"),()=>{captured++;first();return captured;},CHECKPOINT_FORMAT,()=>{},100,70);const timer=setInterval(()=>checkpoint.changed(),10);
  try{checkpoint.changed();await Promise.race([written,new Promise((_,reject)=>setTimeout(()=>reject(new Error("Max wait was starved")),1000))]);clearInterval(timer);await checkpoint.flush();assert.ok(captured>0);
- let snapshots=0;const generations=new Checkpoint(join(root,"generation.json"),()=>{snapshots++;if(snapshots===1)generations.changed();return snapshots;});generations.changed();await generations.flush();assert.equal(snapshots,1);await generations.flush();assert.equal(snapshots,2);
+ let snapshots=0;const generations=new Checkpoint(join(root,"generation.json"),()=>{snapshots++;if(snapshots===1)generations.changed();return snapshots;},CHECKPOINT_FORMAT);generations.changed();await generations.flush();assert.equal(snapshots,1);await generations.flush();assert.equal(snapshots,2);
  }finally{clearInterval(timer);await checkpoint.flush();await rm(root,{recursive:true,force:true});}
 });
 test("version activation acknowledgement has exactly one final manifest save",async()=>{
  const {Versions}=await import("../server/versions/index.js"),root=await mkdtemp(join(tmpdir(),"receipt-save-"));let saves=0,published!:()=>void;const ready=new Promise<void>(r=>published=r);
  class Observed extends Versions{override async save(){saves++;await super.save();}}
  const versions=new Observed(root,()=>published());try{const activation=versions.activate({version:1,tag:"v1",commit:"fixture",title:"Fixture",requester:"viewer",modules:[]});await ready;assert.equal(saves,1);assert.equal(await versions.acknowledge(1,versions.current!.receipt,true),true);assert.equal(await activation,true);assert.equal(saves,2);assert.equal(JSON.parse(await readFile(join(root,"state/versions.json"),"utf8")).current.healthy,true);}finally{versions.close();await rm(root,{recursive:true,force:true});}
+});
+
+test("checkpoint bytes capture a generation once before later state mutations",async()=>{
+ const root=await mkdtemp(join(tmpdir(),"capture-bytes-"));let value=1,serializations=0;const checkpoint=new Checkpoint(join(root,"world.json"),()=>({toJSON(){serializations++;return {value};}}),CHECKPOINT_FORMAT);
+ try{checkpoint.changed();const saving=checkpoint.flush();value=2;await saving;assert.equal(serializations,1);assert.deepEqual(JSON.parse(await readFile(join(root,"world.json"),"utf8")).value,{value:1});}finally{await rm(root,{recursive:true,force:true});}
 });

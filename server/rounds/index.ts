@@ -7,6 +7,7 @@ import type { BuildView, IdeaView, RoundState, SimulationOutcome, ToastView, Ver
 export type { RoundState, SimulationOutcome } from "./types.js";
 
 export const ROUND_MS = Object.freeze({ ideas: 120_000, voting: 45_000, guarding: 45_000, building: BUILD_TIMEOUT_MS, rollback: 30_000 });
+export const ROUND_CAPS=Object.freeze({ideas:100,backers:5000,voters:5000,shortlist:3,queue:8,feed:64,timeline:12,toasts:8});
 interface Idea { id: string; text: string; requester: string; order: number; normalized: string; supporters: Set<string> }
 export const DEMO_MS:Readonly<Record<RoundState["phase"],number>> = Object.freeze({...ROUND_MS,ideas:20000,voting:10000,rollback:10000});
 interface Options { timers?:Readonly<Record<RoundState["phase"],number>>; now?: () => number; publish(state: RoundState): void; simulationAllowed?: boolean; build?: (request: BuildRequest) => Promise<RunResult>; rollback?: (requester: string) => Promise<RunResult>; canRollback?: () => boolean; review?: (idea: string, context: { signal: AbortSignal }) => GuardResult | Promise<GuardResult> }
@@ -102,7 +103,7 @@ export class Rounds {
     return { round: this.round, phase: this.phase, startedAt: this.startedAt, endsAt: this.endsAt,
       now: this.now(), realNow: this.real(), clockRate: this.rate, simulation: this.simulation, paused: this.paused,
       rollback: this.phase === "rollback" ? { ...this.rollbackTally(), requester: this.rollbackRequester } : null,
-      guard: { ...this.guard }, totalIdeas: this.ranked().length, ideas: this.ranked().slice(0, 8).map(ideaView),
+      guard: { ...this.guard }, totalIdeas: this.ranked().length, ideas: this.ranked().slice(0, ROUND_CAPS.queue).map(ideaView),
       candidates: this.shortlist.map((i, index) => ({ ...ideaView(i), slot: index + 1, votes: this.voteCounts(i.id) })),
       totalVotes: this.votes.size, winner: this.winner ? ideaView(this.winner) : null, build: { ...this.build, lines: this.build.lines.map(line => ({ ...line })) },
       timeline: this.timeline.map(v => ({ ...v })), toasts: this.toasts.filter(t => t.expiresAt > this.real()).map(t => ({ ...t })),
@@ -116,7 +117,7 @@ export class Rounds {
   }
   toast(kind: ToastView["kind"], title: string, detail: string) {
     this.toasts.push({ id: ++this.serial, kind, title: title.slice(0, 80), detail: detail.slice(0, 150), expiresAt: this.real() + 8000 });
-    this.toasts = this.toasts.slice(-8); this.emit();
+    this.toasts = this.toasts.slice(-ROUND_CAPS.toasts); this.emit();
   }
   command(chat: ChatEvent) {
     this.tick();
@@ -130,7 +131,7 @@ export class Rounds {
     if (this.phase === "rollback") {
       const ballot = /^!vote\s+(yes|no)$/i.exec(chat.text.trim());
       if (!ballot) return { accepted: false, reason: "use-vote-yes-or-no" };
-      if (!this.rollbackVotes.has(chat.userId) && this.rollbackVotes.size >= 5000) return { accepted: false, reason: "vote-capacity" };
+      if (!this.rollbackVotes.has(chat.userId) && this.rollbackVotes.size >= ROUND_CAPS.voters) return { accepted: false, reason: "vote-capacity" };
       if (this.rollbackVotes.get(chat.userId) === "yes") this.rollbackYes--;
       const value = ballot[1]!.toLowerCase() as "yes" | "no"; if (value === "yes") this.rollbackYes++;
       this.rollbackVotes.set(chat.userId, value); this.emit(); return { accepted: true };
@@ -141,8 +142,8 @@ export class Rounds {
       const text = idea[1]?.trim() ?? "", normalized = normalizeIdea(text);
       if (!normalized || [...text].length > 180 ) return { accepted: false, reason: "invalid-idea" };
       const match = [...this.ideas.values()].find(i => similarIdeas(i.normalized, normalized));
-      if (!match && this.ideas.size >= 100) return { accepted: false, reason: "idea-capacity" };
-      if (!this.support.has(chat.userId) && this.support.size >= 5000) return { accepted: false, reason: "round-capacity" };
+      if (!match && this.ideas.size >= ROUND_CAPS.ideas) return { accepted: false, reason: "idea-capacity" };
+      if (!this.support.has(chat.userId) && this.support.size >= ROUND_CAPS.backers) return { accepted: false, reason: "round-capacity" };
       const previous = this.support.get(chat.userId);
       if (previous) this.ideas.get(previous)?.supporters.delete(chat.userId);
       const proposal = match ?? { id: `r${this.round}-i${++this.order}`, text, normalized, requester: chat.displayName, order: this.order, supporters: new Set<string>() };
@@ -154,7 +155,7 @@ export class Rounds {
       if (this.phase !== "voting") return { accepted: false, reason: "voting-closed" };
       const proposal = this.shortlist[Number(vote[1]) - 1];
       if (!proposal) return { accepted: false, reason: "invalid-option" };
-      if (!this.votes.has(chat.userId) && this.votes.size >= 5000) return { accepted: false, reason: "vote-capacity" };
+      if (!this.votes.has(chat.userId) && this.votes.size >= ROUND_CAPS.voters) return { accepted: false, reason: "vote-capacity" };
       const previous = this.votes.get(chat.userId); if (previous) this.counts.set(previous, this.voteCounts(previous) - 1);
       this.counts.set(proposal.id, this.voteCounts(proposal.id) + 1); this.votes.set(chat.userId, proposal.id); this.emit(); return { accepted: true };
     }
@@ -166,7 +167,7 @@ export class Rounds {
     this.order = 0; this.approved = undefined;
   }
   private startVote(at: number) {
-    this.shortlist = this.ranked().slice(0, 3);
+    this.shortlist = this.ranked().slice(0, ROUND_CAPS.shortlist);
     if (!this.shortlist.length) { this.collect(at); return; }
     this.enter("voting",at);
   }
@@ -209,7 +210,7 @@ export class Rounds {
   private cancelReview() { this.reviewSequence++; this.reviewAbort?.abort(); this.reviewAbort = undefined; this.pendingReview = undefined; }
   feed(kind: "plan" | "edit" | "check" | "ship" | "error", text: string) {
     this.build.lines.push({ id: ++this.serial, kind, text: text.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 180) });
-    this.build.lines = this.build.lines.slice(-64);
+    this.build.lines = this.build.lines.slice(-ROUND_CAPS.feed);
     this.build.progress = kind === "check" ? 75 : kind === "edit" ? 40 : kind === "ship" ? 95 : this.build.progress;
     this.emit();
   }
@@ -235,7 +236,7 @@ export class Rounds {
     this.feed(result.ok ? "ship" : "error", `${result.outcome} · ${result.reason}`);
     if (result.version) this.version = result.version;
     this.timeline.push({ id: ++this.serial, version: this.version, kind: result.ok && result.outcome === "SHIPPED" ? "ship" : "revert", title, requester, reason: result.reason });
-    this.timeline = this.timeline.slice(-12); this.collect(this.now()); this.resetSimulation();
+    this.timeline = this.timeline.slice(-ROUND_CAPS.timeline); this.collect(this.now()); this.resetSimulation();
     this.toast(result.ok && result.outcome === "SHIPPED" ? "ship" : "revert", result.ok ? result.outcome === "ROLLED BACK" ? "ROLLED BACK" : `v${this.version} SHIPPED` : "REVERTED", result.ok ? `${requester}: ${title}` : result.reason);
     this.emit(true);
   }
