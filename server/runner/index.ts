@@ -76,11 +76,13 @@ export class Runner {
       if (approved.verdict !== "accept" || !approved.spec) throw new Error("Only guard-accepted specs can build.");
       const baseUsage=this.options.versions.baseUsage;
       if(!baseUsage)throw new Error("World resource baseline is unknown; open /world before building.");
+      const retained=(this.options.versions.current?.modules??[]).filter(m=>m.id!==approved.spec!.moduleId);
+      if(retained.length+1>ACTIVE_MODULE_CAP)throw new Error(`${ACTIVE_MODULE_CAP} active modules maximum; replace or roll back an existing module first.`);
       base = await cleanMaster(this.root); await this.options.versions.baselineAt(base); version = await this.reserve();
       tree = await createTree(this.root, version, base); await this.options.versions.setPending({ path: tree, base, version });
       const before = await inventory(tree); feed("plan", `Created isolated worktree v${version}.`);
       const sourceEnv = this.options.env ?? process.env;
-      const context:ResourceContext={base:baseUsage,retained:(this.options.versions.current?.modules??[]).filter(m=>m.id!==approved.spec!.moduleId).map(m=>({...m,code:this.options.versions.bundle(m.hash)!}))};
+      const context:ResourceContext={base:baseUsage,retained:retained.map(m=>({...m,code:this.options.versions.bundle(m.hash)!}))};
       const input={...context,file:approved.files[0]!,id:approved.spec.moduleId,files:approved.files};
       const manifest=await selfCheckManifest(this.root,input),command=selfCheckCommand(manifest);
       // Probe retained allocations through the same resource ledger, without renderer work.
@@ -102,16 +104,14 @@ export class Runner {
         for(const file of approved.files){const source=await readFile(join(tree,file),"utf8");if(secrets.some(value=>source.includes(value)))throw new Error("Candidate contained protected data.");}
         try{
           feed("check",`Attempt ${attempt}: approved paths verified; policy, types and resources.`);
-          let checked:Awaited<ReturnType<typeof selfCheck>>;
-          try{checked=await selfCheck(tree,input,signal);}catch(error){throw new RepairableRejection(error instanceof Error?error.message:"Static/type check failed.");}
-          if(!checked.resources.ok){if(checked.resources.retryable===false)throw new Error(checked.resources.reason);throw new RepairableRejection(checked.resources.reason??"Resource admission failed.");}
+          const checked=await selfCheck(tree,input,signal);
+          if(!checked.resources.ok){if(checked.resources.category!=="candidate"||checked.resources.retryable!==true)throw new Error(checked.resources.reason);throw new RepairableRejection(checked.resources.reason);}
           modules=checked.modules;
-          if(modules.length>ACTIVE_MODULE_CAP)throw new RepairableRejection("Eight active modules maximum.");
           feed("check",`SwiftShader · ${CANDIDATE_THRESHOLDS.sampleSeconds}-second candidate gate · attempt ${attempt}.`);
           check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal);
           // A background conflict copy or hostile edit stays fatal even when another gate fails.
           await auditDiff(tree,base,before,approved.files);
-          if(!check.ok){if(check.retryable===false)throw new Error(check.reason);throw new RepairableRejection(check.reason??"Candidate gate failed.");}
+          if(!check.ok){if(check.category!=="candidate"||check.retryable!==true)throw new Error(check.reason);throw new RepairableRejection(check.reason);}
           break;
         }catch(error){
           if(!(error instanceof RepairableRejection)||attempt===BUILD_ATTEMPTS||signal.aborted||deadline-performance.now()<=SELF_CHECK_TIMEOUT_MS+CHECK_TIMEOUT_MS)throw error;

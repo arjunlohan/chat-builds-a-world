@@ -6,6 +6,7 @@ import type {WorldModuleFactory} from "../../world/engine/api.js";
 import {CANDIDATE_THRESHOLDS} from "../../checks/candidate-policy.js";
 import {MODULE_BUDGET} from "../../world/engine/module-host.js";
 import type {ResourceContext} from "./self-check.js";
+import {GateError,candidateRejected,preconditionFailed,infrastructureFailed} from "./verdict.js";
 const request=await (await fetch("/input.json")).json() as ResourceContext&{modules:ResourceContext["retained"];candidateId?:string};
 declare global {interface Window {__resourceResult:import("./self-check.js").SelfCheckResult}}
 const pool=modulePool(request.base??emptyUsage());
@@ -18,11 +19,11 @@ try{
  let retained:Usage=emptyUsage();
  for(const [index,item] of request.modules.entries()){
   const module=await import(`/modules/${index}.js`) as {default:WorldModuleFactory};
-  if(!host.load(module.default)||!host.ids.includes(item.id))throw new Error(`${item.id}: ${status.at(-1)?.reason??"Module ID did not match manifest"}`);
+  if(!host.load(module.default)||!host.ids.includes(item.id)){const reason=`${item.id}: ${status.at(-1)?.reason??"Module ID did not match manifest"}`;throw new GateError(item.id===request.candidateId?candidateRejected(reason):preconditionFailed(reason));}
   if(item.id!==request.candidateId)retained=ledger.usage();
  }
- for(let i=0;i<CANDIDATE_THRESHOLDS.sampleSeconds/MODULE_BUDGET.maxDtSeconds;i++){clock+=MODULE_BUDGET.maxDtSeconds*1000;host.update(MODULE_BUDGET.maxDtSeconds);if(host.activeCount!==request.modules.length)throw new Error(status.at(-1)?.reason??"Module disabled during resource check");}
+ for(let i=0;i<CANDIDATE_THRESHOLDS.sampleSeconds/MODULE_BUDGET.maxDtSeconds;i++){clock+=MODULE_BUDGET.maxDtSeconds*1000;host.update(MODULE_BUDGET.maxDtSeconds);if(host.activeCount!==request.modules.length){const fault=status.at(-1),reason=fault?.reason??"Module disabled during resource check";throw new GateError(fault?.id===request.candidateId?candidateRejected(reason):preconditionFailed(reason));}}
  const usage=ledger.usage(),available=Object.fromEntries(usageKeys.map(k=>[k,Math.max(0,pool[k]-retained[k])])) as unknown as Usage;
  window.__resourceResult={ok:true,usage,pool,retained,available};
-}catch(error){window.__resourceResult={ok:false,reason:error instanceof Error?error.message:"Resource admission failed",pool};}
+}catch(error){window.__resourceResult={...(error instanceof GateError?error.verdict:infrastructureFailed(error instanceof Error?error.message:"Resource admission failed")),pool};}
 finally{host.dispose();}

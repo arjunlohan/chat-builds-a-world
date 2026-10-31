@@ -14,6 +14,9 @@ import { Versions } from "../server/versions/index.js";
 import { Rounds } from "../server/rounds/index.js";
 import {THREE_IMPORTS,threeImportRule} from "../server/runner/imports.js";
 import {buildGuardPrompt} from "../server/guard/index.js";
+import {candidateRejected,infrastructureFailed} from "../server/runner/verdict.js";
+import type {CheckResult} from "../server/runner/check.js";
+import {ACTIVE_MODULE_CAP} from "../world/shared/limits.js";
 test("the checked import manifest drives policy, both prompts and the engineering contract",async()=>{
  const rule=threeImportRule(),contract=await readFile("AGENTS.md","utf8");assert.ok(contract.includes(rule));assert.ok(buildGuardPrompt("a small firefly cloud").includes(rule));
  for(const name of THREE_IMPORTS)assert.doesNotThrow(()=>inspectModule(`import {${name}} from "three";`,"world/modules/test.ts"));
@@ -225,7 +228,7 @@ test("fake builder repairs a candidate rejection in the same worktree, gates aga
  const firstReason="Candidate is not stream-readable: needs 4096 contrasted 1080p pixel-equivalents and 64x64px in two of three probes (best 3600px).";
  try{
   versions=await knownVersions(root,v=>{if(v)void versions.acknowledge(v.version,v.receipt,true);});
-  const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed:(_kind,text)=>feed.push(text),record:r=>{records.push(r);},announce:async()=>{},builder:async options=>{calls++;trees.push(options.tree);timeouts.push(options.timeoutMs!);assert.match(options.prompt!,/LOCKED_SELF_CHECK_COMMAND/);if(calls===2){assert.ok(options.prompt!.includes(JSON.stringify(firstReason)));assert.ok((await readFile(join(options.tree,options.decision.files[0]!),"utf8")).includes("0.03"));}return runCodex(options);},check:async(_root,modules)=>{checks++;assert.ok(modules.at(-1)!.code.includes(checks===1?"0.03":"2.2"));return checks===1?{ok:false,reason:firstReason}:{ok:true,fps:60,avgFps:60};}});
+  const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed:(_kind,text)=>feed.push(text),record:r=>{records.push(r);},announce:async()=>{},builder:async options=>{calls++;trees.push(options.tree);timeouts.push(options.timeoutMs!);assert.match(options.prompt!,/LOCKED_SELF_CHECK_COMMAND/);if(calls===2){assert.ok(options.prompt!.includes(JSON.stringify(firstReason)));assert.ok((await readFile(join(options.tree,options.decision.files[0]!),"utf8")).includes("0.03"));}return runCodex(options);},check:async(_root,modules)=>{checks++;assert.ok(modules.at(-1)!.code.includes(checks===1?"0.03":"2.2"));return checks===1?candidateRejected(firstReason):{ok:true,fps:60,avgFps:60};}});
   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.equal(result.outcome,"SHIPPED",result.reason);assert.equal(result.attempts,2);assert.equal(result.firstReason,firstReason);assert.equal(calls,2);assert.equal(checks,2);assert.equal(trees[0],trees[1]);assert.ok(timeouts[1]!<timeouts[0]!);assert.deepEqual(result.tokens,{input:200,output:400,total:600});assert.ok(feed.some(s=>s.startsWith("Retry 2/2")));assert.equal((records[0] as {attempts:number}).attempts,2);assert.equal(await git(root,"tag","--list"),"v1");assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);await runner.close();versions.close();
  }finally{await rm(root,{recursive:true,force:true});}
 });
@@ -240,8 +243,28 @@ test("resource rejections get one repair then retain the final reason; checker t
  for(const timeout of [false,true]){
   const root=await retryRepository();let calls=0;try{
    const versions=await knownVersions(root,()=>{});if(!timeout)await versions.reportBaseUsage({nodes:0,triangles:129999,draws:0,lights:0,particles:0});
-   const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{},builder:options=>{calls++;return runCodex(options);},check:async()=>({ok:false,reason:"Candidate checker timed out after 24 seconds.",retryable:false})});
+   const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{},builder:options=>{calls++;return runCodex(options);},check:async()=>infrastructureFailed("Candidate checker timed out after 24 seconds.")});
    const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.equal(result.outcome,"REVERTED");assert.equal(calls,timeout?1:2);assert.match(result.reason,timeout?/timed out/:/triangles world limit/);assert.equal(result.attempts,calls);assert.equal(await git(root,"tag","--list"),"");await runner.close();versions.close();
+  }finally{await rm(root,{recursive:true,force:true});}
+ }
+});
+
+test("fixed active-module capacity refuses work before creating a tree or invoking the builder",async()=>{
+ const root=await retryRepository();let calls=0;try{
+  const versions=await knownVersions(root,()=>{}),modules=[];
+  for(let i=0;i<ACTIVE_MODULE_CAP;i++)modules.push(await versions.artifact(`existing-${i}`,`world/modules/existing-${i}.ts`,`export default()=>({id:"existing-${i}",init(){},update(){},onChat(){},onCitizenSpawn(){},onRaid(){},dispose(){}});`));
+  await versions.activate({version:1,tag:"v1",commit:await git(root,"rev-parse","HEAD"),title:"Full world",requester:"fixture",modules},false);
+  const runner=new Runner({root,versions,feed(){},announce:async()=>{},builder:async()=>{calls++;return{input:0,output:0,total:0};}});
+  const refused=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.match(refused.reason,/active modules maximum/);assert.equal(refused.attempts,0);assert.equal(calls,0);assert.equal(versions.pending,undefined);assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);
+  const replace=repairDecision();replace.spec.moduleId="existing-0";replace.files=["world/modules/existing-0.ts"];
+  const allowed=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:replace});assert.equal(allowed.attempts,1);assert.match(allowed.reason,/no module changes/);assert.equal(calls,1);await runner.close();versions.close();
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+test("infrastructure and unclassified checker failures do not opt in to a repair",async()=>{
+ for(const verdict of [infrastructureFailed("Candidate checker returned no valid verdict."),{ok:false,reason:"Unclassified checker failure"} as CheckResult]){
+  const root=await retryRepository();let calls=0;try{
+   const versions=await knownVersions(root,()=>{}),runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{},builder:options=>{calls++;return runCodex(options);},check:async()=>verdict});
+   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.equal(result.outcome,"REVERTED");assert.equal(result.attempts,1);assert.equal(calls,1);assert.equal(result.firstReason,undefined);await runner.close();versions.close();
   }finally{await rm(root,{recursive:true,force:true});}
  }
 });

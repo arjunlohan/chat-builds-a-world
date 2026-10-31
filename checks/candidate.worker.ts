@@ -6,6 +6,7 @@ import { WorldPipeline } from "../server/pipeline.js";
 import { Versions } from "../server/versions/index.js";
 import { frameVerdict, visibilityVerdict, CANDIDATE_THRESHOLDS, type FrameEvidence } from "./candidate-policy.js";
 import { VISIBILITY_PROBE, type Footprint } from "../world/engine/visibility.js";
+import {GateError,candidateRejected,infrastructureFailed} from "../server/runner/verdict.js";
 const path=process.argv[2]!,directory=dirname(path),input=JSON.parse(await readFile(path,"utf8")) as {modules:{id:string;file:string;code:string}[];probeId:string};
 const state=join(directory,"runtime"),pipeline=new WorldPipeline(),versions=new Versions(state,v=>pipeline.publish({type:"version",version:v}));
 const modules=await Promise.all(input.modules.map(m=>versions.artifact(m.id,m.file,m.code)));
@@ -31,6 +32,7 @@ try{
  evidence.status="loading";await save();
  await page.goto(`http://127.0.0.1:${port}/world?check=1&overlay=1&probe=${encodeURIComponent(input.probeId)}`);
  await page.waitForFunction(()=>window.__worldStats?.moduleCount>0||window.__worldStats?.moduleError,undefined,{timeout:6500});
+ const activationError=await page.evaluate(()=>window.__worldStats.moduleError);if(activationError)throw new GateError(candidateRejected(activationError));
  evidence.status="warming";await save();
  const first=await probe(page); // Shader compilation/readback is outside the 15s performance window.
  await page.waitForFunction(frame=>window.__worldStats.moduleError||window.__worldStats.frame>=frame+30,first,{timeout:3000});
@@ -51,7 +53,7 @@ try{
   const {trace:checkpoint,...sampleValue}=value;evidence.frames=checkpoint;
   maxPollGap=Math.max(maxPollGap,value.time-lastPoll);lastPoll=value.time;samples.push(sampleValue);hashes.add(value.hash);evidence.maxPollGap=maxPollGap;await save();
   if(!/swiftshader/i.test(value.renderer))throw new Error("Candidate did not use SwiftShader.");
-  if(errors.length||value.error)throw new Error(value.error||"Candidate console error.");if(!value.lit)throw new Error("Black canvas.");
+  if(value.error)throw new GateError(candidateRejected(value.error));if(errors.length)throw new Error("Candidate console error.");if(!value.lit)throw new GateError(candidateRejected("Black canvas."));
 
  }
  const end=await page.evaluate(()=>({...window.__worldStats,time:window.__worldStats.lastFrameAt}));
@@ -60,12 +62,12 @@ try{
  await probe(page); // Final visibility is measured after timing, not charged as candidate work.
  const visibility=visibilityVerdict(footprints);
  evidence.end=end;evidence.frames=trace;evidence.timing=timing;evidence.visibility=visibility;await save();
- if(!timing.ok)throw new Error(timing.reason);if(!visibility.ok)throw new Error(visibility.reason);
+ if(!timing.ok)throw new GateError(candidateRejected(timing.reason!));if(!visibility.ok)throw new GateError(candidateRejected(visibility.reason!));
  evidence.status="passed";await save();
  await page.screenshot({path:join(directory,"canvas.png"),timeout:800}).catch(()=>{});
  console.log(JSON.stringify({...timing,samples:CANDIDATE_THRESHOLDS.sampleSeconds,modulePixels:visibility.best?.hdPixels,visibility,citizens:end.citizenCount,hashes:hashes.size}));
 }catch(error){evidence.status="failed";evidence.reason=error instanceof Error?error.message.slice(0,300):"Candidate check failed.";
  await save();
  if(page)try{const last=await Promise.race([page.evaluate(()=>({stats:window.__worldStats,frames:window.__worldFrameTrace?Array.from(window.__worldFrameTrace.intervals):[]})),new Promise<null>(r=>setTimeout(()=>r(null),600))]);evidence.lastStats=last;await page.screenshot({path:join(directory,"canvas.png"),timeout:800});}catch{}
- await save();console.log(JSON.stringify({ok:false,reason:evidence.reason}));process.exitCode=1;
+ await save();console.log(JSON.stringify(error instanceof GateError?error.verdict:infrastructureFailed(String(evidence.reason))));process.exitCode=1;
 }finally{await browser?.close();await browserServer?.close();app?.closeStreams();versions.close();if(app)await new Promise<void>(r=>app!.server.close(()=>r()));await rm(state,{recursive:true,force:true});}

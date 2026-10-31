@@ -15,9 +15,11 @@ temporary parent; checked changes are still rejected outside approved modules.
 
 Runtime Three.js imports come from server/runner/imports.ts. The static policy,
 guard and builder use the same list; pnpm check verifies its generated AGENTS.md
-block. Raw Points buffers and InstancedMesh capacity charge particle limits even
+block. Raw Points buffers and module-owned InstancedMesh capacity charge particle limits even
 when drawRange, index count or active instance count is smaller. Each also charges
 nodes/draws, and instanced geometry charges triangles at allocated capacity.
+Base-world citizen/cloud instances reserve their geometry without consuming the
+module particle pool. Numeric particle caps remain unchanged.
 Builder public summaries, bounded readable feed lines, command counts and token
 usage are retained in state/builds/. Reasoning, raw commands and stderr are not
 retained. A no-edit completion reports the final summary or explicitly says the
@@ -25,20 +27,26 @@ builder provided no explanation.
 
 The builder's locked self-check command is generated per run and points outside
 its worktree to server/runner/self-check.ts and a private state/self-checks/ manifest.
-Run it from the candidate worktree. It compiles the entrypoint with the runner's
-static policy and TypeScript check, then uses the actual ModuleHost, ResourceOwner
-and ResourceLedger for resource admission. Generated code runs in an isolated
+Run it from the candidate worktree. It uses single-process node --import and checks
+the entrypoint with the runner's static policy and TypeScript compilation. It runs
+under the workspace sandbox without opening tsx IPC sockets or launching Chromium.
+Resource admission remains the runner's responsibility, using the actual ModuleHost,
+ResourceOwner and ResourceLedger. Generated code runs in an isolated
 Chromium page with WebGL disabled, not in Node. This probe simulates bounded
 updates but creates no renderer and samples no FPS or visibility. Its process and
 browser are killed on cancellation/timeout. The runner calls the same selfCheck
-function independently before the existing candidate gate.
+function independently before the existing candidate gate. A valid terminal verdict
+received before a check's deadline is final: the checker and its browser are killed
+immediately, so graceful cleanup cannot replace a passing verdict with a timeout.
+Checker scratch artifacts live under the retained evidence directory.
 
 The primary world's snapshot handshake reports the engine's allocated base usage.
 That reservation, the reserved summon pool and retained module bundles form the
 resource context. The prompt includes measured retained usage and available pool
-capacity. If the base has not been reported, the prompt explicitly says so and the
-independent browser gate remains authoritative; no admission cap is relaxed there.
-Base reports are bounded, restricted to the primary stream and never checkpointed.
+capacity. Valid base reports are restricted to the primary stream and persisted in
+versions.json only when changed. Builds refuse to start until a valid reservation
+is known, including after restart. A standalone probe without base facts still
+reserves the summon pool via modulePool(emptyUsage()).
 
 Each accepted build gets at most two builder attempts in the same worktree, under
 one original 180-second deadline. A policy/type/resource or candidate-gate rejection
@@ -47,7 +55,9 @@ repair prompt carries the exact redacted rejection, the locked self-check comman
 and the same resource context. The overlay shows Retry 2/2; runner metrics record
 attempts and firstReason, with summed duration and token usage across attempts.
 Guard rejections, path/protected-data violations, no-edit completions, CLI failures,
-timeouts and cancellations do not retry. Every attempt is audited against the
+timeouts and cancellations do not retry. Gate failures carry candidate,
+infrastructure or precondition categories; only an explicit candidate repair opt-in
+retries. Active-module capacity is checked before creating a worktree. Every attempt is audited against the
 original file inventory and repeats the independent checks; promotion happens once.
 
 Checked versions require a master-reachable tag and a healthy activation. A failed merge removes its unshipped tag; recovery covers a crash between tag

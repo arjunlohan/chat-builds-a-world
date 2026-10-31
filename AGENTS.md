@@ -306,6 +306,10 @@ never add credentials or populated values.
   Require the approved entrypoint to be written before the final reply. Retain
   bounded redacted public summaries, readable events, command counts and usage
   under state/builds/ so a no-edit completion can report its explanation.
+  The rendered builder self-check must run inside workspace-write without socket
+  exceptions: policy and TypeScript only. The runner independently enforces those,
+  resource admission and the candidate gate. Only explicitly classified candidate
+  defects may retry; infrastructure failures and fixed preconditions may not.
 - Enforce the 180 s build deadline with cancellation and process-group kill.
   Inspect every changed file, including ignored and untracked entries; reject
   paths outside the exact approved `world/modules/*.ts` list, symlinks, renames,
