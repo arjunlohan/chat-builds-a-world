@@ -28,7 +28,8 @@ Build in this order; cut scope from the bottom:
    scaled to viewer count within the citizen cap. `/history` replays v1…vN as a
    time-lapse. Cross-channel module gifts are stretch scope.
 
-Phase 7 provides the isolated runtime runner, candidate gate, version promotion,
+Phase 9 adds atomic world/round checkpoints, restart recovery, single-flight builds
+and stream polish to the isolated runtime runner, candidate gate, version promotion,
 hot swap and rollback vote, alongside the compact overlay and read-only guard, plus
 the procedural world, instanced citizens and shared Twitch/simulator
 pipeline, readable collision-managed labels, and the data-only Summon fast lane.
@@ -97,7 +98,7 @@ configuration and latency will be verified when the integration is built.
   for inspection and tests. Limit local streams to 16 and terminate slow readers.
   Mutating endpoints require JSON <=8 KiB and reject cross-origin requests. Bind
   only to loopback and accept localhost/127.0.0.1 Host headers.
-- Reserve resources for 300 creatures in six InstancedMesh draws. Each citizen has
+- Reserve resources for 300 creatures in one indexed instanced geometry/draw. Each citizen has
   a dry, unique home, current command, last activity, name/color and latest speech.
   Bodies/ears/tails use the Twitch color (stable palette fallback for empty color).
   Name tags and at most eight visible speech bubbles use textContent, never HTML.
@@ -968,18 +969,55 @@ copy it into the repo. This file is the implementation contract, not a brief cop
 
 ## Phase 8 raids and playback
 
-- Raid policy lives in `server/citizens/raid-policy.ts`: desired=min(viewers,150),
-  free slots first, then oldest `lastActive <= now-IDLE_MS` citizens only. Never
-  evict recent chatters or exceed 300 active citizens. All raid citizens use normal
-  activity/fade/expiry and have server-owned source-channel metadata.
+- Seat admission lives on CitizenRoster and is shared by chat and raids:
+  desired=min(viewers,RAID_CAP=150), free slots first, then oldest citizens quiet
+  for at least QUIET_MS=180000. Never evict anyone active within three minutes or
+  exceed 300 citizens. Raiders have normal activity/fade/expiry, source-labelled
+  names and generic entry {from,at,delay}; they are eligible after QUIET_MS.
 - Both live EventSub and `/sim/eventsub` use `incomingRaid`; the simulator accepts
   only incoming raid notifications, never forged chat authority. Local simulator
   routes require SIMULATION_ALLOWED=1 when Twitch is configured. Real Gate D is
   performed by Arjun from a second account.
-- The portal is one pooled base-world allocation (128 sparks, no local lights).
-  Repeated raids retarget it; citizen arrivals are staged six per render frame.
+- The portal is one pooled base-world ring/swirl with no local lights. Its burst
+  uses the shared 96-particle effects pool. Repeated raids retarget it; a single
+  born/waiting delay staggers generic citizen entry (no second renderer queue).
   Recent arrival snapshots preserve its original age after reconnect.
 - `/history` consumes healthy immutable version bundles in ascending order, with
   public title/requester credits. Playback is isolated from live transport,
   primary-world selection, receipts and fault/reversion endpoints. Keep the empty
   state honest; never fabricate shipped history for an empty checkout.
+
+
+## Phase 9 checkpoints and operation
+
+- Atomically save private state/world.json (format version, fsync, rename):
+  roster/seats/activity, bounded event/rate windows, recent raid, scenes/receipts,
+  summon cooldowns, proposals/supporters/votes, remaining round clock and feed.
+  Coalesce events over 100ms, checkpoint the round clock each second and flush
+  HTTP mutations/receipts and /api/world before responding. A hard crash may lose
+  the last unflushed live event; malformed state stops startup instead of resetting.
+- Resume ideas, votes and rollback ballots with offline time paused. Interrupted
+  guard/build jobs are cancelled, never automatically replayed. Retain the idea
+  round and healthy world. Persist builder PID/worktree before prompt delivery;
+  verify orphan cwd, kill/drain its group, remove the owned worktree, then sweep
+  stale Codex homes. Incomplete promotions restore only modules via a forward
+  commit/tag; dirty/user-advanced master stops recovery without changing it.
+- PID/token server/build locks prevent parallel owners in a checkout. Queue close
+  aborts and awaits runner cleanup; auto-rollback can preempt. Verified EventSub
+  moderator !veto aliases !skip during builds; simulator JSON cannot grant roles.
+- DEMO_MODE=1 uses 20s ideas, 10s votes, 10s rollback; guard/build retain 45/180s.
+  SUMMON_REASONING_EFFORT remains max by default. Twitch reconnect retains capped
+  exponential backoff/jitter. Keep all credentials server-only and out of logs.
+- Retain unchanged module IDs/hashes across activation/history chapters. Cache
+  history JSON until save; update progress only while visible/playing and changed.
+  Dirty citizen matrices upload one min/max range per frame. Labels share projectLabel.
+- Portal guests have mint coats and a diamond marker; real chat colors stay intact.
+  Native ship confetti reuses the existing effect pool and does not extend the
+  module API. Reconnect/history/rollback do not replay it; reduced motion suppresses
+  the celebration. Phase transitions animate transform/opacity over 200ms and
+  respect reduced motion. All visuals remain authored, asset/font/audio-free.
+- The two-hour sim:soak runs in a credential-free clone with hardware Chromium,
+  300 citizens, start/15-minute/end post-GC heaps and frame-delta FPS. It runs a
+  real offline fixture round/ship, then periodic crowd simulations. Its browser
+  freezes only during the independent initial gate and resumes for a real receipt.
+  Never relax production candidate thresholds to pass a loaded benchmark.

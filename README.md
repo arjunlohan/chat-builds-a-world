@@ -4,12 +4,14 @@ Twitch chat builds a living 3D world on stream. Every chatter becomes a creature
 small wishes become objects, bigger ideas become live-coded systems, and raids
 arrive through a portal. A Codex x TwitchCon Hackathon entry by Arjun.
 
-This is **Phase 7 of 10: runner and checks**. `/world` renders the Lantern Garden: an
+This is **Phase 9 of 10: hardening and polish**. `/world` renders the Lantern Garden: an
 original procedural island with jade terrain, layered basalt cliffs, coral trees,
 a spring and waterfall, a moon gate and glowing lanterns. The painted sky follows
 a ten-minute day/night cycle. Soft shadows, shader ripples, GPU fireflies and bloom
 keep the empty world alive. All geometry, shaders and effects are authored in
-code; there are no external assets or fonts. Twitch is optional and server-only;
+code; there are no external assets or fonts. Portal guests have mint coats and a
+diamond name marker. A newly acknowledged ship celebrates through the existing
+96-particle effect pool; reconnect/history/rollback do not repeat it. Twitch is optional and server-only;
 the complete offline crowd demo needs no credentials.
 
 The cinematic camera drifts quietly around the island. Click a spot to fly closer;
@@ -22,8 +24,9 @@ animate them. The server caps the roster at 300; one instanced draw renders the
 creatures, which fade five seconds after becoming idle for 20 minutes. Automatic
 arrival/action camera shots coalesce and are at least eight seconds apart.
 The Summon fast lane now materializes validated data; checked live-coded modules now ship through isolated worktrees;
-version playback remains future work. `/overlay` now shows live rounds and
-checked builds and explicit offline fixtures; `/history` remains a placeholder. Integration stubs fail explicitly if called.
+`/overlay` shows live rounds, checked builds and explicit offline fixtures;
+`/history` replays healthy shipped versions. World, summons, votes and versions
+survive server restarts.
 
 ## Run from a fresh clone
 
@@ -45,8 +48,8 @@ about 11 seconds of accelerated voting plus the real candidate gate (roughly
 50 seconds for the full crowd + checked ship). Expect
 **184 accepted events, 80 chatters plus 24 raiders (104 citizens), and three fixture summons**, including seven
 round proposals and 13 ballots. A dev-server restart
-clears the in-memory roster/scenes. Repeat runs reuse those identities and respect
-the 60-second summon cooldown; use a fresh dev server for deterministic checks.
+restores the saved roster/scenes/round. Repeat runs reuse those identities and respect
+the 60-second summon cooldown; use a fresh disposable clone for deterministic checks.
 Raid portal/parade and history playback are implemented in Phase 8 below.
 
 Open [the world](http://127.0.0.1:3000/world) in a WebGL 2-capable browser. It uses a
@@ -85,7 +88,7 @@ Never commit `.env` or put secrets into browser bundles.
   and compilation of both browser bundles. No external API calls.
 - `pnpm sim`: sends the scripted crowd to the running server, verifies the roster
   and prints counts. It exits with an error if dev is not running or events fail.
-- `pnpm dev`: starts the local Node server and serves the world, transparent overlay and history placeholder.
+- `pnpm dev`: starts the local Node server and serves the world, transparent overlay and history player.
 
 Optional browser verification (downloads Chromium on first setup):
 
@@ -136,9 +139,20 @@ in a disposable clone. It samples frame intervals and CPU update/render timings:
 pnpm sim:soak --output=state/soak.json
 ```
 
-`--ref=<commit>` selects a baseline revision; `--seconds=600` is the default.
-It excludes concurrent builder gates and provider work for matched render-loop
-comparisons, never loads credentials, and removes its clone afterward.
+The default is **7,200 seconds (two hours)**, with samples at start, every 900
+seconds and the end. `--seconds`, `--interval`, `--sample` (default 10 seconds)
+and `--ref=<commit>` are explicit options. It runs real `pnpm sim` with offline
+adapters, checks a full round/ship, fills the roster to 300, keeps ordinary citizens
+active and replays `pnpm sim --crowd-only` every 15 minutes. The harness freezes
+its own browser only during the separate initial SwiftShader gate, then resumes
+it for the real activation receipt. Performance sampling starts afterward.
+Server and browser heap are recorded both before and after explicit GC through
+local Inspector/CDP connections, together with frame-delta FPS, DOM count and
+citizen count. Minute health records and the report survive interruption. No
+provider/Twitch credentials are loaded; the isolated clone is removed afterward.
+A software renderer, failed simulator, console error, <50 FPS sample, wrong
+citizen count or leaked worktree fails the run; gate evidence is retained on setup
+failure. Avoid other GPU benchmarks during a measured soak.
 
 ## Runner, candidate checks and rollback
 
@@ -156,9 +170,10 @@ hooks, and skips host skill discovery. These switches were checked against the i
 [feature controls](https://learn.chatgpt.com/docs/config-file/config-reference).
 The owned process group is killed/drained on normal exit as well as cancellation,
 including descendants with ignored stdio. Home removal runs once after process-group draining; failures warn with secret
-redaction and preserve the verdict. One memoized background startup sweep reclaims
+redaction and preserve the verdict. One memoized startup sweep after orphan-process recovery reclaims
 homes whose owning PID is dead, while preserving live invocations. Config is read
-once per invocation. CLI lines are redacted before callbacks or collection;
+once per invocation. When streaming, CLI lines are redacted once before callbacks and retained in that form;
+non-streaming output is redacted once at close.
 success requires exit 0, turn.completed and no turn.failed. Timeout messages
 use the enforced duration. Error events alone
 are diagnostics. No Twitch credentials
@@ -204,8 +219,8 @@ has no benchmark-only standby option.
 
 On pass, commit `vN: <title> (requested by @user)` in the worktree, recheck master,
 fast-forward it and tag vN. Immutable local module bundles share the engine's
-Three.js instance. The browser imports checked hash URLs and stages a fresh host
-before disposing the previous host. A receipt after eight stable frames confirms
+Three.js instance. The browser imports checked hash URLs and stages only changed modules,
+retaining instances with unchanged IDs/hashes. A receipt after eight stable frames confirms
 the hot swap **without reloading the page**, then the server announces the ship.
 Failure before promotion leaves master unchanged; failed live activation restores
 the old module tree with a new forward commit, never a reset. Owned worktrees are
@@ -501,8 +516,7 @@ deduplication, cooldowns, capacity, commands and broadcasts are identical.
   time belongs to the server. IDs are 1–128 ASCII letters/digits/underscore/hyphen,
   display names 1–64 characters and chat text 1–500 characters.
 - `POST /sim/raid`: JSON with `id`, `broadcasterId`, `broadcasterName`, `viewerCount`
-  (positive integer <=1,000,000). It feeds the same raid hook and counter; it does
-  not invent viewers or spawn raid citizens yet.
+  (positive integer <=1,000,000). It feeds the same raid hook and counter; it spawns bounded representative portal guests.
 - `GET /api/world`: current authoritative roster, summons, rounds and raid/control metadata.
 - `GET /api/rounds`: current authoritative round, build, timeline and toast snapshot.
 - `POST /sim/round`: offline-only empty-round rehearsal with JSON `outcome`
@@ -515,7 +529,7 @@ Simulator POSTs require JSON <=8 KiB, loopback Host headers and same-origin brow
 requests. No simulator body can claim moderator privileges. Incoming chat is
 limited to one accepted message/user/250 ms and 200 messages/second globally.
 Only server-verified Twitch broadcaster/moderator roles may invoke `!pause`,
-`!skip`, `!clear`. Pause gates new actions, clear removes the latest active summon, and skip
+`!skip`/`!veto`, `!clear`. Pause gates new actions, clear removes the latest active summon, and skip
 advances the round or fails a running build. Current blocklist filtering is basic. Command messages never become speech bubbles: movement commands keep their
 animations, and other admitted commands get a small pooled sparkle. Normal speech is always textContent,
 never HTML; at most eight recent bubbles are visible and each expires after 5.5s.
@@ -589,8 +603,9 @@ Representative citizens emerge in a staggered parade, with the source channel in
 their names and a stream-readable arrival banner. EventSub does not supply raider
 identities; these creatures represent the viewer count. Up to 150 arrive, one per
 viewer, within the existing **300 total citizen cap**. Free seats are used first,
-then only the oldest citizens idle for at least `IDLE_MS` can be replaced. Recent
-chatters are never evicted. If there are too few eligible seats, fewer arrive.
+then only the oldest citizens quiet for at least **`QUIET_MS` (three minutes)** can
+be replaced. The same roster policy admits new chatters into a full world; anyone
+active within three minutes is protected. If there are too few eligible seats, fewer arrive.
 Raid citizens have the same 20-minute idle fade and expiry as other citizens.
 Reconnect snapshots restore a recent portal without replaying the raid event.
 
@@ -629,3 +644,67 @@ are excluded. A fresh checkout displays **No versions yet**, with a live-world l
 
 Run checks with `SIMULATION_ALLOWED=1 pnpm check` when `.env` contains Twitch
 credentials. Browser captures and live-test state remain ignored under `state/`.
+
+
+## Phase 9: restart and stream operation
+
+`state/world.json` is a format-versioned, private atomic checkpoint of the roster,
+seats, speech/commands, dedup/rate windows, recent raid, active summons and their
+receipts, cooldowns, proposals/supporters, replacement ballots, phase/remaining
+clock, feed and timeline. Writes coalesce bursts with a 100 ms debounce, with a
+one-second round-clock checkpoint. Simulator mutations, receipts and `/api/world`
+flush before responding. A hard crash can lose an unflushed live event from that
+short debounce window; completed HTTP receipts are durable. Files are written with
+0600 permissions, fsynced, then renamed. Invalid saved state fails startup clearly
+rather than silently resetting the world. Keep `state/` private and back it up as
+a whole with the repository/tagged module content. A new checkout has no saved world.
+
+Offline time pauses the round clock; citizen activity remains real wall time, so
+long-absent citizens still expire normally. Idea/vote/rollback rounds resume with
+their ballots and remaining time. An interrupted guard/build is cancelled, its
+idea round retained, and its candidate discarded; provider calls are **never
+replayed automatically**. An incomplete promotion or unacknowledged version is
+restored to the last healthy module set with a new forward recovery commit/tag.
+Recovery refuses to change a dirty checkout or a master advanced outside that run.
+
+A PID/token lock excludes a second server in the same checkout. A separate
+process lock serializes builds/rollbacks across runner instances; dead owners can
+be reclaimed. The runner persists its worktree and CLI PID before sending its
+prompt. Recovery verifies an orphan's exact working directory, kills/drains its
+process group, removes the owned worktree, then sweeps dead runtime homes. It
+never kills an unverified PID or resets/stashes the build session's working tree.
+Graceful shutdown aborts builds and waits for their cleanup before final checkpoint.
+The process-local queue also lets automatic rollback preempt a build safely.
+
+Verified Twitch moderators/broadcaster can use `!pause`, `!skip` (alias `!veto`)
+and `!clear` during builds. Veto aborts the subprocess and returns to ideas without
+waiting for the deadline. A viewer cannot forge mod authority through a simulator
+payload. Twitch reconnect retains its tested exponential backoff with jitter,
+60-second cap and healthy-session reset; OAuth refresh remains server-only.
+
+Set **`DEMO_MODE=1`** to use 20-second idea collection, 10-second voting and a
+10-second rollback vote. Guard and builder retain their 45- and 180-second safety
+deadlines. Normal timers remain 120/45/30 seconds, with the same guard/build limits.
+Offline `pnpm sim` is a separate explicit 15× scripted rehearsal, and expects the
+normal timers; use a fresh non-demo fixture server for that full script.
+`SUMMON_REASONING_EFFORT` remains **max** by default and in the approved local setup.
+
+Reproduce hardening checks without any live credentials:
+
+```sh
+pnpm exec tsx checks/hardening.smoke.ts
+pnpm exec tsx checks/polish.smoke.ts
+pnpm sim:soak --seconds=7200 --interval=900 --sample=10 --output=state/soak.json
+```
+
+The first uses a disposable clone with an **authored** v1 fixture: it actually
+SIGKILLs the server while voting and again with a real fake-CLI subprocess running,
+then checks world/votes/version continuity, orphan/worktree cleanup and zero page
+reloads. It is crash verification, not a claim of a new real AI build. Unit tests
+also send verified EventSub moderator/viewer fixtures during a real subprocess.
+The polish check saves production 1080p world/composite and 390px portrait captures,
+checks 150 raiders within 300 citizens, FPS, phone overflow and reduced-motion phase
+transitions. The mobile page keeps the full 16:9 OBS scene with readable native
+header/footer outside it. All browser graphics/fonts/audio are covered by the
+local [asset and licence audit](ASSET_LICENSES.md). Gate D's real second-account
+raid remains a manual action for Arjun.
