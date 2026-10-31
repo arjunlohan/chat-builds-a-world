@@ -1,0 +1,13 @@
+node_modules/
+state/
+.env
+.env.*
+!.env.example
+worktrees/
+.codex-runtime/*
+!.codex-runtime/config.toml
+dist/
+playwright-report/
+test-results/
+*.tsbuildinfo
+.DS_Store

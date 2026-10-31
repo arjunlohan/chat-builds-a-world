@@ -1,0 +1,7 @@
+model = "openai.gpt-6.1-sol"
+model_provider = "amazon-bedrock"
+model_reasoning_effort = "medium"
+
+[model_providers.amazon-bedrock.aws]
+region = "us-east-1"
+wire_api = "responses"

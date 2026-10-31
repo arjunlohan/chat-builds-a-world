@@ -1,0 +1,404 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:chat-builds-a-world:scene-spec:v1",
+  "title": "Scene Spec v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "name",
+    "geometries",
+    "materials",
+    "nodes",
+    "lights",
+    "emitters",
+    "behaviors"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "geometries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/geometry"
+      }
+    },
+    "materials": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/material"
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/node"
+      }
+    },
+    "lights": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/$defs/light"
+      }
+    },
+    "emitters": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/$defs/emitter"
+      }
+    },
+    "behaviors": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/behavior"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$"
+    },
+    "position": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "number",
+        "minimum": -64,
+        "maximum": 64
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "size",
+        "detail"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "box",
+            "sphere",
+            "cylinder",
+            "cone",
+            "torus",
+            "plane",
+            "crystal",
+            "mushroom",
+            "tree"
+          ]
+        },
+        "size": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 12
+          }
+        },
+        "detail": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        }
+      }
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "color",
+        "emissive",
+        "emissiveIntensity",
+        "roughness",
+        "metalness",
+        "opacity"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "emissive": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "emissiveIntensity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "roughness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "metalness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 1
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "geometryId",
+        "materialId",
+        "position",
+        "rotation",
+        "scale"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "geometryId": {
+          "$ref": "#/$defs/id"
+        },
+        "materialId": {
+          "$ref": "#/$defs/id"
+        },
+        "position": {
+          "$ref": "#/$defs/position"
+        },
+        "rotation": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "number",
+            "minimum": -3.141593,
+            "maximum": 3.141593
+          }
+        },
+        "scale": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 8
+          }
+        }
+      }
+    },
+    "light": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "color",
+        "intensity",
+        "distance",
+        "position"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "point",
+            "spot"
+          ]
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "intensity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "distance": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 32
+        },
+        "position": {
+          "$ref": "#/$defs/position"
+        }
+      }
+    },
+    "emitter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "position",
+        "color",
+        "maxParticles",
+        "rate",
+        "lifetime",
+        "size"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "sparkle",
+            "mist",
+            "fireflies"
+          ]
+        },
+        "position": {
+          "$ref": "#/$defs/position"
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "maxParticles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 128
+        },
+        "rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "lifetime": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 8
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 0.5
+        }
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "targetId",
+        "speed",
+        "amplitude",
+        "radius"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "float",
+            "orbit",
+            "wander",
+            "pulse",
+            "follow-citizen",
+            "flee"
+          ]
+        },
+        "targetId": {
+          "$ref": "#/$defs/id"
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "amplitude": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 12
+        },
+        "citizenId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "follow-citizen",
+                  "flee"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "citizenId"
+            ],
+            "properties": {
+              "citizenId": {}
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "citizenId"
+              ],
+              "properties": {
+                "citizenId": {}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
