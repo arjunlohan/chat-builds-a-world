@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 export interface ModuleArtifact { id: string; url: string; hash: string; file: string }
 export interface WorldVersion { version: number; tag: string; commit: string; title: string; requester: string; modules: ModuleArtifact[]; receipt: string; healthy?: boolean; restoredFrom?: string }
+export type HistoryEntry = Pick<WorldVersion,"version"|"tag"|"commit"|"title"|"requester"|"modules">;
 interface Stored { baseline?: string; counter: number; current: WorldVersion | null; history: WorldVersion[]; pending?: { path: string; base: string; version: number } }
 export class Versions {
   private data: Stored = { counter: 0, current: null, history: [] };
@@ -23,6 +24,11 @@ export class Versions {
   async baselineAt(commit: string) { if (!this.data.baseline) { this.data.baseline = commit; await this.save(); } }
   get current() { return this.data.current ? structuredClone(this.data.current) : null; }
   get history() { return structuredClone(this.data.history); }
+  replay(): HistoryEntry[] {
+    const shipped=new Map<number,HistoryEntry>();
+    for(const entry of this.data.history)if(entry.version>0&&entry.healthy===true){const {version,tag,commit,title,requester,modules}=entry;shipped.set(version,{version,tag,commit,title,requester,modules});}
+    return structuredClone([...shipped.values()].sort((a,b)=>a.version-b.version));
+  }
   get pending() { return this.data.pending; }
   async save() {
     await mkdir(join(this.root, "state"), { recursive: true });

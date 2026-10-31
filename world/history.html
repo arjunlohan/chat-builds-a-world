@@ -1,10 +1,15 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>World History</title>
-    <link rel="stylesheet" href="/assets/world.css">
-  </head>
-  <body><main class="placeholder"><p class="eyebrow">CHAT BUILDS A WORLD</p><h1>World history</h1><p>Time-lapse playback is planned for Tier 4.</p></main></body>
-</html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>World history · Chat Builds a World</title><link rel="stylesheet" href="/assets/history.css"></head>
+<body>
+  <canvas id="history-world" aria-label="Replaying the community’s island"></canvas>
+  <header><a href="/world">← Live world</a><p class="eyebrow">WORLD HISTORY</p><p id="chapter-count">Loading chapters…</p></header>
+  <main>
+    <section id="history-message" class="message" role="status"><p class="eyebrow">THE ISLAND’S STORY</p><h1>Loading history…</h1><p id="message-detail">Finding the shipped versions.</p><button id="retry" hidden>Try again</button><a href="/world">Watch the live world</a></section>
+    <section id="player" class="player" hidden aria-label="History playback">
+      <div class="chapter-heading"><div><p id="chapter-number" class="eyebrow"></p><h1 id="chapter-title"></h1><p id="chapter-requester"></p></div><output id="playback-status" aria-live="polite"></output></div>
+      <div class="progress" aria-hidden="true"><span id="progress"></span></div>
+      <div class="controls"><button id="play" type="button">Pause</button><button id="replay" type="button">Replay</button><label>Speed <select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label><span id="position"></span></div>
+      <nav id="chapters" aria-label="Shipped versions"></nav>
+    </section>
+  </main><script type="module" src="/assets/history.js"></script>
+</body></html>

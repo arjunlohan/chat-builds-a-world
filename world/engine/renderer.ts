@@ -28,6 +28,7 @@ import { SpecMaterializer } from "./spec-materializer.js";
 import { log } from "./log.js";
 
 export interface RendererOptions {
+  playback?: boolean;
   profile?: Readonly<RenderProfile>;
   probeId?: string;
   fixedTime?: number;
@@ -45,7 +46,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const profile = options.profile ?? PRODUCTION_PROFILE;
   let shadowDirty = true;
   const clientId = crypto.randomUUID();
-  const post = (url: string, data: object) => void fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, clientId }) }).catch(() => {});
+  const post = (url: string, data: object) => { if(options.playback)return;void fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, clientId }) }).catch(() => {}); };
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(1);
@@ -154,7 +155,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   window.__worldStats = stats.value;
   let elapsed = 0, disposed = false, ready = false, frameId = 0, uiTime = 0;
   let serverOffset = 0;
-  const disconnect = connectWorld(event => {
+  const disconnect = options.playback ? () => {} : connectWorld(event => {
     serverOffset = event.now - Date.now();
     switch (event.type) {
     case "snapshot": {
@@ -278,7 +279,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   if (!document.hidden) frameId = requestAnimationFrame(frame);
 
   return {
-    renderer, scene, camera, director, get host(){return host;}, citizens, materializer, stats: stats.value, baseUsage: base,
+    renderer, scene, camera, director, setVersion: activate, get host(){return host;}, citizens, materializer, stats: stats.value, baseUsage: base,
     dispose() {
       if (disposed) return;
       disposed = true;

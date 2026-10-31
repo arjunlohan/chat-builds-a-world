@@ -31,7 +31,7 @@ const runner = new Runner({ root: process.cwd(), versions, ...(adapters.builder 
 await runner.recover();
 const rounds = new Rounds({ build: request => runner.build(request), rollback: requester => runner.rollback(requester), canRollback: () => !!versions.previous(), review: adapters.reviewer, publish: state => pipeline.publish({ type: "rounds", state }), simulationAllowed: config.simulationAllowed });
 pipeline.attachRounds(rounds);
-const { server, closeStreams } = await createWorldServer(pipeline, summons, rounds, versions, { simulationAllowed: config.simulationAllowed, ...(simulation ? { setOutcome: simulation.setOutcome } : {}), live: !!config.summon.key && !simulation, fault: async () => {
+const { server, closeStreams } = await createWorldServer(pipeline, summons, rounds, versions, { broadcasterId: config.twitch?.broadcasterId ?? "sim-broadcaster", simulationAllowed: config.simulationAllowed, ...(simulation ? { setOutcome: simulation.setOutcome } : {}), live: !!config.summon.key && !simulation, fault: async () => {
   if (versions.current) await versions.invalidate(versions.current.version);
   rounds.cancelForRevert();
   rounds.externalResult(await runner.rollback("system", true));

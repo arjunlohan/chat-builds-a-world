@@ -1,3 +1,4 @@
+import { incomingRaid } from "./twitch/raid.js";
 import type { Versions } from "./versions/index.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -35,7 +36,7 @@ async function post(request: IncomingMessage, response: ServerResponse, handler:
   catch {request.resume();if(!response.headersSent)json(response,400,{error:"Invalid JSON event or body; maximum 8 KiB, application/json required"});}
 }
 
-export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
+export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { broadcasterId?:string; simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
   const assets = await buildClient();
   const pages = new Map([
     ["/world", await readFile(new URL("../world/index.html", import.meta.url))],
@@ -56,7 +57,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     const url = new URL(request.url ?? "/", "http://localhost"), path = url.pathname;
     if (request.headers.origin && request.headers.origin !== `http://${host}`) { json(response, 403, { error: "Same origin required" }); return; }
     if ((path.startsWith("/sim/") || path === "/runner/live") && !automation?.simulationAllowed) { request.resume(); json(response, 403, { error: "Simulation routes are disabled" }); return; }
-    if (["/runner/live","/modules/fault","/modules/ack","/summon/ack","/sim/round","/sim/chat","/sim/raid"].includes(path)) {
+    if (["/runner/live","/modules/fault","/modules/ack","/summon/ack","/sim/round","/sim/chat","/sim/raid","/sim/eventsub"].includes(path)) {
       await post(request,response,async input=>{
         switch(path){
           case "/runner/live": {
@@ -86,6 +87,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
             json(response,result.accepted?200:result.reason==="simulation-disabled"?403:409,result);return;
           }
           case "/sim/chat": json(response,200,pipeline.chat(input,{moderator:false,source:"sim"}));return;
+          case "/sim/eventsub": {const raid=incomingRaid(input,automation?.broadcasterId??"sim-broadcaster");json(response,200,raid?pipeline.raid(raid):{accepted:false,reason:"not-incoming-raid"});return;}
           case "/sim/raid": json(response,200,pipeline.raid(input));return;
         }
       });return;
@@ -101,6 +103,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       response.writeHead(405, { Allow: "GET, HEAD" }).end(); return;
     }
     if (path === "/api/rounds") { json(response, rounds ? 200 : 503, rounds?.snapshot() ?? { error: "Rounds unavailable" }); return; }
+    if (path === "/api/history") { json(response,200,{versions:versions?.replay()??[]});return; }
     if (path === "/api/world") { json(response, 200, pipeline.snapshot()); return; }
     if (path === "/events") {
       if (request.method === "HEAD") { response.writeHead(200).end(); return; }

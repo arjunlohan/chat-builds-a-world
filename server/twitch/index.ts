@@ -1,7 +1,8 @@
 import WebSocket from "ws";
 import type { ChatEvent, RaidEvent } from "../contracts.js";
 import { TwitchAuth, TwitchError, tokenStore, type TokenStore, type TwitchConfig } from "./auth.js";
-import { parseChat, parseRaid } from "../pipeline.js";
+import { incomingRaid } from "./raid.js";
+import { parseChat } from "../pipeline.js";
 
 export const EVENTSUB_URL = "wss://eventsub.wss.twitch.tv/ws";
 export interface TwitchHandlers {
@@ -168,10 +169,8 @@ export class TwitchClient {
           const moderator = chat.userId === this.config.broadcasterId || (Array.isArray(badges) && badges.some(b => b?.set_id === "moderator" || b?.set_id === "broadcaster"));
           this.handlers.onChat(chat, { moderator });
         } catch { /* Ignore malformed events; never log chat or raw upstream payloads. */ }
-      } else if (subscription === "channel.raid" && event.to_broadcaster_user_id === this.config.broadcasterId) {
-        try { this.handlers.onRaid(parseRaid({ id: message.metadata?.message_id, broadcasterId: event.from_broadcaster_user_id,
-          broadcasterName: event.from_broadcaster_user_name, viewerCount: event.viewers })); }
-        catch { /* Invalid upstream data is discarded. */ }
+      } else {
+        const raid=incomingRaid(message,this.config.broadcasterId);if(raid)this.handlers.onRaid(raid);
       }
     }
   }
