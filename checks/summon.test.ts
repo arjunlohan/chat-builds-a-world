@@ -184,9 +184,10 @@ test("render timeout is an observation metric; secondary render failures never r
  const scene=service.active()[0]!;assert.equal(await service.acknowledge(scene.id,scene.receipt,"capacity",false),false);assert.equal(service.active().length,1);
  now=31000;service.prune();await new Promise(r=>setImmediate(r));assert.equal(service.status(scene.id)!.status,"awaiting-render");assert.equal(service.status(scene.id)!.renderTimedOut,true);assert.equal(replies,0);
 });
-test("every recipe's server usage matches the independent client ledger", () => {
- for(const kind of ["box","sphere","cylinder","cone","torus","plane","crystal","mushroom","tree"] as const){
+test("every recipe and emitter's server usage matches the independent client ledger", () => {
+ for(const kind of ["box","sphere","cylinder","cone","torus","plane","crystal","mushroom","tree"] as const)for(const emitter of [false,true]){
   const spec=structuredClone(fixtureFor("crystals")) as SceneSpec;spec.geometries[0]!.kind=kind;spec.nodes=spec.nodes.filter(n=>n.geometryId===spec.geometries[0]!.id);spec.behaviors=[];
+  spec.emitters=emitter?[{id:"parity-emitter",kind:"fireflies",position:[0,5,0],color:"#ffeeaa",maxParticles:16,rate:8,lifetime:1,size:.1}]:[];
   const root=new Group();const materializer=new SpecMaterializer({root,ledger:new ResourceLedger(),layout:new LabelManager(),labels:{} as HTMLElement,effects:{play(){}},camera:{focus(){}},citizens:{get:()=>undefined,list:()=>[]}});
   const handle=materializer.spawn(normalizeSceneSpec(JSON.stringify(spec)).spec);assert.deepEqual(handle.usage,specUsage(spec),kind);handle.dispose();
  }

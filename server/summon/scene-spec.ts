@@ -67,7 +67,7 @@ export function nodeEnvelope(spec: SceneSpec, node: SceneSpec["nodes"][number]) 
 }
 export function specUsage(spec: SceneSpec) {
   const geometries = new Map(spec.geometries.map(g => [g.id, g]));
-  return { nodes: spec.nodes.length, triangles: spec.nodes.reduce((n, node) => {
+  return { nodes: spec.nodes.length+spec.emitters.length, triangles: spec.nodes.reduce((n, node) => {
     const g = geometries.get(node.geometryId)!; return n + triangleCost(g.kind, g.detail);
   }, 0), draws: spec.nodes.length + spec.emitters.length, lights: spec.lights.length,
     particles: spec.emitters.reduce((n, emitter) => n + emitter.maxParticles, 0) };

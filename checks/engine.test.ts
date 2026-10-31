@@ -6,6 +6,9 @@ import { ModuleHost, type ModuleStatus } from "../world/engine/module-host.js";
 import { ResourceLedger, ResourceOwner } from "../world/engine/resources.js";
 import { CameraDirector } from "../world/engine/camera-director.js";
 import { FrameStats } from "../world/engine/stats.js";
+import {MODULE_CAP,CITIZEN_CAP,modulePool,emptyUsage} from "../world/shared/limits.js";
+import {createEffects} from "../world/engine/effects.js";
+import {createMotes} from "../world/engine/water.js";
 
 function fixture() {
   let clock = 0;
@@ -21,8 +24,18 @@ function fixture() {
   const module = (id: string, changes: Partial<WorldModule> = {}): WorldModule => ({
     id, init() {}, update() {}, onChat() {}, onCitizenSpawn() {}, onRaid() {}, dispose() { events.push(`dispose:${id}`); }, ...changes,
   });
-  return { root, host, module, events, status, advance(ms: number) { clock += ms; } };
+  return { root, host, module, services, events, status, advance(ms: number) { clock += ms; } };
 }
+
+test("an otherwise empty world admits the full module particle cap alongside base citizen/cloud instances",()=>{
+ const base=new Group(),owner=new ResourceOwner(),geometry=new BoxGeometry(),material=new MeshBasicMaterial();
+ base.add(new InstancedMesh(geometry,material,CITIZEN_CAP),new InstancedMesh(geometry,material,48),createEffects().root,createMotes().root);
+ const usage=owner.audit(base),pool=modulePool(usage);assert.ok(pool.particles>=MODULE_CAP.particles);
+ const f=fixture(),host=new ModuleHost({root:new Group(),ledger:new ResourceLedger(emptyUsage(),pool),services:f.services,now:()=>0});
+ assert.equal(host.load(()=>f.module("fullParticles",{init(s){const g=new BufferGeometry();g.setAttribute("position",new Float32BufferAttribute(new Float32Array(MODULE_CAP.particles*3),3));s.scene.add(new Points(g,new PointsMaterial()));}})),true);
+ assert.equal(host.load(()=>f.module("tooMany",{init(s){s.scene.add(new InstancedMesh(new BoxGeometry(),new MeshBasicMaterial(),MODULE_CAP.particles+1));}})),false);
+ host.dispose();f.host.dispose();owner.dispose(base);
+});
 
 test("raw points and instances reserve allocated capacity under module and global caps", () => {
   const f=fixture();

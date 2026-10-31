@@ -10,7 +10,7 @@ export class ResourceOwner {
   private readonly objects = new Set<Object3D>();
 
   private readonly scannedMaterials = new WeakSet<Material>();
-  constructor(private readonly protectedResources?: ResourceOwner, private readonly changed?: () => void) {}
+  constructor(private readonly protectedResources?: ResourceOwner, private readonly changed?: () => void, private readonly moduleOwned=false) {}
 
   /** Audit a bounded tree. Assets removed later still belong to this owner. */
   audit(root: Object3D, limit = 2048): Usage {
@@ -44,7 +44,8 @@ export class ResourceOwner {
           const instance = object;
           count = instance.instanceMatrix.count;
           if (!Number.isSafeInteger(count) || count < 0 || !Number.isSafeInteger(instance.count) || instance.count < 0 || instance.count > count) throw new Error("invalid instance capacity");
-          usage.particles += count;
+          // Built-in citizens/clouds reserve instance geometry, not module particles.
+          if(this.moduleOwned)usage.particles += count;
         }
         const vertices = object.geometry.index?.count ?? object.geometry.getAttribute("position")?.count ?? 0;
         const drawMaterials = Array.isArray(object.material) ? object.material : undefined;
