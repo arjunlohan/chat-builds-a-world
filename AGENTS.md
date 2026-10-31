@@ -28,17 +28,12 @@ Build in this order; cut scope from the bottom:
    scaled to viewer count within the citizen cap. `/history` replays v1…vN as a
    time-lapse. Cross-channel module gifts are stretch scope.
 
-Phase 9 adds atomic world/round checkpoints, restart recovery, single-flight builds
-and stream polish to the isolated runtime runner, candidate gate, version promotion,
-hot swap and rollback vote, alongside the compact overlay and read-only guard, plus
-the procedural world, instanced citizens and shared Twitch/simulator
-pipeline, readable collision-managed labels, and the data-only Summon fast lane.
-Twitch and Bedrock are optional: missing Twitch configuration keeps sim-only mode
-running; missing Bedrock credentials fails live Summon without substituting a
-fixture. Explicit startup-injected fixture adapters use hand-written Scene Specs and the same
-validation, cooldown, admission, materialization and receipt path. The read-only
-guard and workspace-write builder use Bedrock when configured. Explicit offline
-fixtures exercise the same runner, Git/check/activation paths without provider calls. Never print or log credentials.
+Twitch and Bedrock are optional. Missing Twitch configuration must keep sim-only
+mode running; missing Bedrock credentials must fail live AI requests without
+silently substituting fixtures. Offline adapters must be explicit startup
+configuration and exercise the same validation, limits, checks and activation
+paths. Never print or log credentials. Runtime Codex must remain confined to
+approved module files under the guard, runner and World Module API rules below.
 
 ## Architecture and ownership
 
@@ -988,36 +983,15 @@ copy it into the repo. This file is the implementation contract, not a brief cop
   state honest; never fabricate shipped history for an empty checkout.
 
 
-## Phase 9 checkpoints and operation
+## Persistence rules
 
-- Atomically save private state/world.json (format version, fsync, rename):
-  roster/seats/activity, bounded event/rate windows, recent raid, scenes/receipts,
-  summon cooldowns, proposals/supporters/votes, remaining round clock and feed.
-  Coalesce events over 100ms, checkpoint the round clock each second and flush
-  HTTP mutations/receipts and /api/world before responding. A hard crash may lose
-  the last unflushed live event; malformed state stops startup instead of resetting.
-- Resume ideas, votes and rollback ballots with offline time paused. Interrupted
-  guard/build jobs are cancelled, never automatically replayed. Retain the idea
-  round and healthy world. Persist builder PID/worktree before prompt delivery;
-  verify orphan cwd, kill/drain its group, remove the owned worktree, then sweep
-  stale Codex homes. Incomplete promotions restore only modules via a forward
-  commit/tag; dirty/user-advanced master stops recovery without changing it.
-- PID/token server/build locks prevent parallel owners in a checkout. Queue close
-  aborts and awaits runner cleanup; auto-rollback can preempt. Verified EventSub
-  moderator !veto aliases !skip during builds; simulator JSON cannot grant roles.
-- DEMO_MODE=1 uses 20s ideas, 10s votes, 10s rollback; guard/build retain 45/180s.
-  SUMMON_REASONING_EFFORT remains max by default. Twitch reconnect retains capped
-  exponential backoff/jitter. Keep all credentials server-only and out of logs.
-- Retain unchanged module IDs/hashes across activation/history chapters. Cache
-  history JSON until save; update progress only while visible/playing and changed.
-  Dirty citizen matrices upload one min/max range per frame. Labels share projectLabel.
-- Portal guests have mint coats and a diamond marker; real chat colors stay intact.
-  Native ship confetti reuses the existing effect pool and does not extend the
-  module API. Reconnect/history/rollback do not replay it; reduced motion suppresses
-  the celebration. Phase transitions animate transform/opacity over 200ms and
-  respect reduced motion. All visuals remain authored, asset/font/audio-free.
-- The two-hour sim:soak runs in a credential-free clone with hardware Chromium,
-  300 citizens, start/15-minute/end post-GC heaps and frame-delta FPS. It runs a
-  real offline fixture round/ship, then periodic crowd simulations. Its browser
-  freezes only during the independent initial gate and resumes for a real receipt.
-  Never relax production candidate thresholds to pass a loaded benchmark.
+- Persist versioned private source state atomically. Never persist credentials in
+  world checkpoints or derived views/indexes. Rebuild indexes when loading.
+- Flush critical phase changes, summons and acknowledgements. Read-only HTTP
+  requests must not write checkpoints; idle processes must not periodically fsync.
+- Never replay interrupted provider calls automatically. Verify orphan ownership
+  before killing a process; leave unrelated user commits and files untouched.
+- Serialize runtime work through one server owner and its operation queue. Tag a
+  checked candidate before fast-forwarding master; restore through forward commits.
+- Keep implementation notes and completed measurements in docs/, rather than
+  describing a pending integration or measurement as complete in this contract.

@@ -1,6 +1,7 @@
 # Phase 9 verification
 
-Implementation is committed on master. Summon reasoning remains max; no live
+Historical results completed at commit **31c07df**. These are Phase 9 measurements,
+not claims about later cleanup revisions. Summon reasoning remains max; no live
 Bedrock or Twitch requests were made for these checks. The user-verified live
 integrations are retained. Gate D (a real second-account raid) remains Arjun's
 manual test.
@@ -149,5 +150,5 @@ screenshots are committed.
 | 5b6631a | Nonzero exit for interrupted soak |
 | b103c63 | Acceptance report recorded before the long run finished |
 
-A final report commit records the completed measurements. All work is on master;
-no push was requested or performed.
+Commit 31c07df recorded the completed measurements on master. This report describes
+the build-session verification; subsequent user verification and pushes are separate.
