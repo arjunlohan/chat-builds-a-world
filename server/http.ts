@@ -32,7 +32,7 @@ async function body(request: IncomingMessage): Promise<unknown> {
 
 async function post(request: IncomingMessage, response: ServerResponse, handler: (input: Record<string, unknown>) => Promise<{status:number;value:unknown;changed?:boolean}> | {status:number;value:unknown;changed?:boolean}, durable?: (changed?:boolean)=>Promise<void>) {
   if (request.method !== "POST") { response.setHeader("Allow","POST"); request.resume(); json(response,405,{error:"Use POST"}); return; }
-  try { const input=await body(request); if(!input||typeof input!=="object"||Array.isArray(input))throw new Error(); const result=await handler(input as Record<string,unknown>);await durable?.(result.changed);json(response,result.status,result.value); }
+  try { const input=await body(request); if(!input||typeof input!=="object"||Array.isArray(input))throw new Error(); const result=await handler(input as Record<string,unknown>);if(result.changed)await durable?.(true);json(response,result.status,result.value); }
   catch {request.resume();if(!response.headersSent)json(response,400,{error:"Invalid JSON event or body; maximum 8 KiB, application/json required"});}
 }
 
@@ -72,8 +72,8 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
             if(!moduleFailures.has(current.receipt)){moduleFailures.add(current.receipt);if(moduleFailures.size>128)moduleFailures.delete(moduleFailures.values().next().value!);void automation?.fault().catch(()=>{});}return {status:202,value:{accepted:true}};
           }
           case "/modules/ack": {
-            const accepted=primary(input.clientId)&&typeof input.version==="number"&&typeof input.receipt==="string"&&typeof input.ok==="boolean"&&!!versions?.acknowledge(input.version,input.receipt,input.ok);
-            if(accepted)await versions!.save();return {status:accepted?200:409,value:{accepted},changed:accepted};
+            const accepted=primary(input.clientId)&&typeof input.version==="number"&&typeof input.receipt==="string"&&typeof input.ok==="boolean"&&!!await versions?.acknowledge(input.version,input.receipt,input.ok);
+            return {status:accepted?200:409,value:{accepted}};
           }
           case "/summon/ack": {
             const accepted=typeof input.id==="string"&&typeof input.receipt==="string"&&!!await summons?.acknowledge(input.id,input.receipt,typeof input.error==="string"?input.error:undefined,primary(input.clientId));

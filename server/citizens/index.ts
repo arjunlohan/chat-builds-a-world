@@ -14,6 +14,7 @@ for (let z = -6.3; z <= 6.3; z += 0.63) {
 }
 if (homes.length < CITIZEN_LIMIT) throw new Error("Not enough citizen homes in the island layout");
 
+export const homeSeat=(home:readonly number[])=>homes.findIndex(h=>h.every((n,i)=>n===home[i]));
 export function chatColor(input: string, id: string) {
   if (/^#[\da-f]{6}$/i.test(input)) return input;
   const colors = ["#e9a18e", "#80cbb4", "#a6b6e1", "#e3c277", "#d8a3c3", "#9bc77f"];
@@ -30,7 +31,7 @@ export class CitizenRoster {
   restore(saved: readonly CitizenState[]) {
     this.citizens.clear();this.seats.clear();this.occupied.clear();
     for(const value of saved){
-      const seat=homes.findIndex(h=>h.every((n,i)=>n===value.home[i]));
+      const seat=homeSeat(value.home);
       const citizen=Object.freeze({...value,home:Object.freeze([...value.home] as [number,number,number]),command:value.command?Object.freeze({...value.command}):null,...(value.entry?{entry:Object.freeze({...value.entry,from:Object.freeze([...value.entry.from] as [number,number,number])})}:{})});this.citizens.set(value.id,citizen);this.seats.set(value.id,seat);this.occupied.add(seat);
     }
   }

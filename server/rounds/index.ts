@@ -84,9 +84,7 @@ export class Rounds {
   private voteCounts(id: string) { return this.counts.get(id) ?? 0; }
   private rollbackTally() { return { yes: this.rollbackYes, no: this.rollbackVotes.size - this.rollbackYes }; }
   checkpoint(){return structuredClone({phase:this.phase,round:this.round,startedAt:this.startedAt,endsAt:this.endsAt,now:this.now(),rate:this.rate,simulation:this.simulation,paused:this.paused,guard:this.guard,build:this.build,timeline:this.timeline,toasts:this.toasts,ideas:[...this.ideas.values()].map(({normalized:_normalized,supporters,...idea})=>({...idea,supporters:[...supporters]})),votes:[...this.votes],shortlist:this.shortlist.map(i=>i.id),winner:this.winner?.id,order:this.order,serial:this.serial,version:this.version,rollbackVotes:[...this.rollbackVotes],rollbackRequester:this.rollbackRequester});}
-  restore(saved: ReturnType<Rounds["checkpoint"]>|({state:RoundState}&Pick<ReturnType<Rounds["checkpoint"]>,"ideas"|"votes"|"shortlist"|"winner"|"order"|"serial"|"version"|"rollbackVotes">),savedAt=this.real()){
-    // Read Phase 9 files once; new checkpoints contain source state only.
-    const data="state" in saved?{...saved.state,...saved,rate:saved.state.clockRate,rollbackRequester:saved.state.rollback?.requester??""}:saved;
+  restore(data:ReturnType<Rounds["checkpoint"]>,savedAt=this.real()){
     this.ideas.clear();this.support.clear();this.votes.clear();this.counts.clear();
     for(const raw of data.ideas){const idea={...raw,normalized:normalizeIdea(raw.text),supporters:new Set(raw.supporters)};this.ideas.set(idea.id,idea);for(const user of idea.supporters)this.support.set(user,idea.id);}
     this.shortlist=data.shortlist.map(id=>this.ideas.get(id)!);

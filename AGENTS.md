@@ -988,11 +988,13 @@ copy it into the repo. This file is the implementation contract, not a brief cop
 
 - Persist versioned private source state atomically. Never persist credentials in
   world checkpoints or derived views/indexes. Rebuild indexes when loading.
-- Flush critical phase changes, summons and acknowledgements. Read-only HTTP
-  requests must not write checkpoints; idle processes must not periodically fsync.
+- Bound the maximum wait for dirty state; flush phase changes and confirmed
+  receipts as required. Read-only requests and idle processes must not write.
+  Validate the whole checkpoint before restoration; preserve rejected files aside.
 - Never replay interrupted provider calls automatically. Verify orphan ownership
   before killing a process; leave unrelated user commits and files untouched.
 - Serialize runtime work through one server owner and its operation queue. Tag a
   checked candidate before fast-forwarding master; restore through forward commits.
+  Recovery must remove a reserved version tag if master never reached it.
 - Keep implementation notes and completed measurements in docs/, rather than
   describing a pending integration or measurement as complete in this contract.

@@ -50,14 +50,14 @@ export class Versions {
     const next = { ...version, receipt: randomUUID(), healthy: !wait }; this.data.current = next; this.data.history.push(next); await this.save();
     let receipt: Promise<boolean> = Promise.resolve(true);
     if (wait) receipt = new Promise(resolve => {
-      const timer = setTimeout(() => { this.waiters.delete(next.receipt); resolve(false); }, 8000);
+      const timer = setTimeout(() => { void this.acknowledge(next.version,next.receipt,false); }, 8000);
       this.waiters.set(next.receipt, { resolve, timer });
     });
-    this.publish(next); const ok = await receipt; next.healthy = ok; await this.save(); return ok;
+    this.publish(next);return receipt;
   }
-  acknowledge(version: number, receipt: string, ok: boolean) {
+  async acknowledge(version: number, receipt: string, ok: boolean) {
     if (this.data.current?.version !== version || this.data.current.receipt !== receipt) return false;
-    const pending = this.waiters.get(receipt); if (pending) { this.data.current.healthy=ok;clearTimeout(pending.timer); this.waiters.delete(receipt); pending.resolve(ok); }
+    const pending = this.waiters.get(receipt); if (pending) { this.data.current.healthy=ok;clearTimeout(pending.timer); this.waiters.delete(receipt);try{await this.save();pending.resolve(ok);}catch{this.data.current.healthy=false;pending.resolve(false);return false;} }
     return true;
   }
   /** Rollback is to the prior successful activation, with source content retained by its tag. */

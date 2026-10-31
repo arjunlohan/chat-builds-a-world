@@ -60,7 +60,7 @@ test("version recovery checks artifact hashes and receipt identity",async()=>{
  const root=await mkdtemp(join(tmpdir(),"versions-unit-"));
  try { const store=new Versions(root,()=>{});const module=await store.artifact("test","world/modules/test.ts","export default () => ({});");
   await store.activate({version:1,tag:"v1",commit:"base",title:"Test",requester:"viewer",modules:[module]},false);
-  assert.equal(store.acknowledge(1,"wrong",true),false);assert.equal(store.acknowledge(1,store.current!.receipt,true),true);
+  assert.equal(await store.acknowledge(1,"wrong",true),false);assert.equal(await store.acknowledge(1,store.current!.receipt,true),true);
   const restored=new Versions(root,()=>{});await restored.init();assert.equal(restored.current!.tag,"v1");
   await writeFile(join(root,"state/modules",`${module.hash}.js`),"tampered");await assert.rejects(()=>new Versions(root,()=>{}).init(),/hash mismatch/);
  }finally{await rm(root,{recursive:true,force:true})}
