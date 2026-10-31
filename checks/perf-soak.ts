@@ -52,5 +52,5 @@ try{
   await delay(1000);
  }
  await sample(Math.round(seconds/60));report.status=aborted?"cancelled":"complete";report.finishedAt=new Date().toISOString();report.worktrees=(await git(root,"worktree","list","--porcelain")).split("worktree ").length-1;await page.screenshot({path:output.replace(/\.json$/,".png")});await save();
- if(report.errors.length||report.worktrees!==1||report.samples.some(s=>s.fps<50||s.citizens!==300))process.exitCode=1;
+ if(aborted||report.errors.length||report.worktrees!==1||report.samples.some(s=>s.fps<50||s.citizens!==300))process.exitCode=1;
 }catch(error){report.status="failed";report.errors.push(error instanceof Error?error.message:"Soak failed");await save();process.exitCode=1;}finally{inspector?.close();await world?.browser.close();if(server?.pid)try{process.kill(-server.pid,"SIGTERM");}catch{}await delay(500);await rm(root,{recursive:true,force:true});}
