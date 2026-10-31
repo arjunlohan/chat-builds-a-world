@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import {test} from "node:test";
+import {mkdtemp,readFile,writeFile,rm} from "node:fs/promises";
+import {join} from "node:path";
+import {tmpdir} from "node:os";
+import {Checkpoint} from "../server/persistence/checkpoint.js";
+import {acquireLock} from "../server/runtime/lock.js";
+import {WorldPipeline} from "../server/pipeline.js";
+import {Rounds,DEMO_MS,ROUND_MS} from "../server/rounds/index.js";
+import {SummonService} from "../server/summon/index.js";
+import {fixtureProvider} from "../server/summon/provider.js";
+import type {GuardResult} from "../server/guard/index.js";
+const chat=(id:string,text:string)=>({id,userId:id,displayName:id,color:"#79D7CF",text,timestamp:0});
+test("atomic checkpoints coalesce bursts, recover data and reject malformed state",async()=>{
+ const root=await mkdtemp(join(tmpdir(),"checkpoint-"));let value=0,captures=0;const checkpoint=new Checkpoint(join(root,"world.json"),()=>{captures++;return {value};});
+ try{for(let i=0;i<1000;i++){value=i;checkpoint.changed();}await checkpoint.flush();assert.equal(captures,1);assert.deepEqual(await checkpoint.load(),{value:999});assert.equal(JSON.parse(await readFile(join(root,"world.json"),"utf8")).format,1);await checkpoint.close();await writeFile(join(root,"world.json"),"broken");await assert.rejects(checkpoint.load(),/invalid/);}finally{await rm(root,{recursive:true,force:true});}
+});
+test("process lock excludes another owner and reclaims dead owners",async()=>{
+ const root=await mkdtemp(join(tmpdir(),"flight-lock-"));try{const release=await acquireLock(root);await assert.rejects(acquireLock(root),/Another build/);await release();await writeFile(join(root,"state/build.lock"),JSON.stringify({pid:99999999,token:"dead"}));const next=await acquireLock(root);await next();}finally{await rm(root,{recursive:true,force:true});}
+});
+test("world and vote checkpoints preserve roster, replacement ballots and paused time",()=>{
+ let now=1000;const pipeline=new WorldPipeline(()=>now),rounds=new Rounds({now:()=>now,publish(){}});pipeline.attachRounds(rounds);pipeline.chat(chat("one","!idea A small lantern"));pipeline.chat(chat("two","!idea A jade arch"));rounds.skip();pipeline.chat(chat("voter","!vote 1"));now+=1000;rounds.setPaused(true);const world=pipeline.checkpoint(),state=rounds.checkpoint();now+=50000;
+ const restoredPipeline=new WorldPipeline(()=>now),restored=new Rounds({now:()=>now,publish(){}});restoredPipeline.restore(world);restored.restore(state);assert.deepEqual(restoredPipeline.roster.list(),pipeline.roster.list());assert.equal(restored.snapshot().round,state.state.round);assert.equal(restored.snapshot().phase,"voting");assert.equal(restored.snapshot().paused,true);assert.equal(restored.snapshot().endsAt-restored.snapshot().now,state.state.endsAt-state.state.now);restored.setPaused(false);restored.command({...chat("replace","!vote 2"),userId:"voter"});assert.equal(restored.snapshot().totalVotes,1);assert.deepEqual(restored.snapshot().candidates.map(c=>c.votes),[0,1]);rounds.dispose();restored.dispose();
+});
+test("veto works mid-build, refuses viewer authority and restart never replays providers",async()=>{
+ let now=0,signal:AbortSignal|undefined,calls=0;const accepted:GuardResult={verdict:"accept",reason:"Safe",title:"Lantern",spec:{moduleId:"lantern",description:"Small visual",steps:["Create"],checks:["Clean"],estimatedSeconds:60},files:["world/modules/lantern.ts"],mode:"fixture",latencyMs:0};
+ const pipeline=new WorldPipeline(()=>now),rounds=new Rounds({now:()=>now,review:()=>accepted,build:request=>{signal=request.signal;return new Promise(()=>{});},publish(){}});pipeline.attachRounds(rounds);pipeline.chat(chat("idea","!idea A lantern"));rounds.skip();rounds.skip();assert.equal(rounds.snapshot().phase,"building");const saved=rounds.checkpoint();assert.equal(pipeline.chat(chat("viewer","!veto")).accepted,false);now+=300;assert.equal(pipeline.chat(chat("mod","!veto"),{moderator:true}).accepted,true);assert.equal(signal!.aborted,true);assert.equal(rounds.snapshot().phase,"ideas");
+ const restored=new Rounds({now:()=>now,review:()=>{calls++;return accepted;},build:async()=>{calls++;throw new Error("must not replay");},publish(){}});restored.restore(saved);assert.equal(calls,0);assert.equal(restored.snapshot().round,saved.state.round);assert.equal(restored.snapshot().phase,"ideas");assert.equal(restored.snapshot().build.status,"failed");restored.dispose();rounds.dispose();
+});
+test("summon state restores scenes and original receipts without provider calls",async()=>{
+ const options={config:{model:"fixture",effort:"max",tier:"ultrafast"},provider:fixtureProvider,mode:"fixture" as const,publish(){},reply(){},record(){}};const first=new SummonService(options);await first.submit(chat("summoner","!summon a jellyfish"));const saved=first.checkpoint(),restored=new SummonService({...options,provider:{async generate(){throw new Error("must not call provider");}}});restored.restore(saved);assert.deepEqual(restored.active(),first.active());assert.equal(await restored.acknowledge(saved.scenes[0]!.id,saved.scenes[0]!.receipt),true);
+});
+test("demo mode shortens voting without weakening guard or builder deadlines",()=>{assert.deepEqual(DEMO_MS,{ideas:20000,voting:10000,guarding:45000,building:180000,rollback:10000});assert.equal(DEMO_MS.guarding,ROUND_MS.guarding);assert.equal(DEMO_MS.building,ROUND_MS.building);});
+
+test("crash recovery discards an unpromoted worktree and forward-restores an unacknowledged ship",async()=>{
+ const {mkdir}=await import("node:fs/promises"),{git,createTree,commitTree,promote}=await import("../server/runner/git.js"),{Versions}=await import("../server/versions/index.js"),{Runner}=await import("../server/runner/index.js");
+ const root=await mkdtemp(join(tmpdir(),"recovery-"));try{
+  await mkdir(join(root,"world/modules"),{recursive:true});await writeFile(join(root,".gitignore"),"state/\nworktrees/\n");await writeFile(join(root,"world/modules/visual.ts"),"export default 1;\n");await git(root,"init","-b","master");await git(root,"add",".");await git(root,"-c","user.name=Test","-c","user.email=test@localhost","commit","--no-gpg-sign","-m","Base");
+  const base=await git(root,"rev-parse","HEAD"),versions=new Versions(root,()=>{});await versions.baselineAt(base);const runner=new Runner({root,versions,feed(){},announce:async()=>{}});
+  let tree=await createTree(root,1,base);await versions.setPending({path:tree,base,version:1});await writeFile(join(tree,"world/modules/visual.ts"),"partial edit\n");await runner.recover();assert.equal(versions.pending,undefined);assert.equal(await git(root,"rev-parse","HEAD"),base);assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);
+  tree=await createTree(root,1,base);await versions.setPending({path:tree,base,version:1});await writeFile(join(tree,"world/modules/visual.ts"),"export default 2;\n");const candidate=await commitTree(tree,"v1 interrupted activation");await promote(root,base,candidate,"v1");await runner.recover();assert.equal(await readFile(join(root,"world/modules/visual.ts"),"utf8"),"export default 1;\n");assert.equal(versions.current?.restoredFrom,"v0");assert.equal(versions.current?.tag,"v2");assert.equal(versions.pending,undefined);assert.equal(await git(root,"status","--porcelain"),"");assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);versions.close();await runner.close();
+ }finally{await rm(root,{recursive:true,force:true});}
+});

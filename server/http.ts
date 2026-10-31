@@ -36,7 +36,7 @@ async function post(request: IncomingMessage, response: ServerResponse, handler:
   catch {request.resume();if(!response.headersSent)json(response,400,{error:"Invalid JSON event or body; maximum 8 KiB, application/json required"});}
 }
 
-export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { broadcasterId?:string; simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
+export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { durable?:()=>Promise<void>; broadcasterId?:string; simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
   const assets = await buildClient();
   const pages = new Map([
     ["/world", await readFile(new URL("../world/index.html", import.meta.url))],
@@ -64,7 +64,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
             if(!automation?.live||!rounds||rounds.snapshot().phase!=="ideas"||rounds.snapshot().totalIdeas){json(response,409,{error:"Live runner requires a key and an empty round."});return;}
             if(typeof input.idea!=="string")throw new Error();const round=rounds.snapshot().round;
             const result=pipeline.chat({id:`live-${Date.now()}`,userId:"live-bench",displayName:"LiveBench",color:"#E5C775",text:`!idea ${input.idea}`},{moderator:false,source:"sim"});
-            if(!result.accepted){json(response,400,result);return;}rounds.skip();rounds.skip();json(response,200,{round});return;
+            if(!result.accepted){json(response,400,result);return;}rounds.skip();rounds.skip();await automation?.durable?.();json(response,200,{round});return;
           }
           case "/modules/fault": {
             const current=versions?.current;
@@ -74,21 +74,21 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
           }
           case "/modules/ack": {
             const accepted=primary(input.clientId)&&typeof input.version==="number"&&typeof input.receipt==="string"&&typeof input.ok==="boolean"&&!!versions?.acknowledge(input.version,input.receipt,input.ok);
-            json(response,accepted?200:409,{accepted});return;
+            await automation?.durable?.();json(response,accepted?200:409,{accepted});return;
           }
           case "/summon/ack": {
             const accepted=typeof input.id==="string"&&typeof input.receipt==="string"&&!!await summons?.acknowledge(input.id,input.receipt,typeof input.error==="string"?input.error:undefined,primary(input.clientId));
-            json(response,accepted?200:409,{accepted});return;
+            await automation?.durable?.();json(response,accepted?200:409,{accepted});return;
           }
           case "/sim/round": {
             if(typeof input.outcome!=="string"||!["ship","fail","timeout"].includes(input.outcome))throw new Error();
             automation?.setOutcome?.(input.outcome);
             const result=rounds?.startSimulation(input.outcome as "ship"|"fail"|"timeout")??{accepted:false,reason:"simulation-disabled"};
-            json(response,result.accepted?200:result.reason==="simulation-disabled"?403:409,result);return;
+            await automation?.durable?.();json(response,result.accepted?200:result.reason==="simulation-disabled"?403:409,result);return;
           }
-          case "/sim/chat": json(response,200,pipeline.chat(input,{moderator:false,source:"sim"}));return;
-          case "/sim/eventsub": {const raid=incomingRaid(input,automation?.broadcasterId??"sim-broadcaster");json(response,200,raid?pipeline.raid(raid):{accepted:false,reason:"not-incoming-raid"});return;}
-          case "/sim/raid": json(response,200,pipeline.raid(input));return;
+          case "/sim/chat": {const result=pipeline.chat(input,{moderator:false,source:"sim"});await automation?.durable?.();json(response,200,result);return;}
+          case "/sim/eventsub": {const raid=incomingRaid(input,automation?.broadcasterId??"sim-broadcaster");const result=raid?pipeline.raid(raid):{accepted:false,reason:"not-incoming-raid"};await automation?.durable?.();json(response,200,result);return;}
+          case "/sim/raid": {const result=pipeline.raid(input);await automation?.durable?.();json(response,200,result);return;}
         }
       });return;
     }
@@ -104,7 +104,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     }
     if (path === "/api/rounds") { json(response, rounds ? 200 : 503, rounds?.snapshot() ?? { error: "Rounds unavailable" }); return; }
     if (path === "/api/history") { response.writeHead(200,{"Content-Type":"application/json; charset=utf-8"}).end(versions?.serializedHistory()??'{"versions":[]}');return; }
-    if (path === "/api/world") { json(response, 200, pipeline.snapshot()); return; }
+    if (path === "/api/world") { await automation?.durable?.();json(response, 200, pipeline.snapshot()); return; }
     if (path === "/events") {
       if (request.method === "HEAD") { response.writeHead(200).end(); return; }
       if (clients.size >= 16) { json(response, 503, { error: "Too many viewers on the local stream" }); return; }

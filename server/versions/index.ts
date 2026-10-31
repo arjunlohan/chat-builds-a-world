@@ -1,13 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import {atomicJson} from "../persistence/atomic.js";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 export interface ModuleArtifact { id: string; url: string; hash: string; file: string }
 export interface WorldVersion { version: number; tag: string; commit: string; title: string; requester: string; modules: ModuleArtifact[]; receipt: string; healthy?: boolean; restoredFrom?: string }
 export type HistoryEntry = Pick<WorldVersion,"version"|"tag"|"commit"|"title"|"requester"|"modules">;
-interface Stored { baseline?: string; counter: number; current: WorldVersion | null; history: WorldVersion[]; pending?: { path: string; base: string; version: number } }
+interface Stored { baseline?: string; counter: number; current: WorldVersion | null; history: WorldVersion[]; pending?: { path: string; base: string; version: number;process?:number;owner?:number } }
 export class Versions {
   private data: Stored = { counter: 0, current: null, history: [] };
   private replayJson:string|undefined;
+  private writing:Promise<void>=Promise.resolve();
   private readonly bundles = new Map<string, string>();
   private waiters = new Map<string, { resolve(ok: boolean): void; timer: ReturnType<typeof setTimeout> }>();
   constructor(readonly root: string, private publish: (version: WorldVersion | null) => void) {}
@@ -34,9 +36,8 @@ export class Versions {
   get pending() { return this.data.pending; }
   async save() {
     this.replayJson=undefined;
-    await mkdir(join(this.root, "state"), { recursive: true });
-    const file = join(this.root, "state/versions.json"), temporary = `${file}.${randomUUID()}.tmp`;
-    await writeFile(temporary, JSON.stringify(this.data), { mode: 0o600 }); await rename(temporary, file);
+    const write=this.writing.then(()=>atomicJson(join(this.root,"state/versions.json"),this.data));
+    this.writing=write.catch(()=>{});await write;
   }
   async reserve(minimum = 1) { return Math.max(this.data.counter + 1, minimum); }
   async setPending(value?: Stored["pending"]) { if (value) this.data.pending = value; else delete this.data.pending; await this.save(); }

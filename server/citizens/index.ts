@@ -27,6 +27,17 @@ export class CitizenRoster {
   list() { return [...this.citizens.values()]; }
   get(id: string) { return this.citizens.get(id); }
 
+  restore(saved: readonly CitizenState[]) {
+    if(!Array.isArray(saved)||saved.length>CITIZEN_LIMIT)throw new Error("Invalid saved citizen roster");
+    this.citizens.clear();this.seats.clear();this.occupied.clear();
+    for(const value of saved){
+      const seat=homes.findIndex(h=>h.every((n,i)=>n===value.home?.[i]));
+      if(typeof value.id!=="string"||!/^[a-zA-Z0-9_-]{1,128}$/.test(value.id)||this.citizens.has(value.id)||typeof value.displayName!=="string"||value.displayName.length>64||!/^#[a-f0-9]{6}$/i.test(value.color)||!Number.isFinite(value.lastActive)||seat<0||this.occupied.has(seat)||typeof value.speech!=="string"||value.speech.length>500||!Number.isFinite(value.speechAt)||!Number.isFinite(value.commandAt))throw new Error("Invalid saved citizen");
+      if(value.command&&(!["jump","dance","home","follow"].includes(value.command.kind)||(value.command.kind==="follow"&&typeof value.command.targetId!=="string")))throw new Error("Invalid saved citizen command");
+      if(value.entry&&(!Array.isArray(value.entry.from)||value.entry.from.length!==3||!value.entry.from.every(Number.isFinite)||!Number.isFinite(value.entry.at)||!Number.isFinite(value.entry.delay)||value.entry.delay<0||value.entry.delay>30000))throw new Error("Invalid saved entry");
+      const citizen=Object.freeze({...value,home:Object.freeze([...value.home] as [number,number,number]),command:value.command?Object.freeze({...value.command}):null,...(value.entry?{entry:Object.freeze({...value.entry,from:Object.freeze([...value.entry.from] as [number,number,number])})}:{})});this.citizens.set(value.id,citizen);this.seats.set(value.id,seat);this.occupied.add(seat);
+    }
+  }
   private admit(desired: number, now: number) {
     const needed=Math.max(0,desired-(CITIZEN_LIMIT-this.size));
     const removed=needed?this.list().filter(c=>now-c.lastActive>=QUIET_MS).sort((a,b)=>a.lastActive-b.lastActive||a.id.localeCompare(b.id)).slice(0,needed).map(c=>c.id):[];

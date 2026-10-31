@@ -17,5 +17,5 @@ export function readConfig() {
     model: process.env.SUMMON_MODEL ?? "openai.gpt-6.1-sol",
     effort: process.env.SUMMON_REASONING_EFFORT ?? "max", tier: process.env.SUMMON_SERVICE_TIER ?? "ultrafast",
   };
-  return { broadcasterId: twitch?.broadcasterId??"sim-broadcaster", simulationAllowed: process.env.SIMULATION_ALLOWED === "1" || (process.env.SIMULATION_ALLOWED !== "0" && !twitch), fixtureMode: process.env.SIMULATION_MODE === "fixture", summon, host: "127.0.0.1", port, twitch } as const;
+  return { demoMode:process.env.DEMO_MODE==="1", broadcasterId: twitch?.broadcasterId??"sim-broadcaster", simulationAllowed: process.env.SIMULATION_ALLOWED === "1" || (process.env.SIMULATION_ALLOWED !== "0" && !twitch), fixtureMode: process.env.SIMULATION_MODE === "fixture", summon, host: "127.0.0.1", port, twitch } as const;
 }

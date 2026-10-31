@@ -1,3 +1,5 @@
+import {withLock} from "../runtime/lock.js";
+import {stopOrphan} from "./recovery.js";
 import { ACTIVE_MODULE_CAP } from "../../world/shared/limits.js";
 import { reverted } from "../runtime/results.js";
 import { OperationQueue } from "../runtime/queue.js";
@@ -28,11 +30,24 @@ export class Runner {
   private readonly record: NonNullable<Options["record"]>;
   readonly root: string;
   constructor(private options: Options) { this.root = resolve(options.root); this.record = options.record ?? metricWriter(join(this.root, "state"), "runner-metrics.jsonl"); }
+  async close(){await this.queue.close();}
   async recover() {
-    const pending = this.options.versions.pending;
-    if (pending && pending.path === join(this.root, "worktrees", `v${pending.version}`)) {
-      await removeTree(this.root, pending.path); await this.options.versions.setPending();
-    }
+    await withLock(this.root,async()=>{
+      const pending=this.options.versions.pending,current=this.options.versions.current;
+      if(pending&&pending.path!==join(this.root,"worktrees",`v${pending.version}`))throw new Error("Invalid pending worktree recovery path.");
+      if(pending?.process&&pending.owner)await stopOrphan(pending.process,pending.owner,pending.path);
+      const head=await git(this.root,"rev-parse","master"),advanced=!!pending&&head!==pending.base;
+      if(advanced||current?.healthy===false){
+        const tag=`v${advanced?pending!.version:current!.version}`,tagHead=await git(this.root,"rev-parse",`refs/tags/${tag}`).catch(()=>"");
+        if(head!==tagHead)throw new Error("Master advanced outside the interrupted run; recovery left it unchanged.");
+        await cleanMaster(this.root);
+        const target=(current?.healthy===true?current:this.options.versions.previous())??(this.options.versions.baseline?{commit:this.options.versions.baseline,tag:"v0",modules:[]}:null);if(!target)throw new Error("No known-good version is available for recovery.");
+        if(pending)await removeTree(this.root,pending.path);
+        const version=await this.reserve(),tree=await createTree(this.root,version,head);await this.options.versions.setPending({path:tree,base:head,version});
+        try{await git(tree,"restore","--source",target.commit,"--staged","--worktree","--","world/modules");const commit=await commitTree(tree,`v${version}: recover interrupted activation`);await promote(this.root,head,commit,`v${version}`);await this.options.versions.activate({version,tag:`v${version}`,commit,title:"Recovered previous world",requester:"system",modules:target.modules,restoredFrom:target.tag},false);}finally{await removeTree(this.root,tree);}
+      }else if(pending)await removeTree(this.root,pending.path);
+      await this.options.versions.setPending();
+    });
   }
   private async reserve() {
     const tags = (await git(this.root, "tag", "--list", "v*")).split("\n").filter(tag => /^v[1-9][0-9]*$/.test(tag)).map(tag => Number(tag.slice(1)));
@@ -42,7 +57,7 @@ export class Runner {
     try { await this.record({ at: Date.now(), mode, ...result }); } catch { /* Metrics are never part of promotion or recovery. */ }
   }
   async build(request: BuildRequest): Promise<RunResult> {
-    return this.queue.enqueue(signal => this.buildNow({ ...request, signal: AbortSignal.any([signal, request.signal]) }));
+    return this.queue.enqueue(signal => withLock(this.root,()=>this.buildNow({ ...request, signal: AbortSignal.any([signal, request.signal]) })).catch(error=>reverted(redact(error instanceof Error?error.message:"Build lock unavailable.",protectedValues(this.options.env??process.env)))));
   }
   private async buildNow(request: BuildRequest): Promise<RunResult> {
     const start = performance.now(), controller = new AbortController();
@@ -64,7 +79,7 @@ export class Runner {
       const before = await inventory(tree); feed("plan", `Created isolated worktree v${version}.`);
       const sourceEnv = this.options.env ?? process.env;
       const builderStart = performance.now();
-      try { tokens = await (this.options.builder ?? runCodex)({ root: this.root, tree, bin: this.options.bin ?? sourceEnv.CODEX_BIN ?? "codex", env: sourceEnv, decision: approved, signal, feed, ...(this.options.timeoutMs ? { timeoutMs: this.options.timeoutMs } : {}) }); } finally { builderMs = Math.round(performance.now()-builderStart); }
+      try { tokens = await (this.options.builder ?? runCodex)({ root: this.root, tree, bin: this.options.bin ?? sourceEnv.CODEX_BIN ?? "codex", env: sourceEnv, decision: approved, signal, feed, onSpawn:async pid=>{await this.options.versions.setPending({path:tree,base,version,process:pid,owner:process.pid});}, ...(this.options.timeoutMs ? { timeoutMs: this.options.timeoutMs } : {}) }); } finally { builderMs = Math.round(performance.now()-builderStart); }
       await auditDiff(tree, base, before, approved.files); feed("check", "Approved paths verified; compiling the candidate.");
       const secrets = protectedValues(sourceEnv);
       for (const file of approved.files) {
@@ -113,7 +128,7 @@ export class Runner {
     }
   }
   async rollback(requester: string, automatic = false): Promise<RunResult> {
-    return this.queue.enqueue(() => this.rollbackNow(requester, automatic), automatic);
+    return this.queue.enqueue(() => withLock(this.root,()=>this.rollbackNow(requester, automatic)).catch(error=>reverted(error instanceof Error?error.message:"Rollback lock unavailable.")), automatic);
   }
   private async rollbackNow(requester: string, automatic: boolean): Promise<RunResult> {
     const baseline = this.options.versions.baseline;

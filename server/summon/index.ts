@@ -1,8 +1,8 @@
 import { protectedValues } from "../runtime/process.js";
-import { SummonReservations } from "../../world/shared/limits.js";
+import { SummonReservations, ResourceLedger, SUMMON_POOL, SUMMON_COUNT, emptyUsage } from "../../world/shared/limits.js";
 import { randomUUID } from "node:crypto";
 import type { ChatEvent, LaneEvent, SummonState } from "../contracts.js";
-import { normalizeSceneSpec, specUsage } from "./scene-spec.js";
+import { normalizeSceneSpec, parseSceneSpec, specUsage } from "./scene-spec.js";
 import { bedrockProvider, fixtureProvider, SummonError, type Provider, type SummonConfig, type TokenUsage } from "./provider.js";
 
 export const USER_COOLDOWN = 60_000, GLOBAL_COOLDOWN = 5000;
@@ -38,6 +38,16 @@ export class SummonService {
   private readonly record: NonNullable<Options["record"]>;
   constructor(private readonly options: Options) { this.now = options.now ?? Date.now; this.record = options.record ?? metricWriter(); }
   active() { return [...this.scenes.values()]; }
+  checkpoint(){return {scenes:this.active(),jobs:[...this.jobs.values()].map(job=>({public:job.public,requester:job.chat.displayName,userId:job.chat.userId,color:job.chat.color,source:job.source,receipt:job.receipt})),users:[...this.users],lastGlobal:Number.isFinite(this.lastGlobal)?this.lastGlobal:null};}
+  restore(saved:ReturnType<SummonService["checkpoint"]>){
+    if(!saved||!Array.isArray(saved.scenes)||saved.scenes.length>SUMMON_COUNT||!Array.isArray(saved.jobs)||saved.jobs.length>150)throw new Error("Invalid saved summons");
+    const ledger=new ResourceLedger(emptyUsage(),SUMMON_POOL);
+    for(const scene of saved.scenes){const spec=parseSceneSpec(JSON.stringify(scene.spec));if(typeof scene.id!=="string"||typeof scene.receipt!=="string"||typeof scene.requester!=="string")throw new Error("Invalid saved scene metadata");ledger.reserve(scene.id,specUsage(spec));}
+    for(const id of this.scenes.keys())this.reservations.release(id);this.scenes.clear();this.jobs.clear();this.users.clear();
+    for(const raw of saved.jobs){const job=structuredClone(raw.public);if(job.status==="generating"){job.status="failed";job.reason="interrupted-restart";}this.jobs.set(job.id,{public:job,chat:{id:job.id,userId:raw.userId,displayName:raw.requester,color:raw.color,text:"!summon restored",timestamp:job.requestedAt},source:raw.source,receipt:raw.receipt,logged:job.status!=="awaiting-render"});}
+    for(const scene of saved.scenes){if(!this.jobs.has(scene.id))throw new Error("Saved scene has no job");this.reservations.reserve(scene.id);this.reservations.commit(scene.id,specUsage(scene.spec));this.scenes.set(scene.id,structuredClone(scene));}
+    for(const [id,at] of saved.users){if(typeof id!=="string"||!Number.isFinite(at))throw new Error("Invalid saved cooldown");this.users.set(id,at);}this.lastGlobal=saved.lastGlobal??-Infinity;
+  }
   status(id: string) { const job = this.jobs.get(id)?.public; return job ? structuredClone(job) : undefined; }
   private async log(job: InternalJob) {
     if (job.logged) return;
