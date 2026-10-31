@@ -59,6 +59,8 @@ Twitch networking and credentials stay on the Node server.
 - `server/citizens/`: authoritative roster, activity/expiry and command routing.
 - `server/summon/`: provider adapter, moderation/rate limits, schema and validator.
 - `server/rounds/`: proposals, top-three votes and rollback votes.
+- `server/reactions/`: moderated distinct-viewer charge windows, separate `!react` votes, bounded playback queue and pause-aware persisted clock.
+- `assets/blender/`: offline procedural animation sources; `assets/reactions/`: committed, silent VP9 alpha WebMs served locally. Runtime builders cannot edit either path.
 - `server/guard/`: read-only Codex review; low effort and JSON schema output.
 - `server/runner/`: worktree builder, medium effort, feed, path checks and checks.
 - `server/versions/`: merges, tags, attribution, snapshots and recovery.
@@ -978,6 +980,24 @@ Full JSON schema (keep identical to the canonical file):
   Aim builder geometry at a clear 96x96px silhouette. The runner benchmark freezes
   its own Chromium page and polls world/round state outside the page, then
   resumes for hot swap. Keep this orchestration out of the production renderer.
+
+## Chat reaction contract
+
+Only already-moderated chat may charge reactions. Match whole tokens with the
+catalog aliases in `server/reactions/catalog.ts`; commands never charge meters.
+Keep thresholds, windows and cooldowns named in `server/reactions/index.ts`.
+There is at most one playing clip and one queued clip. A vote winner may replace
+a queued chat clip; it does not interrupt playback or duplicate an active clip.
+Reaction votes use `!react`, never `!vote`, and defer/cancel during idea or rollback
+voting. Moderator pause freezes the reaction clock and browser playback.
+Checkpoint the source state and validate it at the existing checkpoint boundary.
+
+Clips are prerendered original Blender artwork, not generated video or emote
+reproductions. Participation meters show actual distinct viewers, not rendering
+progress. Keep transparent first/last frames, silent VP9 alpha WebMs, same-origin
+media/CSP, and the runner's existing asset size limit. The `/capture` page stacks
+the unmodified world and overlay; it supplies the normal live world connection.
+Blender and ffmpeg must remain optional offline tools, outside `pnpm check`.
 
 ## Working agreements
 

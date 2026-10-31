@@ -104,3 +104,15 @@ test("raid EventSub endpoint uses the live target filter and does not accept for
  try{assert.equal((await (await send(raidFixture("wrong",150,"Clouds","wrong"))).json()).accepted,false);const raw=raidFixture("target",150,"Clouds","correct");assert.equal((await (await send(raw)).json()).admitted,150);assert.equal((await (await send(raw)).json()).reason,"duplicate");const fake={...raw,payload:{...raw.payload,subscription:{type:"channel.chat.message"}}};assert.equal((await (await send(fake)).json()).accepted,false);assert.equal(p.roster.size,150);}
  finally{app.closeStreams();await new Promise<void>(r=>app.server.close(()=>r()));}
 });
+
+test("reaction media is same-origin, ranged and simulation vote routes require authorization",async()=>{
+ const {Reactions}=await import('../server/reactions/index.js');const pipeline=new WorldPipeline(),reactions=new Reactions(state=>pipeline.publish({type:'reactions',state}),()=>false);pipeline.attachReactions(reactions);
+ const app=await createWorldServer(pipeline,undefined,undefined,undefined,{live:false,simulationAllowed:false,async fault(){}});await new Promise<void>(r=>app.server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+ try{
+  const full=await fetch(base+'/reactions/hype.webm');assert.equal(full.status,200);assert.equal(full.headers.get('content-type'),'video/webm');assert.match(full.headers.get('content-security-policy')!,/media-src 'self'/);const bytes=new Uint8Array(await full.arrayBuffer());assert.ok(bytes.length>1000);
+  const range=await fetch(base+'/reactions/hype.webm',{headers:{Range:'bytes=0-15'}});assert.equal(range.status,206);assert.deepEqual(new Uint8Array(await range.arrayBuffer()),bytes.slice(0,16));assert.equal((await fetch(base+'/reactions/hype.webm',{headers:{Range:'bytes=99999999-'}})).status,416);
+  assert.equal((await fetch(base+'/reactions/unknown.webm')).status,404);assert.equal((await fetch(base+'/reactions/hype.webm',{method:'HEAD'})).headers.get('content-length'),String(bytes.length));
+  assert.equal((await fetch(base+'/sim/reactions/vote',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,403);
+  assert.equal((await fetch(base+'/capture')).status,200);assert.equal((await fetch(base+'/assets/capture.js')).status,200);
+ }finally{app.closeStreams();app.server.closeAllConnections();await new Promise<void>(r=>app.server.close(()=>r()));}
+});

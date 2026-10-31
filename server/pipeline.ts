@@ -92,7 +92,7 @@ export class WorldPipeline {
     if (mod) {
       if (!authority.moderator) return { accepted: false, reason: "moderator-only" };
       const action = (mod[1]!.toLowerCase()==="veto"?"skip":mod[1]!.toLowerCase()) as "pause" | "skip" | "clear";
-      if (action === "pause") { this.paused = !this.paused; this.rounds?.setPaused(this.paused); this.reactions?.setPaused(this.paused); }
+      if (action === "pause") { this.paused = !this.paused; this.reactions?.setPaused(this.paused); this.rounds?.setPaused(this.paused); }
       if (action === "skip") this.rounds?.skip();
       if (action === "clear") void this.summonLane?.clearLatest();
       this.emit({ type: "control", revision: ++this.revision, now, action, paused: this.paused });

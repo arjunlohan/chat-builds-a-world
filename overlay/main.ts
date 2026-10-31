@@ -1,3 +1,4 @@
+import {reactionOverlay} from "./reactions.js";
 import "./style.css";
 import type { WorldEvent } from "../server/contracts.js";
 import type { RoundState } from "../server/rounds/types.js";
@@ -14,8 +15,9 @@ const command = el("p", "command", "Waiting for state"), mode = el("span", "mode
 const phaseCopy = el("div", "phase-copy"); phaseCopy.append(kicker, title, command); phase.append(phaseCopy, countdown, mode, connection);
 const ideaQueue = queue(), voteBars = votes(), feed = codexFeed(), history = timeline(), moments = toasts();
 const left = el("div", "rail left-rail"), right = el("div", "rail right-rail");
-left.append(phase, ideaQueue.root, voteBars.root); right.append(feed.root, history.root);
-root.append(left, right, moments.root);
+const reactions=reactionOverlay();
+left.append(phase, ideaQueue.root, voteBars.root, reactions.root); right.append(feed.root, history.root);
+root.append(left, right, moments.root,reactions.video);
 let phaseAnimation: Animation|undefined;
 let state: RoundState | null = null, received = 0, toastKey = "";
 function update(value: RoundState) {
@@ -34,6 +36,7 @@ function update(value: RoundState) {
   ideaQueue.update(value); voteBars.update(value); feed.update(value); history.update(value); clock();
 }
 function clock() {
+  reactions.clock();
   if (!state) return;
   const elapsed = performance.now() - received;
   const seconds = Math.max(0, Math.ceil((state.endsAt - state.now - (state.paused ? 0 : elapsed * state.clockRate)) / 1000));
@@ -49,9 +52,10 @@ events.onerror = () => { connection.textContent = "RECONNECTING"; connection.cla
 events.onmessage = message => {
   try {
     const event = JSON.parse(message.data) as WorldEvent;
-    if (event.type === "snapshot" && event.rounds) update(event.rounds);
+    if (event.type === "snapshot") {if(event.rounds)update(event.rounds);if(event.reactions)reactions.update(event.reactions);}
+    if(event.type==="reactions")reactions.update(event.state);
     if (event.type === "rounds") update(event.state);
   } catch { connection.textContent = "WAITING FOR WORLD STATE"; }
 };
 const timer = setInterval(clock, 100);
-window.addEventListener("pagehide", () => { clearInterval(timer); events.close(); }, { once: true });
+window.addEventListener("pagehide", () => { clearInterval(timer); events.close(); reactions.dispose(); }, { once: true });

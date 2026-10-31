@@ -58,3 +58,11 @@ test("reaction state is validated once, survives round trip and accepts older fo
   assert.equal(validateWorldCheckpoint(f.saved),true);
  }finally{f.rounds.dispose();}
 });
+
+test("pause phase-change flush captures matching world, rounds and reaction clocks",async()=>{
+ const f=await fixture();try{
+  const {Reactions}=await import('../server/reactions/index.js');f.world.attachReactions(new Reactions(state=>f.world.publish({type:'reactions',state}),()=>false));const checks:boolean[]=[];
+  const off=f.world.subscribe(event=>{if(event.type==='rounds'){const saved={...f.saved,value:{world:f.world.checkpoint(),rounds:f.rounds.checkpoint(),summons:f.summons.checkpoint()}};checks.push(validateWorldCheckpoint(saved));assert.equal(checkpointFailure(saved),undefined);}});
+  f.world.chat(chat('pause-phase','!pause'),{moderator:true});assert.equal(f.world.snapshot().reactions?.paused,true);off();assert.deepEqual(checks,[true]);
+ }finally{f.rounds.dispose();}
+});

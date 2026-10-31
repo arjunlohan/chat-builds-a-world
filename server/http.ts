@@ -1,3 +1,4 @@
+import {CLIPS} from "./reactions/catalog.js";
 import { incomingRaid } from "./twitch/raid.js";
 import type { Versions } from "./versions/index.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -41,15 +42,17 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
   const pages = new Map([
     ["/world", await readFile(new URL("../world/index.html", import.meta.url))],
     ["/overlay", await readFile(new URL("../overlay/index.html", import.meta.url))],
+    ["/capture", await readFile(new URL("../overlay/capture.html", import.meta.url))],
     ["/history", await readFile(new URL("../world/history.html", import.meta.url))],
   ]);
+  const media=new Map(CLIPS.map(c=>[c.url,new URL(`../assets/reactions/${c.id}.webm`,import.meta.url)]));
   const clients = new Set<ServerResponse>();
   const worlds = new Map<string, ServerResponse>();
   const primary = (clientId: unknown) => typeof clientId === "string" && worlds.keys().next().value === clientId;
   const moduleFailures = new Set<string>();
   const server = createServer((request, response) => { void (async () => {
     response.on("error", () => response.destroy());
-    response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'");
+    response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'");
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Cache-Control", "no-store");
     const host = request.headers.host ?? "";
@@ -57,7 +60,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     const url = new URL(request.url ?? "/", "http://localhost"), path = url.pathname;
     if (request.headers.origin && request.headers.origin !== `http://${host}`) { json(response, 403, { error: "Same origin required" }); return; }
     if ((path.startsWith("/sim/") || path === "/runner/live") && !automation?.simulationAllowed) { request.resume(); json(response, 403, { error: "Simulation routes are disabled" }); return; }
-    if (["/runner/live","/modules/budget","/modules/fault","/modules/ack","/summon/ack","/sim/round","/sim/chat","/sim/raid","/sim/eventsub"].includes(path)) {
+    if (["/runner/live","/modules/budget","/modules/fault","/modules/ack","/summon/ack","/sim/round","/sim/chat","/sim/raid","/sim/eventsub","/sim/reactions/vote"].includes(path)) {
       await post(request,response,async input=>{
         switch(path){
           case "/modules/budget": {
@@ -89,6 +92,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
             const result=rounds?.startSimulation(input.outcome as "ship"|"fail"|"timeout")??{accepted:false,reason:"simulation-disabled"};
             return {status:result.accepted?200:result.reason==="simulation-disabled"?403:409,value:result};
           }
+          case "/sim/reactions/vote": {const accepted=pipeline.openReactionVote();return {status:accepted?200:409,value:{accepted}};}
           case "/sim/chat": {const result=pipeline.chat(input,{moderator:false,source:"sim"});return {status:200,value:result};}
           case "/sim/eventsub": {const raid=incomingRaid(input,automation?.broadcasterId??"sim-broadcaster");const result=raid?pipeline.raid(raid):{accepted:false,reason:"not-incoming-raid"};return {status:200,value:result};}
           case "/sim/raid": {const result=pipeline.raid(input);return {status:200,value:result};}
@@ -105,6 +109,13 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     if (path.startsWith("/api/summons/")) { const job=summons?.status(path.slice(13));json(response,job?200:404,job??{error:"Unknown summon"});return; }
     if (request.method !== "GET" && request.method !== "HEAD") {
       response.writeHead(405, { Allow: "GET, HEAD" }).end(); return;
+    }
+    if(media.has(path)){
+      const bytes=await readFile(media.get(path)!);const range=request.headers.range;
+      if(range){const match=/^bytes=(\d+)-(\d*)$/.exec(range);const start=Number(match?.[1]),end=Math.min(Number(match?.[2]||bytes.length-1),bytes.length-1);
+       if(!match||!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>end||start>=bytes.length){response.writeHead(416,{"Content-Range":`bytes */${bytes.length}`}).end();return;}
+       response.writeHead(206,{"Content-Type":"video/webm","Accept-Ranges":"bytes","Content-Range":`bytes ${start}-${end}/${bytes.length}`,"Content-Length":end-start+1});response.end(request.method==="HEAD"?undefined:bytes.subarray(start,end+1));
+      }else{response.writeHead(200,{"Content-Type":"video/webm","Accept-Ranges":"bytes","Content-Length":bytes.length});response.end(request.method==="HEAD"?undefined:bytes);}return;
     }
     if (path === "/api/rounds") { json(response, rounds ? 200 : 503, rounds?.snapshot() ?? { error: "Rounds unavailable" }); return; }
     if (path === "/api/history") { response.writeHead(200,{"Content-Type":"application/json; charset=utf-8"}).end(versions?.serializedHistory()??'{"versions":[]}');return; }

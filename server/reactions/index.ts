@@ -36,7 +36,7 @@ export class Reactions {
   for(let i=pool.length-1;i>0;i--){const j=Math.floor(this.random()*(i+1));[pool[i],pool[j]]=[pool[j]!,pool[i]!];}
   this.vote={options:pool.slice(0,3),endsAt:this.time+REACTION_VOTE_MS,ballots:[]};return true;
  }
- openVote(){this.clock();this.advance();if(this.paused||this.roundVoting()||this.vote)return false;const opened=this.open();if(opened)this.publish(this.snapshot());return opened;}
+ openVote(){this.clock();if(this.paused)return false;this.advance();if(this.roundVoting()||this.vote)return false;const opened=this.open();if(opened)this.publish(this.snapshot());return opened;}
  chat(userId:string,text:string):{accepted:boolean;reason?:string}{
   this.clock();if(this.paused)return {accepted:false,reason:"paused"};this.advance();
   const command=/^!react(?:\s|$)/i.test(text.trim());
@@ -50,7 +50,7 @@ export class Reactions {
   this.advance();this.publish(this.snapshot());return {accepted:true};
  }
  setPaused(paused:boolean){this.clock();this.paused=paused;this.publish(this.snapshot());}
- tick(){const before=JSON.stringify(this.snapshot());this.clock();if(!this.paused)this.advance();const after=this.snapshot();if(before!==JSON.stringify({...after,now:JSON.parse(before).now}))this.publish(after);}
+ tick(){const before=JSON.stringify({...this.snapshot(),now:0});this.clock();if(!this.paused)this.advance();const after=this.snapshot();if(before!==JSON.stringify({...after,now:0}))this.publish(after);}
  snapshot():ReactionState{return {now:this.time,paused:this.paused,threshold:threshold(this.active.size),meters:REACTIONS.map(r=>({id:r.id,count:this.charges.get(r.id)!.size,cooldownUntil:this.cooldowns.get(r.id)??0})),current:this.current?{...this.current}:null,queued:this.queued?{...this.queued}:null,vote:this.vote?{options:[...this.vote.options],endsAt:this.vote.endsAt,counts:this.counts(),voters:this.vote.ballots.length}:null,nextVoteAt:this.nextVoteAt};}
  checkpoint():ReactionCheckpoint{return {now:this.time,paused:this.paused,serial:this.serial,nextVoteAt:this.nextVoteAt,active:[...this.active],charges:[...this.charges].map(([id,entries])=>[id,[...entries]]),cooldowns:[...this.cooldowns],current:this.current,queued:this.queued,vote:this.vote};}
  restore(saved:ReactionCheckpoint,savedAt:number){this.real=this.now();this.time=saved.now+(saved.paused?0:Math.max(0,this.real-savedAt));this.paused=saved.paused;this.serial=saved.serial;this.nextVoteAt=saved.nextVoteAt;this.active=new Map(saved.active);this.charges=new Map(saved.charges.map(([id,entries])=>[id,new Map(entries)]));this.cooldowns=new Map(saved.cooldowns);this.current=saved.current;this.queued=saved.queued;this.vote=saved.vote;if(!this.paused)this.advance();}

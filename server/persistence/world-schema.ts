@@ -1,4 +1,4 @@
-import {CLIPS,REACTIONS} from "../reactions/catalog.js";
+import {CLIPS,REACTIONS,clip} from "../reactions/catalog.js";
 import {REACTION_VIEWER_CAP,type ReactionCheckpoint} from "../reactions/index.js";
 import {Ajv2020} from "ajv/dist/2020.js";
 import {parseSceneSpec,specUsage} from "../summon/scene-spec.js";
@@ -50,7 +50,7 @@ export function references(saved:WorldCheckpoint):string|undefined {
   if(r.paused!==world.paused)return "world and reaction pause state disagree";
   for(const entries of [r.active,r.cooldowns,...r.charges.map(([,entries])=>entries),r.vote?.ballots??[]])if(!unique(entries.map(([id])=>id)))return "duplicate reaction viewer or cooldown";
   if(!unique(r.charges.map(([id])=>id)))return "duplicate reaction charge meter";
-  if(r.current&&(r.current.id>r.serial||r.current.endsAt<=r.current.startedAt))return "invalid reaction takeover";
+  if(r.current&&(r.current.id>r.serial||r.current.endsAt-r.current.startedAt!==clip(r.current.clip).seconds*1000))return "invalid reaction takeover";
   if(r.current?.clip===r.queued?.clip&&r.current)return "duplicate reaction takeover";
  }
  if(world.paused!==rounds.paused)return "world and round pause state disagree";

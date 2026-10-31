@@ -84,6 +84,7 @@ Create two Browser Sources at **1920x1080**, in this order:
 | --- | --- |
 | World | `http://127.0.0.1:3000/world?overlay=1` |
 | Overlay, above world | `http://127.0.0.1:3000/overlay` |
+| Combined recording source | `http://127.0.0.1:3000/capture` |
 | Optional history scene | `http://127.0.0.1:3000/history` |
 
 The overlay is transparent and keeps panels at the edges. `?overlay=1` hides the
@@ -192,6 +193,7 @@ Live model requests incur provider charges; the fixture demo requires no key.
 | `!idea <text>` | Back an idea in the collection phase |
 | `!vote 1`, `!vote 2`, `!vote 3` | Vote; a later ballot replaces the earlier one |
 | `!rollback`, then `!vote yes` or `!vote no` | Vote to restore the prior healthy module set |
+| `!react 1`, `!react 2`, `!react 3` | Reaction vote, separate from idea votes |
 | `!pause`, `!skip`/`!veto`, `!clear` | Verified moderators/broadcaster only: pause, advance/cancel, remove latest summon |
 
 The roster caps at 300. A full world can replace the oldest citizen quiet for at
@@ -247,10 +249,44 @@ The code paths are server/guard/, server/runner/ and server/summon/provider.ts.
 The engineering contract is [AGENTS.md](AGENTS.md); operational details are in
 [docs/operation.md](docs/operation.md).
 
-## Demo B-roll (prerendered)
+## Chat reactions (prerendered)
 
-[Prerendered Blender concept clips](demo/blender/README.md) are not product output.
-They are disclosed in the video description and write-up.
+Chat reactions charge with distinct viewers in a sliding 20-second window. The
+threshold is 35% of viewers active in the last two minutes, rounded up, with a
+minimum of 3 and maximum of 30. Each reaction cools down for 90 seconds after it
+starts. At most one clip plays and one waits; a vote winner has queue priority.
+Repeated messages from one viewer refresh that viewer's window without adding
+votes. Blocked messages and commands do not charge meters. Moderator `!pause`
+freezes meters, votes, cooldowns and playback. State survives restart.
+
+Every three minutes, outside idea and rollback voting, three random available
+clips get a 30-second `!react 1|2|3` vote. A later ballot replaces the earlier one;
+ties use the first offered option. An idea/rollback vote cancels a reaction vote.
+An empty reaction vote plays nothing. Dog/carrot and worm appear only in votes.
+
+The overlay plays committed **prerendered Blender clips**, made from scripts
+Codex wrote. It does not generate video live. The source, disclosure, catalog
+and render commands are in [assets/blender/README.md](assets/blender/README.md).
+Judges need neither Blender nor ffmpeg. The two additional concept clips now
+share this playback path. Clips are silent, VP9 WebM with alpha, served locally
+under the existing same-origin policy. The charge meter measures participation.
+
+With the fixture server running, open `/capture` (world plus overlay at
+1920x1080), then in another terminal:
+
+```sh
+pnpm sim:reactions
+pnpm check:reactions
+```
+
+The reaction simulator drives all twelve chat thresholds and one 30-second vote
+through moderated sim chat. Allow about two minutes, use a fresh fixture server
+and keep other chat idle. Its simulation-only route opens a normal reaction vote;
+all ballots still use `/sim/chat`. It sends no chat to Twitch. With live Twitch
+configured, explicitly enable `SIMULATION_ALLOWED=1` for simulation routes.
+The world page must remain open before `pnpm sim` as described above; `/capture`
+also supplies that world connection. The reaction media check starts its own
+isolated HTTP server and browser. It can run without a dev server.
 
 ## Verification and reproduction
 

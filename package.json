@@ -10,17 +10,19 @@
   "packageManager": "pnpm@9.10.0",
   "scripts": {
     "dev": "tsx watch server/index.ts",
-    "demo:render": "node demo/blender/render.mjs",
+    "demo:render": "node assets/blender/render.mjs",
     "sim": "tsx server/sim/index.ts",
     "sim:raid": "tsx server/sim/raid.ts",
     "check:raid": "tsx checks/phase8.raid.ts",
-    "check": "tsx checks/generate-module-policy.ts --check && tsx checks/generate-validator.ts --check && tsc --noEmit && tsx --test checks/*.test.ts && tsx checks/build.ts",
+    "check": "tsx checks/generate-module-policy.ts --check && tsx checks/generate-validator.ts --check && tsc --noEmit && tsx --test checks/*.test.ts && tsx checks/build.ts && tsx checks/reactions.smoke.ts",
     "summon:bench": "tsx server/summon/bench.ts",
     "guard:eval": "tsx server/guard/eval.ts",
     "runner:live": "tsx server/runner/live.ts",
     "runner:sim": "tsx checks/runner.sim.ts",
     "sim:soak": "tsx checks/perf-soak.ts",
-    "check:gate": "tsx checks/candidate.smoke.ts"
+    "check:gate": "tsx checks/candidate.smoke.ts",
+    "sim:reactions": "tsx server/sim/reactions.ts",
+    "check:reactions": "tsx checks/reactions.smoke.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0",
