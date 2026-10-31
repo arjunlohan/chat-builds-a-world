@@ -23,9 +23,10 @@ if (versions.current) pipeline.publish({ type: "version", version: versions.curr
 const runner = new Runner({ root: process.cwd(), versions, feed: (kind, text) => rounds.feed(kind, text),
   announce: async message => { pipeline.publish({ type: "reply", message }); if (config.twitch) await twitch.sendChat(message); } });
 await runner.recover();
-const rounds = new Rounds({ build: request => runner.build(request), rollback: requester => runner.rollback(requester), canRollback: () => versions.history.length > 1, review: (idea, context) => context.fixture ? fixtureReview(idea) : guard.review(idea, context.signal), publish: state => pipeline.publish({ type: "rounds", state }), simulationAllowed: !config.twitch });
+const rounds = new Rounds({ build: request => runner.build(request), rollback: requester => runner.rollback(requester), canRollback: () => !!versions.previous(), review: (idea, context) => context.fixture ? fixtureReview(idea) : guard.review(idea, context.signal), publish: state => pipeline.publish({ type: "rounds", state }), simulationAllowed: !config.twitch });
 pipeline.attachRounds(rounds);
 const { server, closeStreams } = await createWorldServer(pipeline, summons, rounds, versions, { live: !!config.summon.key, fault: async () => {
+  if (versions.current) await versions.invalidate(versions.current.version);
   rounds.cancelForRevert();
   for (let wait = 0; runner.isBusy && wait < 100; wait++) await new Promise(resolve => setTimeout(resolve, 50));
   rounds.externalResult(await runner.rollback("system", true));

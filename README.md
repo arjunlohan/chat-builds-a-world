@@ -176,7 +176,8 @@ the runner never stashes, resets, cleans or checks out the main working tree.
 `!rollback` starts a **30-second** `!vote yes|no` vote. One ballot per viewer; later
 votes replace earlier ones. A strict yes majority restores the previous tag's
 module tree through a new forward commit/tag, then hot-swaps its stored checked
-artifacts. Ties/no votes retain the current world. Runtime disabled-module faults
+artifacts. Ties/no votes retain the current world. Failed activations and identical module
+snapshots are excluded from rollback targets. Runtime disabled-module faults
 also request restoration. Hooks remain cooperative JavaScript; the guard, static
 policy and timed gate reduce risk but do not prove arbitrary code safe.
 

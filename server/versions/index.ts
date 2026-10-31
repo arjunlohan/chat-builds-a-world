@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 export interface ModuleArtifact { id: string; url: string; hash: string; file: string }
-export interface WorldVersion { version: number; tag: string; commit: string; title: string; requester: string; modules: ModuleArtifact[]; receipt: string; restoredFrom?: string }
+export interface WorldVersion { version: number; tag: string; commit: string; title: string; requester: string; modules: ModuleArtifact[]; receipt: string; healthy?: boolean; restoredFrom?: string }
 interface Stored { baseline?: string; counter: number; current: WorldVersion | null; history: WorldVersion[]; pending?: { path: string; base: string; version: number } }
 export class Versions {
   private data: Stored = { counter: 0, current: null, history: [] };
@@ -40,13 +40,13 @@ export class Versions {
   bundle(hash: string) { return /^[a-f0-9]{64}$/.test(hash) ? this.bundles.get(hash) : undefined; }
   async activate(version: Omit<WorldVersion, "receipt">, wait = true) {
     this.data.counter = Math.max(this.data.counter, version.version);
-    const next = { ...version, receipt: randomUUID() }; this.data.current = next; this.data.history.push(next); await this.save();
+    const next = { ...version, receipt: randomUUID(), healthy: !wait }; this.data.current = next; this.data.history.push(next); await this.save();
     let receipt: Promise<boolean> = Promise.resolve(true);
     if (wait) receipt = new Promise(resolve => {
       const timer = setTimeout(() => { this.waiters.delete(next.receipt); resolve(false); }, 8000);
       this.waiters.set(next.receipt, { resolve, timer });
     });
-    this.publish(next); return receipt;
+    this.publish(next); const ok = await receipt; next.healthy = ok; await this.save(); return ok;
   }
   acknowledge(version: number, receipt: string, ok: boolean) {
     if (this.data.current?.version !== version || this.data.current.receipt !== receipt) return false;
@@ -54,6 +54,12 @@ export class Versions {
     return true;
   }
   /** Rollback is to the prior successful activation, with source content retained by its tag. */
-  previous() { return this.data.history.length > 1 ? structuredClone(this.data.history[this.data.history.length - 2]!) : null; }
+  async invalidate(version: number) { const entry = this.data.history.find(v => v.version === version); if (entry) { entry.healthy = false; await this.save(); } }
+  previous() {
+    const signature = (version: WorldVersion | null) => JSON.stringify(version?.modules.map(m => [m.id, m.hash]).sort() ?? []);
+    const current = signature(this.data.current);
+    const previous = this.data.history.slice(0, -1).reverse().find(v => v.healthy !== false && signature(v) !== current);
+    return previous ? structuredClone(previous) : null;
+  }
   close() { for (const w of this.waiters.values()) { clearTimeout(w.timer); w.resolve(false); } this.waiters.clear(); }
 }

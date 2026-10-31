@@ -98,7 +98,7 @@ test("failed live acknowledgement restores module content with a forward commit 
   versions=new Versions(root,version=>{if(version)versions.acknowledge(version.version,version.receipt,false)});
   const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"synthetic-fixture-secret"},feed(){},announce:async()=>{},check:async()=>({ok:true,fps:60,avgFps:60})});
   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"Test",reason:"Fixture",spec:{moduleId:"activation",description:"good",steps:["Small visual"],checks:["Cleanup"],estimatedSeconds:60},files:["world/modules/activation.ts"],mode:"fixture",latencyMs:0}});
-  assert.equal(result.ok,false);assert.match(result.reason,/activation/);assert.equal(versions.current!.modules.length,0);
+  assert.equal(result.ok,false);assert.match(result.reason,/activation/);assert.equal(versions.current!.modules.length,0);assert.equal(versions.previous(),null,"A failed activation must never become a rollback target");
   assert.equal(await git(root,"diff",baseline,"HEAD","--","world/modules"),"");assert.equal(await git(root,"rev-list","--count",`${baseline}..HEAD`),"2");
   assert.equal(await git(root,"status","--porcelain","--untracked-files=all"),"");assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);versions.close();
  }finally{await rm(root,{recursive:true,force:true})}
