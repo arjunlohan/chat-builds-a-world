@@ -3,10 +3,11 @@ import { readFile } from "node:fs/promises";
 import { resolve, dirname, relative, posix } from "node:path";
 import { build } from "esbuild";
 import { THREE_IMPORTS } from "./imports.js";
+import {DENIED_GLOBALS,DENIED_PROPERTIES,POLICY_LIMITS,POLICY_RULES} from "./policy-rules.js";
 const vetted = new Set(THREE_IMPORTS);
-const denied = new Set("window document globalThis self global process require fetch XMLHttpRequest WebSocket Worker navigator location eval Function setTimeout setInterval requestAnimationFrame queueMicrotask Promise performance Date console importScripts Reflect Proxy".split(" "));
+const denied = new Set(DENIED_GLOBALS);
 export function inspectModule(source: string, file: string) {
-  if (Buffer.byteLength(source) > 65536) throw new Error("Module source exceeds 64 KiB.");
+  if (Buffer.byteLength(source) > POLICY_LIMITS.sourceBytes) throw new Error(`Module source exceeds ${POLICY_LIMITS.sourceBytes} bytes.`);
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
   for (const statement of ast.statements) {
     if (ts.isImportDeclaration(statement)) {
@@ -17,19 +18,19 @@ export function inspectModule(source: string, file: string) {
       } else if (!statement.importClause?.isTypeOnly || !["world/engine/api.js", "world/engine/api.ts"].includes(posix.normalize(posix.join(posix.dirname(file), from)))) throw new Error("Only API type imports and vetted Three.js imports are allowed.");
     } else if (ts.isVariableStatement(statement)) {
       for (const item of statement.declarationList.declarations) if (item.initializer && !ts.isArrowFunction(item.initializer) && !ts.isFunctionExpression(item.initializer) && !ts.isLiteralExpression(item.initializer)) throw new Error("Top-level side effects are forbidden.");
-    } else if (!ts.isFunctionDeclaration(statement) && !ts.isInterfaceDeclaration(statement) && !ts.isTypeAliasDeclaration(statement) && !ts.isExportAssignment(statement)) throw new Error("Unsupported top-level module statement.");
+    } else if (!ts.isFunctionDeclaration(statement) && !ts.isInterfaceDeclaration(statement) && !ts.isTypeAliasDeclaration(statement) && !ts.isExportAssignment(statement)) throw new Error(POLICY_RULES.topLevel.error);
     if (ts.isExportAssignment(statement) && !ts.isIdentifier(statement.expression) && !ts.isArrowFunction(statement.expression) && !ts.isFunctionExpression(statement.expression)) throw new Error("Default export must be a factory.");
   }
   function visit(node: ts.Node) {
     if (ts.isNewExpression(node) && /Geometry$|Material$|BufferAttribute$|^(Float32|Float64|Uint8|Uint16|Uint32|Int8|Int16|Int32)Array$/.test(node.expression.getText(ast))) {
       for (let parent = node.parent; parent; parent = parent.parent) {
-        if ((ts.isMethodDeclaration(parent) || ts.isPropertyAssignment(parent)) && parent.name?.getText(ast) === "update") throw new Error("Per-frame geometry/material/buffer creation is forbidden.");
+        if ((ts.isMethodDeclaration(parent) || ts.isPropertyAssignment(parent)) && parent.name?.getText(ast) === "update") throw new Error(POLICY_RULES.allocation.error);
       }
     }
-    if (ts.isIdentifier(node) && (denied.has(node.text) || ["constructor", "__proto__", "prototype", "parent", "onBeforeRender", "onAfterRender", "onBeforeCompile", "addEventListener", "removeEventListener"].includes(node.text))) throw new Error(`Forbidden module capability: ${node.text}`);
-    if (node.kind === ts.SyntaxKind.AnyKeyword || (ts.isElementAccessExpression(node) && !ts.isNumericLiteral(node.argumentExpression) && !ts.isIdentifier(node.argumentExpression))) throw new Error("Unchecked types and dynamic property access are forbidden.");
-    if (ts.isStringLiteral(node) && ["constructor", "__proto__", "prototype", "parent", "onBeforeRender", "onAfterRender", "onBeforeCompile", "addEventListener", "removeEventListener"].includes(node.text)) throw new Error("Forbidden property indirection.");
-    if (ts.isAwaitExpression(node) || node.kind === ts.SyntaxKind.AsyncKeyword || (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword)) throw new Error("Modules must be synchronous; no dynamic imports.");
+    if (ts.isIdentifier(node) && (denied.has(node.text) || DENIED_PROPERTIES.includes(node.text))) throw new Error(`Forbidden module capability: ${node.text}`);
+    if (node.kind === ts.SyntaxKind.AnyKeyword || (ts.isElementAccessExpression(node) && !ts.isNumericLiteral(node.argumentExpression) && !ts.isIdentifier(node.argumentExpression))) throw new Error(POLICY_RULES.typing.error);
+    if (ts.isStringLiteral(node) && DENIED_PROPERTIES.includes(node.text)) throw new Error("Forbidden property indirection.");
+    if (ts.isAwaitExpression(node) || node.kind === ts.SyntaxKind.AsyncKeyword || (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword)) throw new Error(POLICY_RULES.synchronous.error);
     if (ts.isStringLiteral(node) && /https?:\/\/|wss?:\/\/|file:\/\//i.test(node.text)) throw new Error("External references are forbidden.");
     ts.forEachChild(node, visit);
   }

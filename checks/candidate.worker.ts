@@ -5,7 +5,7 @@ import { chromium, type Page } from "@playwright/test";
 import { createWorldServer } from "../server/http.js";
 import { WorldPipeline } from "../server/pipeline.js";
 import { Versions } from "../server/versions/index.js";
-import { frameVerdict, visibilityVerdict, type FrameEvidence } from "./candidate-policy.js";
+import { frameVerdict, visibilityVerdict, CANDIDATE_THRESHOLDS, type FrameEvidence } from "./candidate-policy.js";
 import { VISIBILITY_PROBE, type Footprint } from "../world/engine/visibility.js";
 const path=process.argv[2]!,directory=dirname(path),input=JSON.parse(await readFile(path,"utf8")) as {modules:{id:string;file:string;code:string}[];probeId:string};
 const state=await mkdtemp(join(tmpdir(),"world-candidate-")),pipeline=new WorldPipeline(),versions=new Versions(state,v=>pipeline.publish({type:"version",version:v}));
@@ -40,7 +40,7 @@ try{
  const start=await page.evaluate(()=>({frame:window.__worldStats.frame,time:window.__worldStats.lastFrameAt}));
  evidence.status="sampling";evidence.start=start;await save();
  const sampleStart=performance.now(),hashes=new Set<number>();let lastPoll=start.time,maxPollGap=0;
- for(let sample=0;sample<15;sample++){
+ for(let sample=0;sample<CANDIDATE_THRESHOLDS.sampleSeconds;sample++){
   await page.waitForTimeout(Math.max(0,sampleStart+(sample+1)*1000-performance.now()));
   const value=await page.evaluate(()=>new Promise<{frame:number;time:number;error:string;hash:number;lit:number;avg:number;renderer:string;visibility:string;trace:FrameEvidence[]}>(resolve=>requestAnimationFrame(()=>{
    const stats=window.__worldStats,gl=document.querySelector("canvas")!.getContext("webgl2")!,info=gl.getExtension("WEBGL_debug_renderer_info"),width=gl.drawingBufferWidth,height=gl.drawingBufferHeight,pixels=new Uint8Array(width*height*4);let hash=2166136261,lit=0;
@@ -64,7 +64,7 @@ try{
  if(!timing.ok)throw new Error(timing.reason);if(!visibility.ok)throw new Error(visibility.reason);
  evidence.status="passed";await save();
  await page.screenshot({path:join(directory,"canvas.png"),timeout:800}).catch(()=>{});
- console.log(JSON.stringify({...timing,samples:15,modulePixels:visibility.best?.hdPixels,visibility,citizens:end.citizenCount,hashes:hashes.size}));
+ console.log(JSON.stringify({...timing,samples:CANDIDATE_THRESHOLDS.sampleSeconds,modulePixels:visibility.best?.hdPixels,visibility,citizens:end.citizenCount,hashes:hashes.size}));
 }catch(error){evidence.status="failed";evidence.reason=error instanceof Error?error.message.slice(0,300):"Candidate check failed.";
  await save();
  if(page)try{const last=await Promise.race([page.evaluate(()=>({stats:window.__worldStats,frames:window.__worldFrameTrace?Array.from(window.__worldFrameTrace.intervals):[]})),new Promise<null>(r=>setTimeout(()=>r(null),600))]);evidence.lastStats=last;await page.screenshot({path:join(directory,"canvas.png"),timeout:800});}catch{}

@@ -1,3 +1,4 @@
 /** Canonical runtime import policy. Prompts and the checked AGENTS block use this list. */
+import {MODULE_CAP} from "../../world/shared/limits.js";
 export const THREE_IMPORTS = Object.freeze("Mesh Group Object3D Vector2 Vector3 Euler Quaternion Matrix4 Color BoxGeometry SphereGeometry IcosahedronGeometry CylinderGeometry ConeGeometry TorusGeometry PlaneGeometry MeshStandardMaterial MeshBasicMaterial Points PointsMaterial BufferGeometry BufferAttribute Float32BufferAttribute InstancedMesh".split(" "));
-export const threeImportRule = () => `Only these named imports from "three" are allowed: ${THREE_IMPORTS.join(", ")}. All other Three.js imports are rejected. Points buffers and instance capacity count toward the 512 particles/module cap; allocate bounded buffers once in init, reuse in update, and dispose them.`;
+export const threeImportRule = () => `Only these named imports from "three" are allowed: ${THREE_IMPORTS.join(", ")}. All other Three.js imports are rejected. Points buffers and instance capacity count toward the ${MODULE_CAP.particles} particles/module cap; allocate bounded buffers once in init, reuse in update, and dispose them.`;
