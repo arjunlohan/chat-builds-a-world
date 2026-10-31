@@ -18,6 +18,16 @@ and AJV-generated validation helpers. Retain the following notices with
 redistributed browser code. This audit does not grant rights to arbitrary future
 assets; runtime modules may not import assets or external URLs.
 
+## Demo B-roll (prerendered)
+
+The clips under `demo/blender/` use original procedural geometry, materials,
+lighting and animation authored in scripts by Codex for this demo. They contain
+no third-party models, textures, HDRIs, fonts, logos or audio. Blender is the
+rendering tool, not an asset source. Generated PNG sequences and alpha movies
+remain local under ignored `demo/renders/`; no rendered media is committed.
+These concept clips are prerendered and are not output from, or used by, the
+running server or world.
+
 ## three
 
 ```text

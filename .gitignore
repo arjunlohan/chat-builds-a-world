@@ -11,3 +11,5 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 .DS_Store
+demo/renders/
+demo/blender/__pycache__/

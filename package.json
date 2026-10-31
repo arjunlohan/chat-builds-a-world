@@ -10,6 +10,7 @@
   "packageManager": "pnpm@9.10.0",
   "scripts": {
     "dev": "tsx watch server/index.ts",
+    "demo:render": "node demo/blender/render.mjs",
     "sim": "tsx server/sim/index.ts",
     "sim:raid": "tsx server/sim/raid.ts",
     "check:raid": "tsx checks/phase8.raid.ts",
