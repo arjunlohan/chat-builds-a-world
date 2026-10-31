@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, rename } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, rename, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { git, inventory, auditDiff, cleanMaster, createTree, removeTree, commitTree, promote } from "../server/runner/git.js";
@@ -61,7 +61,7 @@ test("feed translates events into readable plans, approved file names and generi
 });
 test("runner prompt carries locked API and quoted guard data; fake CLI cancellation scrubs its environment",async()=>{
  const decision={verdict:"accept" as const,title:"Test",reason:"Safe",spec:{moduleId:"test",description:"timeout",steps:["Small visual"],checks:["Cleanup"],estimatedSeconds:60},files:["world/modules/test.ts"]};
- const root=process.cwd(), prompt=await runnerPrompt(root,decision);assert.ok(prompt.includes("2 ms total per frame"));assert.ok(prompt.endsWith(JSON.stringify({title:decision.title,spec:decision.spec,files:decision.files})));
+ const root=process.cwd(), prompt=await runnerPrompt(root,decision);assert.ok(prompt.includes("2 ms total per frame"));assert.ok(prompt.includes(threeImportRule()));assert.ok(prompt.includes("Write the implementation to world/modules/test.ts before replying"));assert.ok(prompt.endsWith(JSON.stringify({title:decision.title,spec:decision.spec,files:decision.files})));
  const controller=new AbortController();const pending=runCodex({root,tree:root,bin:resolve("checks/fixtures/fake-builder.cjs"),env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"synthetic-not-a-key",TWITCH_ACCESS_TOKEN:"forbidden"},decision,signal:controller.signal,feed(){}});
  setTimeout(()=>controller.abort(),100);await assert.rejects(()=>pending,/cancelled/);
 });
@@ -96,6 +96,17 @@ test("protected data written only into module source is rejected before compilat
   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"Test",reason:"Fixture",spec:{moduleId:"security",description:"protected",steps:["Small visual"],checks:["Cleanup"],estimatedSeconds:60},files:["world/modules/security.ts"],mode:"live",latencyMs:0}});
   assert.equal(result.ok,false);assert.match(result.reason,/protected data/);assert.ok(!JSON.stringify({result,feed}).includes(secret));assert.equal(await git(root,"rev-parse","HEAD"),head);
  }finally{await rm(root,{recursive:true,force:true})}
+});
+
+test("a completed builder with no edits reports its explanation and retains only redacted public evidence",async()=>{
+ const root=await repository(),secret="synthetic-nochange-secret";try{
+  await writeFile(join(root,"AGENTS.md"),"## World Module API v1\nSynchronous hooks only.\n## Scene Spec v1\n");await git(root,"add","AGENTS.md");await git(root,"-c","user.name=Test","-c","user.email=test@localhost","commit","--no-gpg-sign","-m","Contract");
+  const versions=new Versions(root,()=>{}),head=await git(root,"rev-parse","HEAD");
+  const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:secret},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{}});
+  const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"Rain",reason:"Safe",spec:{moduleId:"rain",description:"nochange",steps:["Implement rain"],checks:["Dispose"],estimatedSeconds:60},files:["world/modules/rain.ts"],mode:"fixture",latencyMs:0}});
+  assert.equal(result.outcome,"REVERTED");assert.match(result.reason,/no module changes.*could not implement.*available API/);assert.ok(!result.reason.includes(secret));assert.deepEqual(result.tokens,{input:123,output:45,total:168});
+  const files=await readdir(join(root,"state/builds"));assert.equal(files.length,1);const text=await readFile(join(root,"state/builds",files[0]!),"utf8"),saved=JSON.parse(text);assert.equal(saved.completed,true);assert.equal(saved.failedCommands,1);assert.match(saved.summary,/REDACTED/);assert.ok(!text.includes(secret));assert.ok(!text.includes("private tool invocation"));assert.equal(await git(root,"rev-parse","HEAD"),head);assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);await runner.close();versions.close();
+ }finally{await rm(root,{recursive:true,force:true});}
 });
 
 test("failed live acknowledgement restores module content with a forward commit and cleans the tree",async()=>{

@@ -300,6 +300,9 @@ never add credentials or populated values.
   this file's World Module API/budgets and JSON-quoted guard plan. No dependency
   installation or Git operations by runtime Codex. No raw JSON/reasoning/commands,
   stderr or credentials are streamed/logged; readable bounded feed lines only.
+  Require the approved entrypoint to be written before the final reply. Retain
+  bounded redacted public summaries, readable events, command counts and usage
+  under state/builds/ so a no-edit completion can report its explanation.
 - Enforce the 180 s build deadline with cancellation and process-group kill.
   Inspect every changed file, including ignored and untracked entries; reject
   paths outside the exact approved `world/modules/*.ts` list, symlinks, renames,

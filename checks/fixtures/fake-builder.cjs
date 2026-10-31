@@ -9,6 +9,7 @@ let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',s=>input+
  const emit=value=>console.log(JSON.stringify(value));
  emit({type:'turn.started'});emit({type:'item.completed',item:{type:'plan_update',plan:[{step:'Create the approved local visual',status:'in_progress'}]}});
  if(kind==='timeout'){setInterval(()=>{},1000);return;}
+ if(kind==='nochange'){emit({type:'item.completed',item:{type:'command_execution',command:'private tool invocation',exit_code:1}});emit({type:'item.completed',item:{type:'agent_message',text:'I could not implement the requested service with the available API. '+process.env.AWS_BEARER_TOKEN_BEDROCK}});emit({type:'turn.completed',usage:{input_tokens:123,output_tokens:45}});return;}
  let source=fs.readFileSync(path.join(__dirname,'modules', ['throws','slow','empty'].includes(kind)?`${kind}.ts`:'good.ts'),'utf8').replace('"../../../world/engine/api.js"','"../engine/api.js"').replace('FIXTURE_ID',decision.spec.moduleId);
  if(kind==='protected')source+='\n// '+process.env.AWS_BEARER_TOKEN_BEDROCK+'\n';
  if(kind==='outside')fs.appendFileSync('README.md','\nForbidden fixture edit\n');

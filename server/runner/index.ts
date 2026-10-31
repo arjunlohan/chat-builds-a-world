@@ -76,8 +76,10 @@ export class Runner {
       const before = await inventory(tree); feed("plan", `Created isolated worktree v${version}.`);
       const sourceEnv = this.options.env ?? process.env;
       const builderStart = performance.now();
-      try { tokens = await (this.options.builder ?? runCodex)({ root: this.root, tree, bin: this.options.bin ?? sourceEnv.CODEX_BIN ?? "codex", env: sourceEnv, decision: approved, signal, feed, onSpawn:async pid=>{await this.options.versions.setPending({path:tree,base,version,process:pid,owner:process.pid});}, ...(this.options.timeoutMs ? { timeoutMs: this.options.timeoutMs } : {}) }); } finally { builderMs = Math.round(performance.now()-builderStart); }
-      await auditDiff(tree, base, before, approved.files); feed("check", "Approved paths verified; compiling the candidate.");
+      let diagnostic:string|undefined;
+      try { const built = await (this.options.builder ?? runCodex)({ root: this.root, tree, bin: this.options.bin ?? sourceEnv.CODEX_BIN ?? "codex", env: sourceEnv, decision: approved, signal, feed, onSpawn:async pid=>{await this.options.versions.setPending({path:tree,base,version,process:pid,owner:process.pid});}, ...(this.options.timeoutMs ? { timeoutMs: this.options.timeoutMs } : {}) });tokens={input:built.input,output:built.output,total:built.total};diagnostic=built.diagnostic; } finally { builderMs = Math.round(performance.now()-builderStart); }
+      try{await auditDiff(tree, base, before, approved.files);}catch(error){if(error instanceof Error&&error.message==="Builder produced no module changes.")throw new Error(`${error.message} ${diagnostic??"Builder returned no explanation."}`);throw error;}
+      feed("check", "Approved paths verified; compiling the candidate.");
       const secrets = protectedValues(sourceEnv);
       for (const file of approved.files) {
         const source = await readFile(join(tree, file), "utf8");
