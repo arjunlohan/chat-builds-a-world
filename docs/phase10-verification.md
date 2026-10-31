@@ -25,8 +25,7 @@ ANGLE Metal, Node 25.1.0, pnpm 9.10.0. No live Twitch/Bedrock requests were made
 | `pnpm sim:soak --seconds=10 --interval=900 --sample=2 --output=state/soak-smoke.json` | Exit 0 | 73.15 s |
 
 The env template contains 14 empty assignments (optional entries commented with
-defaults). Its copy parses with dotenv and contains no credentials. The README
-keeps the current test count here, rather than duplicating it in operating docs.
+defaults). Its copy parses with dotenv and contains no credentials. Current check results and test counts are maintained in this report.
 Twitch CLI `token --help` and `configure --help` confirmed the device-flow and app
 configuration flags. Actual OAuth login and token validation are interactive
 account-owner steps; they were not rerun as part of this credential-free test.

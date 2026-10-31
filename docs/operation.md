@@ -8,14 +8,15 @@ rollbacks and waits for cancellation cleanup. Runtime invocations have private
 Codex homes, minimal environments and owned process groups. On restart, a recorded
 orphan is killed only after its cwd matches the exact recorded worktree.
 
-Checked versions require a master-reachable tag and a healthy activation. Recovery
-removes a recorded reserved tag that master never reached. restoreForward creates
+Checked versions require a master-reachable tag and a healthy activation. A failed merge removes its unshipped tag; recovery covers a crash between tag
+creation and merge. restoreForward creates
 a worktree and forward commit for rollback, failed activation and startup recovery.
 Versions.fallbackTarget selects the applicable healthy version or v0 baseline.
 Unrelated master changes stop recovery.
 
-state/world.json uses format 2 and savedAt. A single root Ajv schema checks the
-entire file, source shapes, references and resource admission before restoration.
+state/world.json uses format 2 and savedAt. Typed schema fields track checkpoint return types and shared runtime caps. Ajv
+checks the shape, followed by plain reference/resource checks with specific
+rejection reasons. Scene Specs pass their existing parser once before restoration.
 The loader upgrades valid format-1 source/Phase-9 views to this format. Invalid or
 unsupported checkpoints are renamed to world.json.invalid-<time>-<id>.json with
 a warning, then a fresh world starts. The original bytes remain available; version
@@ -30,8 +31,8 @@ Ordinary changes use a 1.5-second trailing debounce with a five-second maximum w
 Round phase changes flush immediately. Event-backed POSTs use the bounded writer;
 summon receipts explicitly flush their changed state. Module acknowledgement
 performs one final versions.json save. Read-only polls and idle timers do no
-checkpoint I/O. A flush joins writes only through its captured generation; future
-traffic is scheduled separately. The shared writer serializes per file, creates
+checkpoint I/O. A flush serializes its captured generation once, synchronously; future traffic is
+scheduled separately and the writer receives the captured string. The shared writer serializes per file, creates
 each parent directory once, writes mode 0600, fsyncs and renames. Versions and
 Twitch token rotation use the same JSON I/O. Keep state/ private and back it up
 with the tagged repository.

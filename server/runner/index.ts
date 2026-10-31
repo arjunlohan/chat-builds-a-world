@@ -41,7 +41,7 @@ export class Runner {
         const tag=`v${advanced?pending!.version:current!.version}`,tagHead=await git(this.root,"rev-parse",`refs/tags/${tag}`).catch(()=>"");
         if(head!==tagHead)throw new Error("Master advanced outside the interrupted run; recovery left it unchanged.");
         await cleanMaster(this.root);
-        const target=this.options.versions.fallbackTarget(head);if(!target)throw new Error("No known-good version is available for recovery.");
+        const target=this.options.versions.fallbackTarget({excludingCommit:head,allowBaseline:true});if(!target)throw new Error("No known-good version is available for recovery.");
         if(pending)await removeTree(this.root,pending.path);
         await this.restoreForward(head,target,"Recovered previous world","system",false);
       }else if(pending)await removeTree(this.root,pending.path);
@@ -110,7 +110,7 @@ export class Runner {
       tokens = (error as { tokens?: Usage })?.tokens ?? tokens;
       const reason = signal.aborted ? "Build timed out or was cancelled." : redact(detail, protectedValues(this.options.env ?? process.env));
       if (merged && tree) {
-        const head=await git(this.root,"rev-parse","master"),target=this.options.versions.fallbackTarget(head);if(!target)throw new Error("No healthy world is available for restoration.");
+        const head=await git(this.root,"rev-parse","master"),target=this.options.versions.fallbackTarget({excludingCommit:head,allowBaseline:true});if(!target)throw new Error("No healthy world is available for restoration.");
         await this.restoreForward(head,target,"Automatic revert",requester,false);
       }
       feed("error", `REVERTED · ${reason}`);
@@ -125,7 +125,7 @@ export class Runner {
     return this.queue.enqueue(() => this.rollbackNow(requester, automatic), automatic);
   }
   private async rollbackNow(requester: string, automatic: boolean): Promise<RunResult> {
-    const start = performance.now(), target = (automatic||this.options.versions.previous())?this.options.versions.fallbackTarget():null, tokens = { input: 0, output: 0, total: 0 };
+    const start = performance.now(), target = this.options.versions.fallbackTarget({allowBaseline:automatic}), tokens = { input: 0, output: 0, total: 0 };
     if (!target) return reverted("No previous tag to restore.",0,tokens);
     try {
       const base = await cleanMaster(this.root);

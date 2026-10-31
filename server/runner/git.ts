@@ -3,9 +3,9 @@ import { promisify } from "node:util";
 import { lstat, mkdir, readFile, realpath, readdir } from "node:fs/promises";
 import { join, resolve, relative } from "node:path";
 const execute = promisify(execFile);
+const executeGit=(root:string,args:string[])=>execute("git",["-c","core.hooksPath=/dev/null",...args],{cwd:root,timeout:12000,maxBuffer:4194304,env:{PATH:process.env.PATH??"/usr/bin:/bin",HOME:process.env.HOME??""}});
 export async function git(root: string, ...args: string[]) {
-  try { return (await execute("git", ["-c", "core.hooksPath=/dev/null", ...args], { cwd: root, timeout: 12_000, maxBuffer: 4_194_304, env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: process.env.HOME ?? "" } })).stdout.trimEnd(); }
-  catch { throw new Error(`Git operation failed: ${args[0]}`); }
+  try{return (await executeGit(root,args)).stdout.trimEnd();}catch{throw new Error(`Git operation failed: ${args[0]}`);}
 }
 export async function cleanMaster(root: string, expected?: string) {
   if (await git(root, "symbolic-ref", "--short", "HEAD") !== "master") throw new Error("Runner requires master; no checkout was changed.");
@@ -30,14 +30,18 @@ export async function promote(root: string, base: string, commit: string, tag: s
   await cleanMaster(root, base);
   if (await git(root, "tag", "--list", tag)) throw new Error("Version tag already exists.");
   await git(root, "tag", tag, commit);
-  await cleanMaster(root, base);
-  await git(root, "merge", "--ff-only", "--no-edit", commit);
+  try{await cleanMaster(root,base);await git(root,"merge","--ff-only","--no-edit",commit);}
+  catch(error){await discardUnshippedTag(root,tag,commit);throw error;}
 }
 /** Only the recorded reserved version may be removed, and never if master reaches it. */
-export async function discardUnshippedTag(root:string,version:number){
-  const ref=`refs/tags/v${version}`,commit=await git(root,"rev-parse","--verify",ref).catch(()=>"");if(!commit)return;
-  const reachable=(await git(root,"for-each-ref","--merged=master","--format=%(refname)",ref)).split("\n");
-  if(!reachable.includes(ref))await git(root,"update-ref","-d",ref,commit);
+export async function discardUnshippedTag(root:string,version:number|string,expectedCommit?:string){
+  const ref=`refs/tags/${typeof version==="number"?`v${version}`:version}`;
+  try{await executeGit(root,["merge-base","--is-ancestor",ref,"master"]);}
+  catch(error){const code=(error as {code?:number}).code;
+    if(code===1){await git(root,"update-ref","-d",ref,...(expectedCommit?[expectedCommit]:[]));return;}
+    if(code===128)return; // Missing or unreadable ref is not proof of an unshipped commit.
+    throw new Error("Git operation failed: merge-base");
+  }
 }
 /** Snapshot includes ignored files, so hiding an engine edit behind .gitignore cannot pass. */
 export async function inventory(root: string) {

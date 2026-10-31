@@ -160,3 +160,19 @@ test("verified EventSub moderator veto drains a running CLI and its worktree",as
   veto("viewer",[]);assert.equal(rounds.snapshot().phase,"building");const start=performance.now();veto("moderator",[{set_id:"moderator",id:"1",info:""}]);assert.deepEqual(admitted,[false,true]);assert.equal(rounds.snapshot().phase,"ideas");const outcome=await result;assert.equal(outcome.outcome,"REVERTED");assert.ok(performance.now()-start<2000,"Moderator cancellation must not wait for the build deadline");assert.throws(()=>process.kill(child,0));assert.equal(versions.pending,undefined);assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);await runner.close();versions.close();
  }finally{client?.stop();rounds?.dispose();await rm(root,{recursive:true,force:true});}
 });
+
+test("a rejected fast-forward removes its new tag without changing master",async()=>{
+ const root=await repository();let tree="";try{
+  const baseline=await git(root,"rev-parse","HEAD");tree=await createTree(root,1,baseline);await writeFile(join(tree,"world/modules/a.ts"),"export default 2;\n");const candidate=await commitTree(tree,"Candidate");
+  await writeFile(join(root,"world/modules/a.ts"),"export default 3;\n");const head=await commitTree(root,"User commit");await assert.rejects(promote(root,head,candidate,"v1"),/merge/);assert.equal(await git(root,"tag","--list","v1"),"");assert.equal(await git(root,"rev-parse","HEAD"),head);assert.equal(await readFile(join(root,"world/modules/a.ts"),"utf8"),"export default 3;\n");
+ }finally{if(tree)await removeTree(root,tree);await rm(root,{recursive:true,force:true});}
+});
+test("fallback policy explicitly selects previous, healthy current or baseline",async()=>{
+ const root=await mkdtemp(join(tmpdir(),"fallback-policy-")),versions=new Versions(root,()=>{});try{
+  await versions.baselineAt("base");assert.equal(versions.fallbackTarget({allowBaseline:false}),null);assert.equal(versions.fallbackTarget({allowBaseline:true})!.tag,"v0");
+  const one=await versions.artifact("one","world/modules/one.ts","export default 1;");await versions.activate({version:1,tag:"v1",commit:"one",title:"One",requester:"viewer",modules:[one]},false);
+  assert.equal(versions.fallbackTarget({allowBaseline:false}),null);assert.equal(versions.fallbackTarget({excludingCommit:"interrupted",allowBaseline:false})!.tag,"v1");
+  const two=await versions.artifact("two","world/modules/two.ts","export default 2;");await versions.activate({version:2,tag:"v2",commit:"two",title:"Two",requester:"viewer",modules:[two]},false);
+  assert.equal(versions.fallbackTarget({allowBaseline:false})!.tag,"v1");assert.equal(versions.fallbackTarget({excludingCommit:"two",allowBaseline:true})!.tag,"v1");assert.equal(versions.fallbackTarget({excludingCommit:"interrupted",allowBaseline:true})!.tag,"v2");await versions.invalidate(2);assert.equal(versions.fallbackTarget({excludingCommit:"interrupted",allowBaseline:true})!.tag,"v1");
+ }finally{versions.close();await rm(root,{recursive:true,force:true});}
+});

@@ -1,3 +1,4 @@
+import {readJson} from "../server/persistence/atomic.js";
 import {spawn,type ChildProcess} from "node:child_process";
 import {once} from "node:events";
 import {mkdtemp,symlink,appendFile,rm} from "node:fs/promises";
@@ -11,8 +12,11 @@ export async function waitFor<T>(get:()=>Promise<T>,accept:(value:T)=>boolean,ms
 export async function fixtureServer(source:string,options:{prefix?:string;ref?:string;demo?:boolean}={}){
  const root=await mkdtemp(join(tmpdir(),options.prefix??"world-fixture-")),socket=createServer();await new Promise<void>(r=>socket.listen(0,"127.0.0.1",r));const port=(socket.address() as {port:number}).port;await new Promise<void>(r=>socket.close(()=>r()));
  const env={PATH:process.env.PATH??"/usr/bin:/bin",HOME:process.env.HOME??"",PORT:String(port),SIMULATION_ALLOWED:"1",SIMULATION_MODE:"fixture",...(options.demo?{DEMO_MODE:"1"}:{})},base=`http://127.0.0.1:${port}`;
- try{await git(source,"clone","--quiet","--no-hardlinks","--no-tags",source,root);await git(root,"switch","-C","master",options.ref??"HEAD");// Reset the scripted fixture only in this private clone, including after a prior demo ship.
- const fixture="world/modules/lantern-orchard.ts";if(await git(root,"ls-files",fixture)){await git(root,"rm","--",fixture);await commitTree(root,"Prepare isolated fixture baseline");}await symlink(join(source,"node_modules"),join(root,"node_modules"));await appendFile(join(root,".git/info/exclude"),"\nnode_modules\n");}catch(error){await rm(root,{recursive:true,force:true});throw error;}
+ try{await git(source,"clone","--quiet","--no-hardlinks","--no-tags",source,root);await git(root,"switch","-C","master",options.ref??"HEAD");// Restore the recorded source baseline only inside this owned clone.
+ const baseline=(await readJson<{baseline?:string}>(join(source,"state/versions.json")))?.baseline??await git(root,"rev-parse","HEAD");
+ await git(root,"restore","--source",baseline,"--staged","--worktree","--","world/modules");
+ if(await git(root,"diff","--cached","--name-only","--","world/modules"))await commitTree(root,"Prepare isolated fixture baseline");
+ await symlink(join(source,"node_modules"),join(root,"node_modules"));await appendFile(join(root,".git/info/exclude"),"\nnode_modules\n");}catch(error){await rm(root,{recursive:true,force:true});throw error;}
  let server:ChildProcess|undefined;
  async function start(inspect=false){let stderr="",inspectorUrl="";server=spawn(process.execPath,[...(inspect?["--inspect=127.0.0.1:0"]:[]),"--import","tsx","server/index.ts"],{cwd:root,env,detached:true,stdio:["ignore","ignore","pipe"]});server.stderr!.on("data",chunk=>{stderr=(stderr+String(chunk)).slice(-8192);inspectorUrl=/ws:\/\/127\.0\.0\.1:\d+\/[a-f0-9-]+/.exec(stderr)?.[0]??inspectorUrl;});
   await waitFor(async()=>(await fetch(base+"/api/world")).ok,ok=>ok&&(!inspect||!!inspectorUrl),20000);return {process:server,inspectorUrl,diagnostics:stderr};

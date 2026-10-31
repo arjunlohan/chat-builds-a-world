@@ -108,23 +108,21 @@ export class Citizens {
       label.className = "citizen-label"; name.className = "citizen-name"; bubble.className = "citizen-bubble";
       label.dataset.userId = state.id; label.hidden = true;
       label.append(bubble, name); this.labels.append(label);
-    const ui:CitizenUI={label,name,bubble,remove:()=>{},fullWidth:160,quietWidth:80};c.ui=ui;
-      const creature = c;
-      ui.remove = this.layout.add(`citizen:${state.id}`, label, (candidate, time, camera, focus) => {
-        if(time<creature.born)return;
-        if(!projectLabel(creature.position,camera,candidate,1))return;
-        const s = creature.state, spokeAge = time - s.speechAt;
-        const focused = !!focus && creature.position.distanceToSquared(focus) < 3.2;
-        const distance = creature.position.distanceTo(camera.position);
-        const speaking = !!s.speech && !creature.commandSpeech && spokeAge < 5500 && this.speakers.has(s.id);
-        const mode = speaking ? "speech" : citizenLabelMode(distance, spokeAge, time - creature.born, focused);
+    const ui:CitizenUI={label,name,bubble,fullWidth:160,quietWidth:80,remove: this.layout.add(`citizen:${state.id}`, label, (candidate, time, camera, focus) => {
+        if(time<c.born)return;
+        if(!projectLabel(c.position,camera,candidate,1))return;
+        const s = c.state, spokeAge = time - s.speechAt;
+        const focused = !!focus && c.position.distanceToSquared(focus) < 3.2;
+        const distance = c.position.distanceTo(camera.position);
+        const speaking = !!s.speech && !c.commandSpeech && spokeAge < 5500 && this.speakers.has(s.id);
+        const mode = speaking ? "speech" : citizenLabelMode(distance, spokeAge, time - c.born, focused);
         if (ui.bubble.hidden !== !speaking) ui.bubble.hidden = !speaking;
         const nameWidth = mode === "quiet" ? ui.quietWidth : ui.fullWidth;
         candidate.width=speaking?Math.max(200,nameWidth):nameWidth;candidate.height=speaking?82:mode==="quiet"?18:26;
         candidate.kind=mode;candidate.opacity=idleFade(time,s.lastActive)*(mode==="quiet"?0.35:1);
         candidate.priority=speaking?2000+Math.max(0,5500-spokeAge)/5500:focused?900:mode==="quiet"?1:100+Math.max(0,30000-spokeAge)/1000+30/Math.max(1,distance);
         return true;
-      });
+      })};c.ui=ui;
     this.updateLabel(c);
   }
   private updateLabel(c:Creature){
