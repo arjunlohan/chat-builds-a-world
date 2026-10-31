@@ -3,10 +3,10 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, rename, readdir } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, rename, readdir, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { git, inventory, auditDiff, cleanMaster, createTree, removeTree, commitTree, promote } from "../server/runner/git.js";
+import { join, resolve, dirname } from "node:path";
+import { git, inventory, auditDiff, cleanMaster, createTree, removeTree, commitTree, promote, validateTree } from "../server/runner/git.js";
 import { inspectModule } from "../server/runner/policy.js";
 import { readableEvent } from "../server/runner/events.js";
 import { runnerPrompt, runCodex } from "../server/runner/codex.js";
@@ -27,6 +27,15 @@ async function repository() {
   await writeFile(join(root, "world/modules/a.ts"), "export default () => ({});\n");
   await git(root, "init", "-b", "master"); await git(root, "add", "."); await git(root, "-c", "user.name=Test", "-c", "user.email=test@localhost", "commit", "--no-gpg-sign", "-m", "Base"); return root;
 }
+test("temporary worktrees are unique, repository-owned, symlink-safe and fully cleaned",async()=>{
+ const root=await repository(),other=await repository();let tree="",second="";try{
+  const base=await cleanMaster(root);tree=await createTree(root,1,base);second=await createTree(root,1,base);assert.notEqual(tree,second);assert.equal(dirname(dirname(tree)),await realpath(tmpdir()));assert.ok(!tree.startsWith(root+"/"));assert.equal(await validateTree(root,tree,1),true);
+  await assert.rejects(validateTree(root,tree,2),/Invalid/);await assert.rejects(validateTree(other,tree,1),/Invalid/);await assert.rejects(removeTree(root,root),/Invalid/);
+  const original=tree,alias=join(dirname(tree),"alias");await symlink(tree,alias);await assert.rejects(validateTree(root,alias,1),/Invalid/);await rm(alias);
+  await rename(tree,tree+"-real");await symlink(tree+"-real",tree);await assert.rejects(validateTree(root,tree,1),/symlink/);await rm(tree);await rename(tree+"-real",tree);
+  const parent=dirname(tree);await removeTree(root,tree);tree="";await assert.rejects(realpath(parent));assert.equal(await git(root,"status","--porcelain"),"");assert.equal(await git(root,"rev-parse","HEAD"),base);
+ }finally{if(tree)await removeTree(root,tree);if(second)await removeTree(root,second);await rm(root,{recursive:true,force:true});await rm(other,{recursive:true,force:true});}
+});
 test("diff audit includes ignored/untracked files and rejects deletions, renames and symlinks", async () => {
  const root = await repository();
  try {

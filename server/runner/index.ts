@@ -9,7 +9,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateDecision, type GuardResult } from "../guard/index.js";
 import { Versions, type WorldVersion } from "../versions/index.js";
-import { auditDiff, discardUnshippedTag, cleanMaster, commitTree, createTree, git, inventory, promote, removeTree } from "./git.js";
+import { auditDiff, discardUnshippedTag, cleanMaster, commitTree, createTree, git, inventory, promote, removeTree, validateTree } from "./git.js";
 import { compileModule } from "./policy.js";
 import { runCodex, BUILD_TIMEOUT_MS } from "./codex.js";
 import { candidateCheck, type CheckResult } from "./check.js";
@@ -33,7 +33,7 @@ export class Runner {
   async recover() {
 
       const pending=this.options.versions.pending,current=this.options.versions.current;
-      if(pending&&pending.path!==join(this.root,"worktrees",`v${pending.version}`))throw new Error("Invalid pending worktree recovery path.");
+      if(pending)await validateTree(this.root,pending.path,pending.version);
       if(pending?.process&&pending.owner)await stopOrphan(pending.process,pending.owner,pending.path);
       if(pending)await discardUnshippedTag(this.root,pending.version);
       const head=await git(this.root,"rev-parse","master"),advanced=!!pending&&head!==pending.base;

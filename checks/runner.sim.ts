@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, copyFile, chmod, rm, readdir, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, copyFile, chmod, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import {launchWorldPage} from "./browser.js";
@@ -75,7 +75,7 @@ try {
    const expected: Record<string,RegExp>={outside:/outside approved/,throws:/update threw/,slow:/overruns/,empty:/stream-readable/,timeout:/timed out|cancelled/};
    assert.match(row.reason,expected[kind]!);
   }
-  assert.equal((await readdir(join(root,"worktrees")).catch(()=>[])).length,0,"Worktree leaked");
+  assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1,"Worktree leaked");
   assert.equal(await git(root,"status","--porcelain","--untracked-files=all"),"");
  }
  assert.equal(versions.current?.version,4);assert.equal(navigations,1,"Hot swap reloaded the page");assert.deepEqual(errors,[]);

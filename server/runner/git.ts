@@ -1,7 +1,9 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { lstat, mkdir, readFile, realpath, readdir } from "node:fs/promises";
-import { join, resolve, relative } from "node:path";
+import { lstat, mkdtemp, rm, readFile, realpath, readdir } from "node:fs/promises";
+import { join, resolve, relative, dirname, basename } from "node:path";
+import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 const execute = promisify(execFile);
 const executeGit=(root:string,args:string[])=>execute("git",["-c","core.hooksPath=/dev/null",...args],{cwd:root,timeout:12000,maxBuffer:4194304,env:{PATH:process.env.PATH??"/usr/bin:/bin",HOME:process.env.HOME??""}});
 export async function git(root: string, ...args: string[]) {
@@ -15,12 +17,27 @@ export async function cleanMaster(root: string, expected?: string) {
   return head;
 }
 export async function createTree(root: string, version: number, base: string) {
-  const parent = join(root, "worktrees"); await mkdir(parent, { recursive: true });
-  if (await realpath(parent) !== join(await realpath(root), "worktrees")) throw new Error("Worktree directory cannot be a symlink.");
-  const path = join(parent, `v${version}`);
-  await git(root, "worktree", "add", "--detach", path, base); return path;
+  if(!Number.isSafeInteger(version)||version<1)throw new Error("Invalid worktree version.");
+  const parent = await mkdtemp(join(await realpath(tmpdir()),`${await treePrefix(root)}${version}-`)),path=join(parent,"tree");
+  try{await git(root, "worktree", "add", "--detach", path, base);await validateTree(root,path,version);return path;}
+  catch(error){await git(root,"worktree","remove","--force",path).catch(()=>{});await rm(parent,{recursive:true,force:true});throw error;}
 }
-export async function removeTree(root: string, path: string) { await git(root, "worktree", "remove", "--force", path); }
+const treePrefix=async(root:string)=>`world-build-${createHash("sha256").update(await realpath(root)).digest("hex").slice(0,16)}-v`;
+/** Recovery/removal require this repository's canonical, registered, non-symlink tree. */
+export async function validateTree(root:string,path:string,version?:number){
+  if(path!==resolve(path))throw new Error("Invalid pending worktree recovery path.");
+  const parent=dirname(path),prefix=await treePrefix(root),name=basename(parent);
+  const suffix=name.startsWith(prefix)?/^(\d+)-[a-zA-Z0-9]{6}$/.exec(name.slice(prefix.length)):null;
+  const temporary=basename(path)==="tree"&&dirname(parent)===await realpath(tmpdir())&&!!suffix&&(version===undefined||Number(suffix[1])===version);
+  // Safely finish a recorded run from before the temporary-directory migration.
+  const legacyVersion=/^v([1-9][0-9]*)$/.exec(basename(path));
+  const legacy=!!legacyVersion&&parent===join(await realpath(root),"worktrees")&&(version===undefined||Number(legacyVersion[1])===version);
+  if((!temporary&&!legacy)||await realpath(parent)!==parent||await realpath(path)!==path)throw new Error("Invalid pending worktree recovery path or symlink.");
+  const registered=(await git(root,"worktree","list","--porcelain")).split("\n").includes(`worktree ${path}`);
+  if(!registered)throw new Error("Pending worktree is not registered to this repository.");
+  return temporary;
+}
+export async function removeTree(root: string, path: string) { const temporary=await validateTree(root,path);await git(root, "worktree", "remove", "--force", path);if(temporary)await rm(dirname(path),{recursive:true,force:true}); }
 export async function commitTree(path: string, message: string) {
   await git(path, "add", "--", "world/modules");
   await git(path, "-c", "user.name=World Runner", "-c", "user.email=world@localhost", "commit", "--no-gpg-sign", "-m", message);

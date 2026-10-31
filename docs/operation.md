@@ -7,6 +7,21 @@ A PID/token server lock owns a checkout. Its runner queue serializes builds and
 rollbacks and waits for cancellation cleanup. Runtime invocations have private
 Codex homes, minimal environments and owned process groups. On restart, a recorded
 orphan is killed only after its cwd matches the exact recorded worktree.
+Worktrees use private per-run directories in os.tmpdir(), with a repository hash
+and reserved version in the name. Recovery and removal require canonical paths,
+no symlinks and registration in that repository's Git worktree list. Recorded
+legacy worktrees/vN paths remain recoverable. Removal also deletes the owned
+temporary parent; checked changes are still rejected outside approved modules.
+
+Runtime Three.js imports come from server/runner/imports.ts. The static policy,
+guard and builder use the same list; pnpm check verifies its generated AGENTS.md
+block. Raw Points buffers and InstancedMesh capacity charge particle limits even
+when drawRange, index count or active instance count is smaller. Each also charges
+nodes/draws, and instanced geometry charges triangles at allocated capacity.
+Builder public summaries, bounded readable feed lines, command counts and token
+usage are retained in state/builds/. Reasoning, raw commands and stderr are not
+retained. A no-edit completion reports the final summary or explicitly says the
+builder provided no explanation.
 
 Checked versions require a master-reachable tag and a healthy activation. A failed merge removes its unshipped tag; recovery covers a crash between tag
 creation and merge. restoreForward creates

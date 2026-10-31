@@ -286,11 +286,14 @@ never add credentials or populated values.
 ## Phase 7 runner and versions contract
 
 - A guard-accepted plan enters `server/runner`. Start only on clean master. Create
-  a detached `worktrees/vN` from its exact tip; never checkout, reset, stash, clean,
+  a detached worktree from its exact tip in a private per-run directory under
+  os.tmpdir(), outside synced repository folders; never checkout, reset, stash, clean,
   amend or commit in the main checkout. Recheck clean state and unchanged master
   immediately before fast-forward-only promotion; create immutable vN tags.
   Build commits use `vN: <title> (requested by @user)`. Failed pre-promotion builds
-  never alter master. Worktree removal is restricted to the runner's recorded path.
+  never alter master. Recovery/removal require a registered worktree with the
+  repository-specific temporary prefix, canonical path and no symlink ancestors.
+  Recorded legacy worktrees/vN paths may be recovered under the same checks.
 - Run CODEX_BIN with `exec --sandbox workspace-write --json --ephemeral`, medium
   effort, explicit Bedrock model/provider, approval_policy=never and cwd=worktree.
   Only inherit PATH/HOME/AWS_BEARER_TOKEN_BEDROCK plus absolute dedicated CODEX_HOME
