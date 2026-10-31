@@ -1,4 +1,5 @@
 import { config as loadEnv } from "dotenv";
+import type { SummonConfig } from "./summon/provider.js";
 import type { TwitchConfig } from "./twitch/auth.js";
 
 /** dotenv is quiet and server-only. Never spread or log the environment/config. */
@@ -11,5 +12,10 @@ export function readConfig() {
   const twitch: TwitchConfig | undefined = values.every(value => typeof value === "string" && value.trim()) ? {
     clientId: values[0]!, clientSecret: values[1]!, accessToken: values[2]!, refreshToken: values[3]!, broadcasterId: values[4]!,
   } : undefined;
-  return { host: "127.0.0.1", port, twitch } as const;
+  const summon: SummonConfig = {
+    ...(process.env.AWS_BEARER_TOKEN_BEDROCK ? { key: process.env.AWS_BEARER_TOKEN_BEDROCK } : {}),
+    model: process.env.SUMMON_MODEL ?? "openai.gpt-6.1-sol",
+    effort: process.env.SUMMON_REASONING_EFFORT ?? "max", tier: process.env.SUMMON_SERVICE_TIER ?? "ultrafast",
+  };
+  return { summon, host: "127.0.0.1", port, twitch } as const;
 }

@@ -4,7 +4,7 @@ Twitch chat builds a living 3D world on stream. Every chatter becomes a creature
 small wishes become objects, bigger ideas become live-coded systems, and raids
 arrive through a portal. A Codex x TwitchCon Hackathon entry by Arjun.
 
-This is **Phase 3 of 10: Twitch, citizens and the simulator**. `/world` renders the Lantern Garden: an
+This is **Phase 4 of 10: Summon (fast lane)**. `/world` renders the Lantern Garden: an
 original procedural island with jade terrain, layered basalt cliffs, coral trees,
 a spring and waterfall, a moon gate and glowing lanterns. The painted sky follows
 a ten-minute day/night cycle. Soft shadows, shader ripples, GPU fireflies and bloom
@@ -21,7 +21,8 @@ with name tags and speech bubbles. `!jump`, `!dance`, `!follow <name>` and `!hom
 animate them. The server caps the roster at 300; six instanced draws render the
 creatures, which fade five seconds after becoming idle for 20 minutes. Automatic
 arrival/action camera shots coalesce and are at least eight seconds apart.
-AI lanes, Scene Spec materialization and version playback remain future work. `/overlay` and `/history`
+The Summon fast lane now materializes validated data; live-coded modules and
+version playback remain future work. `/overlay` and `/history`
 remain placeholders. Integration stubs fail explicitly if called.
 
 ## Run from a fresh clone
@@ -37,9 +38,12 @@ pnpm dev
 
 In a second terminal at the repository root, run `pnpm sim`. It replays 80 named
 chatters in varied colors, 80 chat lines, 80 commands (20 of each kind), and one
-raid through the same pipeline as Twitch. Expect **161 accepted events and 80
-citizens**. Repeat runs reuse those 80 identities; a dev-server restart clears the
-in-memory roster. Raid intake is implemented; its portal/parade is a later tier.
+raid through the same pipeline as Twitch. It also adds three hand-written fixture
+summons at 5.1-second intervals. Expect
+**164 accepted events, 80 citizens and three fixture summons**. A dev-server restart
+clears the in-memory roster/scenes. Repeat runs reuse those identities and respect
+the 60-second summon cooldown; use a fresh dev server for deterministic checks.
+Raid intake is implemented; its portal/parade is a later tier.
 
 Open [the world](http://127.0.0.1:3000/world) in a WebGL 2-capable browser. It uses a
 fixed **1920×1080 framebuffer at DPR 1**, fitted to the viewport at 16:9 without
@@ -47,13 +51,15 @@ stretching. Set an OBS browser source to 1920×1080. `/` redirects to `/world`.
 
 - `/world?debug=1` shows instantaneous FPS and the rolling 120-frame average.
   Diagnostics are hidden by default. `window.__worldStats` always exposes
-  `{ fps, avgFps, frame, citizenCount, raidCount, cameraFocuses }` for automation. FPS measures actual frame intervals;
+  `{ fps, avgFps, frame, citizenCount, raidCount, cameraFocuses, summonCount, summonFocuses }`
+  for automation. FPS measures actual frame intervals;
   hidden-tab time is excluded and simulation dt is clamped to 0.05 seconds.
 - `?time=dawn`, `?time=day`, `?time=dusk`, `?time=night` freeze the sky at an
   authored time of day for screenshots. Water and fireflies keep animating.
 - Full-HD rendering uses instanced plants/props, pooled particles, one cached
   1024px soft-shadow map, and a half-resolution bloom chain. Crowd shadows refresh
-  every other frame; active modules cause per-frame shadow refresh. No per-frame geometry/material allocation.
+  every other frame; active modules cause per-frame shadow refresh. No per-frame
+  geometry/material allocation.
 
 The server binds only to `127.0.0.1`. To change the port, use `PORT=3001 pnpm dev`.
 Stop with Ctrl+C. Browser bundles are built in memory at startup; restart dev
@@ -67,7 +73,8 @@ Never commit `.env` or put secrets into browser bundles.
 
 ## Checks and local simulation
 
-- `pnpm check`: strict TypeScript checks, 36 contract/engine/integration tests covering lifecycle,
+- `pnpm check`: generated-validator consistency, strict TypeScript checks and 77
+  contract/engine/integration tests covering lifecycle,
   budgets, queues, cleanup, roster/cap/expiry, HTTP/SSE, Twitch reconnect/refresh,
   camera and FPS, and compilation of both browser bundles. No external API calls.
 - `pnpm sim`: sends the scripted crowd to the running server, verifies the roster
@@ -112,9 +119,83 @@ The hardware-backed Chromium check opens `/world?debug=1`, executes **pnpm sim**
 compares all 80 server IDs with browser tags, verifies Twitch colors and all four
 commands, checks bounded bubbles and raid delivery, warms up and samples 15 seconds.
 It requires both measured FPS and `window.__worldStats.avgFps` >=50, no console
-errors and at most three automatic fly-tos. Screenshots go to `test-results/`.
-The M1 Pro/Metal development run held about 60 FPS at 1920×1080 with exactly 80
-citizens and two automatic shots. Performance depends on hardware and load.
+errors and bounded automatic fly-tos. Screenshots go to `test-results/`.
+The previous M1 Pro/Metal development run held about 60 FPS at 1920×1080 with 80
+citizens; the Phase 4 check also verifies fixture effects, credits, camera focus,
+render receipts and zero label overlaps. Performance depends on hardware and load.
+
+## Summon and readable stream labels
+
+At 1080p, the label manager gives speech first choice of space, then summon credits
+and important citizen tags. It hides overlaps and HUD collisions, limits full
+labels, and shrinks/fades quiet distant tags. Nearby citizens, those who spoke in
+the last 30 seconds, new arrivals and camera-focused citizens get full-tag
+priority. Speech bubbles are limited to eight at a time. This replaces the wall
+of 80 overlapping names without removing anyone from the world.
+
+`!summon <wish>` uses the Bedrock Responses API at
+`https://bedrock-mantle.us-east-1.api.aws/openai/v1/responses` with structured JSON
+output. It reads `AWS_BEARER_TOKEN_BEDROCK` **only on the server**. Defaults remain
+`SUMMON_MODEL=openai.gpt-6.1-sol`, `SUMMON_REASONING_EFFORT=max`, and
+`SUMMON_SERVICE_TIER=ultrafast`; set those variables in a private `.env` to change
+them. `.env.example` remains names only. No live Bedrock call has been verified
+without the key; missing credentials return a friendly failure, never a silent
+fixture fallback.
+
+The fast lane applies a blocklist, 60-second per-user cooldown and a global
+five-second gap. Finite numeric values are clamped to declared ranges and safe
+transformed bounds; wrong types, extra properties, excess counts, broken
+references, code, shaders, external URLs and unsupported geometry are rejected.
+The full canonical schema is validated again in the browser. The API receives a
+grammar-compatible schema projection; local validation keeps all constraints.
+The wire adapter follows the official [Bedrock Responses example](https://developers.openai.com/cookbook/examples/partners/aws/openai_models_with_amazon_bedrock)
+and [Bedrock schema constraints](https://docs.aws.amazon.com/bedrock/latest/userguide/structured-output.html).
+AJV validators are compiled **at build time**, so the browser keeps its no-eval CSP.
+To change the canonical schema, regenerate its locked engine validator with:
+
+```sh
+pnpm exec tsx checks/generate-validator.ts
+```
+
+The materializer supports primitives, procedural crystal/mushroom/tree recipes,
+materials, capped emitters, local lights and float/orbit/wander/pulse/follow/flee
+behaviors. Summons get an on-screen spawn effect, requester credit and camera
+focus. Verified Twitch mods can `!clear` the last summon; disposal releases all
+owned scene resources. Admission uses per-spec limits, shared world quotas and
+conservative server headroom. At most 24 summons remain active.
+
+Fixture mode is explicit: local `POST /sim/chat` may include `fixture:true` with
+an ordinary `!summon` message. Twitch never enables it. The hand-written fixtures
+are jellyfish, mushrooms, crystals and arch; every fixture still goes through
+moderation, cooldowns, normalization, strict validation, admission and browser
+render receipts. `pnpm sim` uses this path and never spends Bedrock tokens.
+`checks/summon-prompts.json` holds **30 prompt cases**: 12 valid fixtures, 10
+policy/injection rejections and eight invalid-output rejections. These are tests
+of the pipeline and validator, not claims about untested live model responses.
+
+`state/summon-metrics.jsonl` records mode, settings, validity, clamp status, reason,
+provider latency, request-to-screen latency and input/output/total/reasoning/cached
+token counts. The screen metric uses a request-bound browser receipt after an
+object and its credit are visible and composited. No viewer within 30 seconds
+means null screen latency; a late viewer can append the actual observed result.
+Fixture usage is explicitly zero; unavailable provider counts stay null. No raw
+prompts, generated bodies, private keys or reasoning text are logged. Failures
+reply in Twitch chat, or locally on screen for simulated traffic.
+
+Once the key exists, restart a fresh `pnpm dev` and run:
+
+```sh
+pnpm summon:bench
+```
+
+This opens a local Chromium world, submits **20 real live summons** sequentially
+using distinct benchmark viewers, respects the global five-second gap, and
+prints each result's validity, status, provider/screen latency and token counts.
+It requires an empty world and Chromium installed, exits before making any
+request if the key is absent, and never prints credentials. It may take several
+minutes and incurs the configured model/service-tier charges. The request output
+ceiling is 16,384 tokens and timeout is 120 seconds to allow cold grammar setup;
+the under-ten-second product target still needs a live measurement.
 
 ## Optional live Twitch
 
@@ -159,9 +240,9 @@ Simulator POSTs require JSON <=8 KiB, loopback Host headers and same-origin brow
 requests. No simulator body can claim moderator privileges. Incoming chat is
 limited to one accepted message/user/250 ms and 200 messages/second globally.
 Only server-verified Twitch broadcaster/moderator roles may invoke `!pause`,
-`!skip`, `!clear`. Pause gates new actions; skip/clear publish controls for the
-future lanes. Current blocklist filtering is basic. Speech is always textContent,
-never HTML; at most 16 recent bubbles are visible and each expires after 5.5s.
+`!skip`, `!clear`. Pause gates new actions, clear removes the latest active summon, and skip
+publishes a control for the future Build lane. Current blocklist filtering is basic. Speech is always textContent,
+never HTML; at most eight recent bubbles are visible and each expires after 5.5s.
 
 ## Layout and implementation order
 
@@ -182,7 +263,7 @@ state/        future persisted world/round/version data (ignored; created at run
 
 Build the independently demo-able tiers in order: world/citizens, Summon,
 Build, then raids/history. The live server routes Twitch EventSub events to the world over same-origin SSE;
-the future overlay can consume that stream. Summon will generate validated data via Bedrock Responses;
+the future overlay can consume that stream. Summon generates validated data via Bedrock Responses (or explicit local fixtures);
 Build will guard proposals, write isolated world modules, check them and activate
 versioned changes.
 
@@ -190,14 +271,14 @@ Later-phase model settings from the product contract are retained in `AGENTS.md`
 and `.codex-runtime/config.toml`: `openai.gpt-6.1-sol` on Bedrock in `us-east-1`;
 summon defaults `max` reasoning and `ultrafast` service tier, configurable through
 `SUMMON_MODEL`, `SUMMON_REASONING_EFFORT` and `SUMMON_SERVICE_TIER`. Guard uses low
-effort and builder medium effort. Provider access and latency are not exercised
-or verified yet.
+effort and builder medium effort. Live Bedrock access and latency remain unverified until the key is supplied;
+fixtures and a mocked Responses adapter cover the complete data path.
 
 ## Safety model
 
 - Fast lane runs data, never code. The schema and server parser enforce payload,
   count, numeric, reference and size constraints. Moderation, cooldowns, global
-  rate limits, full geometry bounds and resource admission are later-phase work.
+  rate limits, full geometry bounds and resource admission are now enforced for Summon.
 - Runtime code changes are confined to `world/modules/**`; the future runner must
   reject every diff outside that path, including path escapes and symlinks.
 - Runtime Codex receives an allowlisted environment with no secrets except the

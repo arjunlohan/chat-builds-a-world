@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { buildClient } from "./assets.js";
+import type { SummonService } from "./summon/index.js";
 import { WorldPipeline } from "./pipeline.js";
 
 function json(response: ServerResponse, status: number, value: unknown) {
@@ -26,7 +27,7 @@ async function body(request: IncomingMessage): Promise<unknown> {
   });
 }
 
-export async function createWorldServer(pipeline: WorldPipeline) {
+export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService) {
   const assets = await buildClient();
   const pages = new Map([
     ["/world", await readFile(new URL("../world/index.html", import.meta.url))],
@@ -43,12 +44,21 @@ export async function createWorldServer(pipeline: WorldPipeline) {
     if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host)) { json(response, 421, { error: "Local host required" }); return; }
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
     if (request.headers.origin && request.headers.origin !== `http://${host}`) { json(response, 403, { error: "Same origin required" }); return; }
+    if (path === "/summon/ack") {
+      if (request.method !== "POST") { json(response, 405, { error: "Use POST" }); return; }
+      try { const input = await body(request) as { id?: unknown; receipt?: unknown; error?: unknown };
+        const ok = typeof input?.id === "string" && typeof input.receipt === "string" && !!await summons?.acknowledge(input.id, input.receipt, typeof input.error === "string" ? input.error : undefined);
+        json(response, ok ? 200 : 409, { accepted: ok });
+      } catch { request.resume(); json(response, 400, { error: "Invalid render acknowledgement" }); }
+      return;
+    }
+    if (path.startsWith("/api/summons/")) { const job = summons?.status(path.slice(13)); json(response, job ? 200 : 404, job ?? { error: "Unknown summon" }); return; }
     if (path === "/sim/chat" || path === "/sim/raid") {
       if (request.method !== "POST") { response.setHeader("Allow", "POST"); json(response, 405, { error: "Use POST" }); return; }
       try {
         const input = await body(request);
         // Simulator never grants moderator authority from request fields.
-        const result = path === "/sim/chat" ? pipeline.chat(input) : pipeline.raid(input);
+        const result = path === "/sim/chat" ? pipeline.chat(input, { moderator: false, source: "sim", fixture: (input as { fixture?: unknown })?.fixture === true }) : pipeline.raid(input);
         json(response, 200, result);
       } catch { request.resume(); json(response, 400, { error: "Invalid JSON event or body; maximum 8 KiB, application/json required" }); }
       return;

@@ -1,0 +1,314 @@
+{
+  "version": 1,
+  "name": "Lake Lantern Jelly",
+  "geometries": [
+    {
+      "id": "bell",
+      "kind": "sphere",
+      "size": [
+        2.8,
+        1.1,
+        2.8
+      ],
+      "detail": 2
+    },
+    {
+      "id": "rim",
+      "kind": "torus",
+      "size": [
+        2.1,
+        2.1,
+        0.12
+      ],
+      "detail": 1
+    },
+    {
+      "id": "tendril",
+      "kind": "cylinder",
+      "size": [
+        0.075,
+        1.8,
+        0.075
+      ],
+      "detail": 1
+    }
+  ],
+  "materials": [
+    {
+      "id": "glass",
+      "color": "#88DDCE",
+      "emissive": "#44BAAF",
+      "emissiveIntensity": 1.4,
+      "roughness": 0.65,
+      "metalness": 0.1,
+      "opacity": 1
+    },
+    {
+      "id": "gold",
+      "color": "#F2CE97",
+      "emissive": "#DDAB66",
+      "emissiveIntensity": 1.5,
+      "roughness": 0.65,
+      "metalness": 0.1,
+      "opacity": 1
+    }
+  ],
+  "nodes": [
+    {
+      "id": "crown",
+      "geometryId": "bell",
+      "materialId": "glass",
+      "position": [
+        -2.5,
+        6.3,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "halo",
+      "geometryId": "rim",
+      "materialId": "gold",
+      "position": [
+        -2.5,
+        6,
+        1.5
+      ],
+      "rotation": [
+        1.5707963267948966,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "strand0",
+      "geometryId": "tendril",
+      "materialId": "glass",
+      "position": [
+        -1.7,
+        4.8,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "strand1",
+      "geometryId": "tendril",
+      "materialId": "glass",
+      "position": [
+        -2.0999999999999996,
+        4.8,
+        2.1928203230275507
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "strand2",
+      "geometryId": "tendril",
+      "materialId": "glass",
+      "position": [
+        -2.9,
+        4.8,
+        2.192820323027551
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "strand3",
+      "geometryId": "tendril",
+      "materialId": "glass",
+      "position": [
+        -3.3,
+        4.8,
+        1.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "strand4",
+      "geometryId": "tendril",
+      "materialId": "glass",
+      "position": [
+        -2.9000000000000004,
+        4.8,
+        0.8071796769724493
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "strand5",
+      "geometryId": "tendril",
+      "materialId": "glass",
+      "position": [
+        -2.0999999999999996,
+        4.8,
+        0.8071796769724491
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "behaviors": [
+    {
+      "id": "float0",
+      "kind": "float",
+      "targetId": "crown",
+      "speed": 0.7,
+      "amplitude": 0.25,
+      "radius": 0
+    },
+    {
+      "id": "float1",
+      "kind": "float",
+      "targetId": "halo",
+      "speed": 0.7,
+      "amplitude": 0.25,
+      "radius": 0
+    },
+    {
+      "id": "float2",
+      "kind": "float",
+      "targetId": "strand0",
+      "speed": 0.7,
+      "amplitude": 0.25,
+      "radius": 0
+    },
+    {
+      "id": "float3",
+      "kind": "float",
+      "targetId": "strand1",
+      "speed": 0.7,
+      "amplitude": 0.25,
+      "radius": 0
+    },
+    {
+      "id": "float4",
+      "kind": "float",
+      "targetId": "strand2",
+      "speed": 0.7,
+      "amplitude": 0.25,
+      "radius": 0
+    },
+    {
+      "id": "float5",
+      "kind": "float",
+      "targetId": "strand3",
+      "speed": 0.7,
+      "amplitude": 0.25,
+      "radius": 0
+    },
+    {
+      "id": "float6",
+      "kind": "float",
+      "targetId": "strand4",
+      "speed": 0.7,
+      "amplitude": 0.25,
+      "radius": 0
+    },
+    {
+      "id": "float7",
+      "kind": "float",
+      "targetId": "strand5",
+      "speed": 0.7,
+      "amplitude": 0.25,
+      "radius": 0
+    }
+  ],
+  "emitters": [
+    {
+      "id": "spores",
+      "kind": "fireflies",
+      "position": [
+        -2.5,
+        5.4,
+        1.5
+      ],
+      "color": "#AEF5D8",
+      "maxParticles": 32,
+      "rate": 8,
+      "lifetime": 4,
+      "size": 0.06
+    }
+  ],
+  "lights": [
+    {
+      "id": "lakeglow",
+      "kind": "point",
+      "position": [
+        -2.5,
+        6,
+        1.5
+      ],
+      "color": "#9CE8D6",
+      "intensity": 0.8,
+      "distance": 5
+    }
+  ]
+}

@@ -23,6 +23,7 @@ try {
   if (!canvas) throw new Error("World canvas is missing");
   const world = createRenderer(canvas, {
     ...(labels ? { labels } : {}),
+    onReply(message) { if (fault) { fault.hidden = false; fault.textContent = message; } },
     onConnection(connected) { if (connection) connection.hidden = connected; },
     ...(phase !== undefined ? { fixedTime: phase } : {}),
     onReady() { if (status) status.hidden = true; canvas.dataset.ready = "true"; },

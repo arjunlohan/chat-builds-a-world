@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "name": "Rosecap Grove",
+  "geometries": [
+    {
+      "id": "tall",
+      "kind": "mushroom",
+      "size": [
+        1.8,
+        2.5,
+        1.8
+      ],
+      "detail": 2
+    },
+    {
+      "id": "small",
+      "kind": "mushroom",
+      "size": [
+        1.1,
+        1.5,
+        1.1
+      ],
+      "detail": 1
+    }
+  ],
+  "materials": [
+    {
+      "id": "rose",
+      "color": "#DEA7A8",
+      "emissive": "#A65E8B",
+      "emissiveIntensity": 0.45,
+      "roughness": 0.65,
+      "metalness": 0.1,
+      "opacity": 1
+    },
+    {
+      "id": "cream",
+      "color": "#EDD8A9",
+      "emissive": "#BF9D61",
+      "emissiveIntensity": 0.3,
+      "roughness": 0.65,
+      "metalness": 0.1,
+      "opacity": 1
+    }
+  ],
+  "nodes": [
+    {
+      "id": "roseA",
+      "geometryId": "tall",
+      "materialId": "rose",
+      "position": [
+        3,
+        3.3,
+        3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "roseB",
+      "geometryId": "small",
+      "materialId": "cream",
+      "position": [
+        4.8,
+        2.8,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "roseC",
+      "geometryId": "small",
+      "materialId": "rose",
+      "position": [
+        2,
+        2.6,
+        4.3
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "behaviors": [
+    {
+      "id": "breath",
+      "kind": "pulse",
+      "targetId": "roseA",
+      "speed": 0.7,
+      "amplitude": 0.6,
+      "radius": 0
+    }
+  ],
+  "emitters": [],
+  "lights": []
+}

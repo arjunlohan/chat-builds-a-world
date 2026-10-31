@@ -39,7 +39,7 @@ test("sim HTTP and SSE use the production pipeline, reconnect snapshots and reje
     const world = await fetch(`${base}/world`);
     assert.ok(world.headers.get("content-security-policy")!.includes("connect-src 'self'"));
     const bundle = await (await fetch(`${base}/assets/world.js`)).text();
-    assert.ok(!bundle.includes("TWITCH_ACCESS_TOKEN") && !bundle.includes("TWITCH_CLIENT_SECRET"));
+    assert.ok(!bundle.includes("TWITCH_ACCESS_TOKEN") && !bundle.includes("TWITCH_CLIENT_SECRET") && !bundle.includes("AWS_BEARER_TOKEN_BEDROCK"));
     const second = await fetch(`${base}/events`, { signal: controller.signal });
     const resumed = decoder.decode((await second.body!.getReader().read()).value);
     assert.ok(resumed.includes('"type":"snapshot"')); assert.ok(resumed.includes("local-viewer"));
@@ -47,4 +47,32 @@ test("sim HTTP and SSE use the production pipeline, reconnect snapshots and reje
     controller.abort(); closeStreams(); server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
+});
+
+test("fixture Summon HTTP uses the shared lane, validates receipts and enforces moderator clear", async () => {
+  const { SummonService } = await import("../server/summon/index.js");
+  const pipeline = new WorldPipeline();
+  const records: import("../server/summon/index.js").SummonJob[] = [];
+  const summons = new SummonService({ config: { model: "openai.gpt-6.1-sol", effort: "max", tier: "ultrafast" },
+    publish: event => pipeline.publish(event), reply() {}, record: job => { records.push(job); } });
+  pipeline.attachSummon(summons);
+  const { server, closeStreams } = await createWorldServer(pipeline, summons);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const post = (path: string, input: object) => fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+  try {
+    const chat = { id: "fixture-http", userId: "viewer", displayName: "Viewer", color: "#79D7CF", text: "!summon a jellyfish", fixture: true };
+    assert.equal((await post("/sim/chat", chat)).status, 200);
+    await new Promise(resolve => setImmediate(resolve));
+    const scene = pipeline.snapshot().summons[0]!; assert.ok(scene);
+    assert.equal((await post("/summon/ack", { id: scene.id, receipt: "wrong" })).status, 409);
+    assert.equal((await post("/summon/ack", { id: scene.id, receipt: scene.receipt })).status, 200);
+    const job = await (await fetch(`${base}/api/summons/${scene.id}`)).json();
+    assert.equal(job.status, "rendered"); assert.equal(job.valid, true); assert.equal(records.length, 1);
+    const spoof = { ...chat, id: "forged-clear", userId: "outsider", text: "!clear", moderator: true };
+    assert.equal((await (await post("/sim/chat", spoof)).json()).reason, "moderator-only");
+    assert.equal(summons.active().length, 1);
+    pipeline.chat({ ...chat, id: "real-clear", userId: "verified-mod", text: "!clear" }, { moderator: true });
+    assert.equal(summons.active().length, 0);
+  } finally { closeStreams(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
 });

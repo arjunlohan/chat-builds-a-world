@@ -1,4 +1,5 @@
-import type { ChatEvent, RaidEvent, WorldEvent } from "./contracts.js";
+import type { ChatEvent, RaidEvent, WorldEvent, LaneEvent } from "./contracts.js";
+import type { SummonService } from "./summon/index.js";
 import { CitizenRoster } from "./citizens/index.js";
 
 const id = (v: unknown): v is string => typeof v === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(v);
@@ -23,6 +24,9 @@ export class WorldPipeline {
   private readonly seen = new Map<string, number>();
   private readonly cooldowns = new Map<string, number>();
   private readonly listeners = new Set<(event: WorldEvent) => void>();
+  private summonLane: SummonService | undefined;
+  attachSummon(lane: SummonService) { this.summonLane = lane; }
+  publish(event: LaneEvent) { this.emit({ ...event, revision: ++this.revision, now: this.now() }); }
   private revision = 0;
   private paused = false;
   private raids = 0;
@@ -34,7 +38,7 @@ export class WorldPipeline {
     for (const listener of this.listeners) { try { listener(event); } catch { this.listeners.delete(listener); } }
   }
   snapshot(): Extract<WorldEvent, { type: "snapshot" }> {
-    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids };
+    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, summons: this.summonLane?.active() ?? [] };
   }
   private duplicate(key: string, now: number) {
     if (this.seen.has(key)) return true;
@@ -42,7 +46,7 @@ export class WorldPipeline {
     while (this.seen.size > 10_000) this.seen.delete(this.seen.keys().next().value!);
     return false;
   }
-  chat(input: unknown, authority: { moderator: boolean } = { moderator: false }) {
+  chat(input: unknown, authority: { moderator: boolean; fixture?: boolean; source?: "sim" | "twitch" } = { moderator: false }) {
     const event = parseChat(input), now = this.now();
     if (this.duplicate(`chat:${event.id}`, now)) return { accepted: false, reason: "duplicate" };
     const mod = /^!(pause|skip|clear)$/i.exec(event.text.trim());
@@ -50,11 +54,15 @@ export class WorldPipeline {
       if (!authority.moderator) return { accepted: false, reason: "moderator-only" };
       const action = mod[1]!.toLowerCase() as "pause" | "skip" | "clear";
       if (action === "pause") this.paused = !this.paused;
+      if (action === "clear") void this.summonLane?.clearLatest();
       this.emit({ type: "control", revision: ++this.revision, now, action, paused: this.paused });
       return { accepted: true, count: this.roster.size };
     }
     if (this.paused) return { accepted: false, reason: "paused" };
-    if (this.blocklist.some(term => event.text.toLocaleLowerCase().includes(term))) return { accepted: false, reason: "blocked" };
+    if (this.blocklist.some(term => event.text.toLocaleLowerCase().includes(term))) {
+      if (/^!summon\b/i.test(event.text) && this.summonLane) { void this.summonLane.submit(event, authority); return { accepted: true, count: this.roster.size }; }
+      return { accepted: false, reason: "blocked" };
+    }
     const second = Math.floor(now / 1000);
     if (this.window !== second) { this.window = second; this.messages = 0; }
     if (now - (this.cooldowns.get(event.userId) ?? -Infinity) < 250 || this.messages >= 200) return { accepted: false, reason: "rate-limited" };
@@ -62,6 +70,7 @@ export class WorldPipeline {
     if (!result) return { accepted: false, reason: "capacity" };
     this.messages++; this.cooldowns.set(event.userId, now);
     this.emit({ type: "chat", revision: ++this.revision, now, chat: { ...event, timestamp: now }, ...result });
+    if (/^!summon(?:\s|$)/i.test(event.text.trim())) void this.summonLane?.submit({ ...event, timestamp: now }, authority);
     return { accepted: true, count: this.roster.size };
   }
   raid(input: unknown) {

@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "name": "The Fernkeeper Arch",
+  "geometries": [
+    {
+      "id": "curve",
+      "kind": "torus",
+      "size": [
+        2.3,
+        3.2,
+        0.3
+      ],
+      "detail": 1
+    },
+    {
+      "id": "post",
+      "kind": "box",
+      "size": [
+        0.45,
+        1.5,
+        0.5
+      ],
+      "detail": 1
+    },
+    {
+      "id": "sprout",
+      "kind": "tree",
+      "size": [
+        1,
+        1.5,
+        1
+      ],
+      "detail": 1
+    },
+    {
+      "id": "leaf",
+      "kind": "plane",
+      "size": [
+        0.6,
+        1,
+        0.01
+      ],
+      "detail": 1
+    }
+  ],
+  "materials": [
+    {
+      "id": "stone",
+      "color": "#B7C8B8",
+      "emissive": "#000000",
+      "emissiveIntensity": 0,
+      "roughness": 0.65,
+      "metalness": 0.1,
+      "opacity": 1
+    },
+    {
+      "id": "rune",
+      "color": "#A3F4D7",
+      "emissive": "#66C7AE",
+      "emissiveIntensity": 1.2,
+      "roughness": 0.65,
+      "metalness": 0.1,
+      "opacity": 1
+    }
+  ],
+  "nodes": [
+    {
+      "id": "arch",
+      "geometryId": "curve",
+      "materialId": "rune",
+      "position": [
+        5,
+        4,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "left",
+      "geometryId": "post",
+      "materialId": "stone",
+      "position": [
+        3.9,
+        2.4,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "right",
+      "geometryId": "post",
+      "materialId": "stone",
+      "position": [
+        6.1,
+        2.4,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "treeNode",
+      "geometryId": "sprout",
+      "materialId": "stone",
+      "position": [
+        6.8,
+        2.8,
+        -0.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "leafNode",
+      "geometryId": "leaf",
+      "materialId": "rune",
+      "position": [
+        5,
+        4.2,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "behaviors": [],
+  "emitters": [],
+  "lights": []
+}

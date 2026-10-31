@@ -25,6 +25,7 @@ export class CameraDirector {
   private lastAutomatic = -Infinity;
   private lastFocus = -Infinity;
   private automaticCount = 0;
+  get focusPoint(): Readonly<Vector3> | undefined { return this.hold > 0 ? this.target : undefined; }
   get automaticFocuses() { return this.automaticCount; }
 
   /** Coalesce a burst to one weighted target; automatic shots are >=8 seconds apart. */

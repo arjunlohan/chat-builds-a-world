@@ -1,7 +1,7 @@
 import { Group, Vector3 } from "three";
 import type { ChatEvent, RaidEvent } from "../../server/contracts.js";
 import type { Citizen, SpawnHandle, WorldModule, WorldModuleFactory, WorldServices } from "./api.js";
-import { emptyUsage, ResourceLedger, ResourceOwner } from "./resources.js";
+import { emptyUsage, MODULE_CAP, ResourceLedger, ResourceOwner, type Usage } from "./resources.js";
 
 export const MODULE_BUDGET = Object.freeze({
   maxActive: 8, perModuleMs: 2, totalMs: 4, maxDtSeconds: 0.05,
@@ -14,7 +14,7 @@ type Event = { kind: "onChat"; value: Readonly<ChatEvent> } |
 export interface ModuleStatus { id: string; state: "active" | "disabled" | "rejected" | "disposed"; reason: string }
 interface RecordState {
   module: WorldModule; id: string; key: string; root: Group; owner: ResourceOwner;
-  queue: Event[]; overruns: number[]; handles: Set<SpawnHandle>; active: boolean; cleaned: boolean;
+  queue: Event[]; overruns: number[]; handles: Set<SpawnHandle>; spawnUsage: Map<SpawnHandle, Usage>; active: boolean; cleaned: boolean;
   window: number; effects: number; logs: number; lastFocus: number; lastQueueWarning: number;
 }
 interface HostOptions {
@@ -80,13 +80,15 @@ export class ModuleHost {
       }),
       spawnSpec: (spec: Parameters<WorldServices["spawnSpec"]>[0]) => {
         allow();
-        // The engine materializer owns validation/admission. It remains unavailable in Phase 2.
+        // The engine materializer validates and reserves globally; this host also caps aggregate module ownership.
         const handle = this.options.services.spawnSpec(spec);
+        const usage = (handle as SpawnHandle & { usage?: Usage }).usage ?? emptyUsage();
         const owned: SpawnHandle = { id: handle.id, dispose: () => {
           if (!record.handles.delete(owned)) return;
-          handle.dispose();
+          record.spawnUsage.delete(owned); handle.dispose();
         } };
-        record.handles.add(owned);
+        record.handles.add(owned); record.spawnUsage.set(owned, usage);
+        try { this.audit(record); } catch { owned.dispose(); throw new Error("module spawn allocation limit exceeded"); }
         return Object.freeze(owned);
       },
       camera: Object.freeze({ focus: (target: Readonly<Vector3>, opts: { duration?: number; priority?: number } = {}) => {
@@ -111,6 +113,16 @@ export class ModuleHost {
     });
   }
 
+  private audit(record: RecordState) {
+    const raw = record.owner.audit(record.root, 256);
+    for (const key of Object.keys(MODULE_CAP) as (keyof Usage)[]) {
+      let total = raw[key]; for (const usage of record.spawnUsage.values()) total += usage[key];
+      if (total > MODULE_CAP[key]) throw new Error(`${key} module limit exceeded`);
+    }
+    // Materializer reservations already charge global usage; only raw scene resources go here.
+    this.ledger.reserve(record.key, raw);
+  }
+
   /** Init and audit candidate before retiring a previous instance with the same ID. */
   load(factory: WorldModuleFactory): boolean {
     let module: WorldModule;
@@ -128,7 +140,7 @@ export class ModuleHost {
     const record: RecordState = {
       module, id: module.id, root, key: `${module.id}:${++this.serial}`, owner: new ResourceOwner(this.options.protectedResources),
       queue: [], overruns: [], handles: new Set<SpawnHandle>(), active: false, cleaned: false,
-      window: -1, effects: 0, logs: 0, lastFocus: -Infinity, lastQueueWarning: -Infinity,
+      spawnUsage: new Map(), window: -1, effects: 0, logs: 0, lastFocus: -Infinity, lastQueueWarning: -Infinity,
     };
     const services = this.services(record);
     try {
@@ -136,7 +148,7 @@ export class ModuleHost {
       const elapsed = this.invoke(record, "init", () => module.init(services));
       if (elapsed > MODULE_BUDGET.lifecycleMs) throw new Error("init exceeded 8 ms");
       if (root.parent) throw new Error("module group escaped ownership");
-      this.ledger.reserve(record.key, record.owner.audit(root, 256));
+      this.audit(record);
     } catch (error) {
       this.status(module.id, "rejected", error instanceof Error ? error.message : "init failed");
       this.cleanup(record);
@@ -220,7 +232,7 @@ export class ModuleHost {
           elapsed += this.invoke(record, "update", () => record.module.update(seconds));
         }
         if (record.root.parent !== this.options.root) throw new Error("module group escaped ownership");
-        this.ledger.reserve(record.key, record.owner.audit(record.root, 256));
+        this.audit(record);
         record.overruns = record.overruns.filter(frame => frame > this.frame - MODULE_BUDGET.overrunWindow);
         if (elapsed > MODULE_BUDGET.perModuleMs) record.overruns.push(this.frame);
         if (record.overruns.length >= MODULE_BUDGET.disableAfterOverruns) throw new Error("three 2 ms overruns in 60 frames");

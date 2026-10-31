@@ -6,12 +6,13 @@ import {
 import type { Citizen, WorldServices } from "./api.js";
 import type { CitizenState } from "../../server/contracts.js";
 import { hash, terrainHeight } from "./land.js";
+import { LabelManager, citizenLabelMode } from "./labels.js";
 import { stepOnLand } from "./navigation.js";
 
 const LIMIT = 300, IDLE_MS = 20 * 60_000, FADE_MS = 5000;
 interface Creature {
   state: CitizenState; position: Vector3; phase: number; yaw: number; born: number;
-  label: HTMLDivElement; name: HTMLSpanElement; bubble: HTMLSpanElement;
+  label: HTMLDivElement; name: HTMLSpanElement; bubble: HTMLSpanElement; removeLabel: () => void; fullWidth: number; quietWidth: number;
 }
 interface Part { mesh: InstancedMesh; fade: InstancedBufferAttribute; copies: number }
 
@@ -24,7 +25,7 @@ export class Citizens {
   private readonly transform = new Object3D();
   private readonly tint = new Color();
   private readonly projection = new Vector3();
-  private labelTime = 0;
+  private readonly measure = document.createElement("canvas").getContext("2d");
   private dirtyColor = false;
   private readonly speakers = new Set<string>();
   private readonly body: Part;
@@ -34,7 +35,7 @@ export class Citizens {
   private readonly paws: Part;
   private readonly tails: Part;
 
-  constructor(private readonly labels: HTMLElement) {
+  constructor(private readonly labels: HTMLElement, private readonly layout: LabelManager) {
     this.root.name = "citizens • 300 reserved creature slots";
     const make = (geometry: IcosahedronGeometry | ConeGeometry, color: string, copies: number, name: string, shadows = false) => {
       const material = new MeshStandardMaterial({ color, roughness: 0.9, flatShading: true });
@@ -86,12 +87,33 @@ export class Citizens {
       label.dataset.userId = state.id; label.hidden = true;
       label.append(bubble, name); this.labels.append(label);
       const phase = hash(state.id) / 4294967296 * Math.PI * 2;
-      c = { state, position: new Vector3(...state.home), phase, yaw: phase, born: now, label, name, bubble };
+      c = { fullWidth: 160, quietWidth: 80, removeLabel: () => {}, state, position: new Vector3(...state.home), phase, yaw: phase, born: now, label, name, bubble };
       this.items.push(c); this.byId.set(state.id, c);
+      const creature = c;
+      creature.removeLabel = this.layout.add(`citizen:${state.id}`, label, (time, camera, focus) => {
+        this.projection.copy(creature.position); this.projection.y += 1.0; this.projection.project(camera);
+        if (this.projection.z <= -1 || this.projection.z >= 1) return undefined;
+        const s = creature.state, spokeAge = time - s.speechAt;
+        const focused = !!focus && creature.position.distanceToSquared(focus) < 3.2;
+        const distance = creature.position.distanceTo(camera.position);
+        const speaking = spokeAge < 5500 && this.speakers.has(s.id);
+        const mode = speaking ? "speech" : citizenLabelMode(distance, spokeAge, time - creature.born, focused);
+        creature.bubble.hidden = !speaking;
+        const nameWidth = mode === "quiet" ? creature.quietWidth : creature.fullWidth;
+        return { x: (this.projection.x + 1) * 960, y: (1 - this.projection.y) * 540,
+          width: speaking ? Math.max(200, nameWidth) : nameWidth, height: speaking ? 82 : mode === "quiet" ? 18 : 26,
+          kind: mode, opacity: Math.max(0, Math.min(1, 1 - (time - s.lastActive - IDLE_MS) / FADE_MS)) * (mode === "quiet" ? 0.35 : 1),
+          priority: speaking ? 2000 + Math.max(0, 5500 - spokeAge) / 5500 : focused ? 900 : mode === "quiet" ? 1 : 100 + Math.max(0, 30_000 - spokeAge) / 1000 + 30 / Math.max(1, distance),
+        };
+      });
     }
     c.state = state;
     this.speakers.delete(state.id); this.speakers.add(state.id);
     if (this.speakers.size > 16) this.speakers.delete(this.speakers.keys().next().value!);
+    if (this.measure) {
+      this.measure.font = "13px system-ui"; c.fullWidth = Math.min(500, Math.ceil(this.measure.measureText(state.displayName).width) + 16);
+      this.measure.font = "10px system-ui"; c.quietWidth = Math.min(80, Math.ceil(this.measure.measureText(state.displayName).width) + 10);
+    }
     c.name.textContent = state.displayName;
     c.bubble.textContent = state.speech;
     c.label.dataset.command = state.command?.kind ?? "idle";
@@ -109,7 +131,7 @@ export class Citizens {
     for (const id of ids) {
       const c = this.byId.get(id);
       if (!c) continue;
-      c.label.remove(); this.speakers.delete(id); this.byId.delete(id); this.items.splice(this.items.indexOf(c), 1);
+      c.removeLabel(); this.speakers.delete(id); this.byId.delete(id); this.items.splice(this.items.indexOf(c), 1);
     }
     this.dirtyColor = true;
   }
@@ -120,9 +142,6 @@ export class Citizens {
     part.mesh.setMatrixAt(index, this.transform.matrix); part.fade.setX(index, opacity);
   }
   update(dt: number, time: number, now: number, camera: PerspectiveCamera, reducedMotion: boolean) {
-    this.labelTime += dt;
-    const project = this.labelTime >= 0.05;
-    if (project) this.labelTime = 0;
     for (let i = 0; i < this.items.length; i++) {
       const c = this.items[i]!, s = c.state;
       const age = Math.max(0, (now - s.commandAt) / 1000);
@@ -170,17 +189,7 @@ export class Citizens {
         this.body.mesh.setColorAt(i, this.tint); this.tails.mesh.setColorAt(i, this.tint);
         for (let j = 0; j < 2; j++) this.ears.mesh.setColorAt(i * 2 + j, this.tint);
       }
-      if (project) {
-        this.projection.copy(c.position); this.projection.y += 1.0; this.projection.project(camera);
-        const visible = this.projection.z > -1 && this.projection.z < 1 && Math.abs(this.projection.x) < 1.05 && Math.abs(this.projection.y) < 1.05;
-        c.label.hidden = !visible;
-        if (visible) {
-          c.label.style.transform = `translate3d(${((this.projection.x + 1) * 960).toFixed(1)}px,${((1 - this.projection.y) * 540).toFixed(1)}px,0) translate(-50%,-100%)`;
-          c.label.style.opacity = String(fade);
-          const speaking = now - s.speechAt < 5500 && this.speakers.has(s.id);
-          c.bubble.hidden = !speaking;
-        }
-      }
+
     }
     for (const part of this.parts) {
       part.mesh.count = this.count * part.copies; part.mesh.instanceMatrix.needsUpdate = true; part.fade.needsUpdate = true;
@@ -188,5 +197,5 @@ export class Citizens {
     }
     this.dirtyColor = false;
   }
-  dispose() { for (const c of this.items) c.label.remove(); this.items.length = 0; this.byId.clear(); }
+  dispose() { for (const c of this.items) c.removeLabel(); this.items.length = 0; this.byId.clear(); }
 }

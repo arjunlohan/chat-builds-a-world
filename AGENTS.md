@@ -28,12 +28,13 @@ Build in this order; cut scope from the bottom:
    scaled to viewer count within the citizen cap. `/history` replays v1…vN as a
    time-lapse. Cross-channel module gifts are stretch scope.
 
-Phase 3 provides the procedural world, instanced citizens, shared Twitch/simulator
-pipeline, cinematic camera, bounded module host and frame diagnostics. Twitch is
-optional; missing configuration produces one warning and keeps sim-only mode
-running. Bedrock, spec materialization and runtime Codex calls remain disabled.
-No credentials are required for the simulator. Never print or log tokens. Do not
-present stub success as a completed integration.
+Phase 4 provides the procedural world, instanced citizens, shared Twitch/simulator
+pipeline, readable collision-managed labels, and the data-only Summon fast lane.
+Twitch and Bedrock are optional: missing Twitch configuration keeps sim-only mode
+running; missing Bedrock credentials fails live Summon without substituting a
+fixture. Explicit fixture requests use hand-written Scene Specs and the same
+validation, cooldown, admission, materialization and receipt path. Runtime Codex
+is still disabled. Never print or log credentials.
 
 ## Architecture and ownership
 
@@ -93,7 +94,7 @@ configuration and latency will be verified when the integration is built.
 - Reserve resources for 300 creatures in six InstancedMesh draws. Each citizen has
   a dry, unique home, current command, last activity, name/color and latest speech.
   Bodies/ears/tails use the Twitch color (stable palette fallback for empty color).
-  Name tags and at most 16 current speech bubbles use textContent, never HTML.
+  Name tags and at most eight visible speech bubbles use textContent, never HTML.
   Bubbles expire after 5.5 seconds. Idle citizens dither-fade for five seconds
   starting at 20 minutes, then the server removes them and releases their home.
 - `!jump`, `!dance`, `!follow <name>` (case-insensitive display name/ID), `!home`
@@ -122,9 +123,75 @@ configuration and latency will be verified when the integration is built.
   server-only POST /helix/chat/messages; no test sends a real Twitch message.
 - Only authenticated EventSub broadcaster/moderator roles can invoke !pause,
   !skip, !clear. Sim JSON cannot grant roles. !pause gates new chat actions;
-  skip/clear emit controls for future summon/build lanes, which are still stubs.
+  skip emits a control for the future Build lane; clear now removes the last
+  active Summon as specified below.
   Twitch AutoMod is upstream; enable it on the channel. The current blocklist is
   deliberately basic, not a claim of comprehensive moderation.
+
+## Phase 4 Summon and label contract
+
+- Citizen tags are packed in a shared 1920×1080 screen layout with HUD exclusion
+  zones. Bubbles win, then summon credits, focus, near/recent arrivals and tags.
+  Full tags are eligible within 19 world units, within 30 seconds of speaking,
+  within eight seconds of arrival, or near the camera focus. Quiet distant tags
+  are smaller/faded. Show at most eight bubbles, 22 full labels and six quiet tags;
+  hide colliding rectangles. Keep full text in the DOM; use textContent throughout.
+- !summon goes through `server/summon/index.ts`: untrusted wish/blocklist check,
+  60-second per-user cooldown, global one-per-five-seconds limit, provider,
+  normalize, strict schema/reference/workload/bounds validation, global admission,
+  SSE event, atomic browser materialization, then visible-paint receipt.
+- Live calls use the exact specified Bedrock Responses endpoint/model and
+  configurable reasoning/service tier. The key is read only from
+  AWS_BEARER_TOKEN_BEDROCK server-side. Requests use store:false, a fixed output
+  token ceiling, no tools and a 120-second timeout (including possible cold
+  grammar compilation). A compatible schema projection removes unsupported
+  provider grammar keywords and replaces behavior conditionals with explicit
+  alternatives; the canonical full schema remains authoritative locally.
+- `normalizeSceneSpec` accepts only finite numeric values of the correct types,
+  clamps declared numeric ranges, scaled dimensions and transformed/animated
+  world positions, and then invokes the strict validator. Never repair unknown
+  fields, IDs, references, unsupported types, oversized payloads or array counts.
+  Clamp cannot turn executable code or unsafe content into an allowed spec.
+- Strict and structural validators are AJV standalone output, generated at build
+  time from the canonical JSON schema. `pnpm check` checks the generated file is
+  current. Regenerate with `pnpm exec tsx checks/generate-validator.ts`. The browser
+  executes no dynamic validator compilation; CSP continues to disallow eval.
+- Materialization covers all nine geometry recipes, all six behaviors, vetted
+  emitter shaders and point/spot lights without shadows. Geometry is fitted to
+  its declared local bounding box; workload estimates are tested against actual
+  recipe triangles at every detail level. No textures, external assets or code
+  come from model output. Revalidate in the browser and reserve shared resources
+  before attaching anything. Dispose geometries, materials, particles, labels and
+  reservations on removal. Module spawnSpec handles also count toward aggregate
+  module quotas, in addition to shared world admission.
+- Summons have a spawn burst when first visible, a requester credit in the shared
+  label layout and a priority camera fly-to. !clear is accepted only from verified
+  Twitch moderators/broadcaster and removes the last active summon. Sim JSON can
+  never grant moderator privileges. No generated code runs in this lane.
+- `fixture:true` is accepted only on local `/sim/chat`, never from Twitch. The sim
+  adds three different existing viewers' fixture wishes at least 5.1 seconds
+  apart; it does not bypass limits or need Bedrock credentials. There are four
+  hand-written fixtures. `checks/summon-prompts.json` has 30 labeled prompt cases:
+  12 allowed, 10 blocked/injection cases and eight invalid output fixtures.
+- `/summon/ack` accepts a request-bound render receipt. The world sends it on the
+  RAF after compositing a frustum-visible object and credit label; total latency
+  is server receipt time minus accepted request time. Provider time is separate.
+  `/api/summons/<id>` exposes bounded diagnostic status, validity and usage.
+  Never log raw prompts, provider bodies, reasoning text, receipts or credentials.
+- Append metrics to ignored `state/summon-metrics.jsonl`: mode, model/settings,
+  validity, clamp flag, reason, provider time, request-to-screen latency and
+  input/output/total/reasoning/cached token counts. Fixtures have explicit zero
+  usage. Missing usage stays null. No visible receipt after 30 seconds records
+  null screen latency; a late valid receipt can append the observed result.
+- Failures produce a safe chat reply via Twitch sendChat, or a local on-screen
+  reply for simulator traffic. Never echo raw provider errors. Cooldown refusal
+  replies are coalesced per user to avoid flooding chat.
+- Keep at most 24 active scenes, per-spec canonical caps, conservative server
+  global headroom and a final client ledger check. `pnpm summon:bench` requires the
+  key and a fresh running dev server; it opens Chromium and submits 20 live wishes
+  sequentially through `/sim/chat` with fixture:false, respects the five-second
+  global limit, and prints validity, provider/screen latency and token counts.
+  The live benchmark has not been run without a key and is never faked.
 
 ## World Module API v1
 
@@ -206,15 +273,15 @@ failed activation disposes the candidate and keeps the previous version active.
   or black frames. Use an external process timeout to catch page freezes. The
   Phase 2 smoke verifies day/night rendering and animation only; it is not the
   candidate gate. `checks/world.performance.ts` separately measures the empty
-  world for 15 seconds on an identified physical GPU. The Phase 3 crowd
-  performance check separately measures 80 scripted citizens.
+  world for 15 seconds on an identified physical GPU. The crowd performance check
+  now measures 80 scripted citizens plus three Phase 4 fixture summons.
 
 ## Scene Spec v1: data only
 
 Canonical machine-readable schema: `server/summon/scene-spec.schema.json`, JSON
-Schema draft 2020-12. `parseSceneSpec` enforces schema plus byte size, ID uniqueness,
-references, Y bounds and scaled dimensions. Client materializer is still a stub;
-future implementations must enforce allocation/triangle/motion limits below.
+Schema draft 2020-12. `parseSceneSpec` enforces schema plus byte size, ID uniqueness, references, scaled
+dimensions, transformed/animated bounds and workload limits. The browser independently revalidates and materializes atomically, including
+allocation, triangle, transformed bounds and motion limits below.
 Schema and TypeScript definitions must change together; update contract tests.
 No code, shaders, external URLs, file paths, textures, scripts or arbitrary assets.
 All object properties are closed; unknown fields are rejected, never stripped.
@@ -676,8 +743,8 @@ Full JSON schema (keep identical to the canonical file):
   uses read-only sandbox, low effort and JSON schema output. Construct an explicit
   minimal environment: only the Bedrock credential, dedicated CODEX_HOME and
   necessary allowlisted execution variables. Never inherit Twitch credentials.
-  Do not log credentials. Twitch is the only active external integration; no
-  Bedrock calls or runtime Codex subprocesses exist yet.
+  Do not log credentials. Twitch and Bedrock are the only active external integrations; no
+  runtime Codex subprocesses exist yet; Bedrock is active only for live Summon.
 - Module host wraps each hook, budgets scheduling and auto-disables on failures.
   Require isolated headless checks before merge/tag, and retain the previous known
   good version for reversion. Serialize activation and persist recovery state.

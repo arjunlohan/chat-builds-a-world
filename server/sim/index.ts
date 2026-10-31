@@ -17,11 +17,26 @@ try {
     accepted++;
     await delay(step.delay);
   }
+  for (let i = 0; i < 3; i++) {
+    if (i) await delay(5100);
+    const wish = ["a glowing jellyfish above the lake", "a rose mushroom grove", "an orbit of amber crystals"][i]!;
+    const event = { id: `sim-${run}-summon-${i}`, userId: `sim-viewer-${i}`, displayName: ["Moss01", "Pebble02", "Clover03"][i], color: ["#E9A18E", "#79D7CF", "#9FB3E7"][i], text: `!summon ${wish}`, fixture: true };
+    const response = await fetch(`${base}/sim/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(event) });
+    if (!response.ok || !(await response.json() as { accepted: boolean }).accepted) throw new Error("Fixture summon was rejected");
+    let valid = false;
+    for (let poll = 0; poll < 50; poll++) {
+      const job = await (await fetch(`${base}/api/summons/${event.id}`)).json() as { status: string; valid: boolean };
+      if (job.status !== "generating") { valid = job.valid && ["awaiting-render", "rendered"].includes(job.status); break; }
+      await delay(100);
+    }
+    if (!valid) throw new Error("Fixture summon failed validation or cooldown");
+    accepted++;
+  }
   const response = await fetch(`${base}/api/world`);
-  const world = await response.json() as { citizens: { id: string }[]; raids: number };
+  const world = await response.json() as { citizens: { id: string }[]; raids: number; summons: unknown[] };
   const count = world.citizens.filter(c => c.id.startsWith("sim-viewer-")).length;
   if (count !== SIM_CROWD) throw new Error("Crowd count mismatch");
-  console.log(`Simulator: ${accepted} events accepted, ${count}/${SIM_CROWD} scripted citizens, ${world.citizens.length} total citizens, ${world.raids} raid event(s).`);
+  console.log(`Simulator: ${accepted} events accepted, ${count}/${SIM_CROWD} scripted citizens, ${world.citizens.length} total citizens, ${world.raids} raid event(s), ${world.summons.length} fixture summons.`);
 } catch {
   console.error(`Simulator could not complete. Start pnpm dev on port ${port}; use an unpaused world with capacity for 80 citizens.`);
   process.exitCode = 1;
