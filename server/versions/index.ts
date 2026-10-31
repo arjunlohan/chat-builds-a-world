@@ -2,11 +2,19 @@ import { createHash, randomUUID } from "node:crypto";
 import {atomicJson,readJson} from "../persistence/atomic.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import {GLOBAL_CAP,usageKeys,type Usage} from "../../world/shared/limits.js";
 export interface ModuleArtifact { id: string; url: string; hash: string; file: string }
 export interface WorldVersion { version: number; tag: string; commit: string; title: string; requester: string; modules: ModuleArtifact[]; receipt: string; healthy?: boolean; restoredFrom?: string }
 export type HistoryEntry = Pick<WorldVersion,"version"|"tag"|"commit"|"title"|"requester"|"modules">;
 interface Stored { baseline?: string; counter: number; current: WorldVersion | null; history: WorldVersion[]; pending?: { path: string; base: string; version: number;process?:number;owner?:number } }
 export class Versions {
+  private base:Usage|undefined;
+  get baseUsage(){return this.base?{...this.base}:undefined;}
+  reportBaseUsage(value:unknown){
+    if(!value||typeof value!=="object"||Array.isArray(value)||Object.keys(value).length!==usageKeys.length)return false;
+    const usage=value as Usage;if(usageKeys.some(k=>!Number.isFinite(usage[k])||usage[k]<0||usage[k]>GLOBAL_CAP[k]))return false;
+    this.base={...usage};return true;
+  }
   private data: Stored = { counter: 0, current: null, history: [] };
   private replayJson:string|undefined;
   private readonly bundles = new Map<string, string>();

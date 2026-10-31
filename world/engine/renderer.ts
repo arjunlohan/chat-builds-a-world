@@ -167,6 +167,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     serverOffset = event.now - Date.now();
     switch (event.type) {
     case "snapshot": {
+      post("/modules/budget",{base});
       void activate(event.version);
       citizens.sync(event.citizens, event.now); stats.value.raidCount = event.raids;
       if(event.arrival)raidPortal.open(event.arrival.raid.broadcasterName,event.arrival.admitted,event.arrival.raid.viewerCount,elapsed-(event.now-event.arrival.at)/1000);

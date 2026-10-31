@@ -23,6 +23,23 @@ usage are retained in state/builds/. Reasoning, raw commands and stderr are not
 retained. A no-edit completion reports the final summary or explicitly says the
 builder provided no explanation.
 
+The builder's locked self-check command is generated per run and points outside
+its worktree to server/runner/self-check.ts and a private state/self-checks/ manifest.
+Run it from the candidate worktree. It compiles the entrypoint with the runner's
+static policy and TypeScript check, then uses the actual ModuleHost, ResourceOwner
+and ResourceLedger for resource admission. Generated code runs in an isolated
+Chromium page with WebGL disabled, not in Node. This probe simulates bounded
+updates but creates no renderer and samples no FPS or visibility. Its process and
+browser are killed on cancellation/timeout. The runner calls the same selfCheck
+function independently before the existing candidate gate.
+
+The primary world's snapshot handshake reports the engine's allocated base usage.
+That reservation, the reserved summon pool and retained module bundles form the
+resource context. The prompt includes measured retained usage and available pool
+capacity. If the base has not been reported, the prompt explicitly says so and the
+independent browser gate remains authoritative; no admission cap is relaxed there.
+Base reports are bounded, restricted to the primary stream and never checkpointed.
+
 Checked versions require a master-reachable tag and a healthy activation. A failed merge removes its unshipped tag; recovery covers a crash between tag
 creation and merge. restoreForward creates
 a worktree and forward commit for rollback, failed activation and startup recovery.

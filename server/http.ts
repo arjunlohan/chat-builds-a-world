@@ -57,9 +57,13 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     const url = new URL(request.url ?? "/", "http://localhost"), path = url.pathname;
     if (request.headers.origin && request.headers.origin !== `http://${host}`) { json(response, 403, { error: "Same origin required" }); return; }
     if ((path.startsWith("/sim/") || path === "/runner/live") && !automation?.simulationAllowed) { request.resume(); json(response, 403, { error: "Simulation routes are disabled" }); return; }
-    if (["/runner/live","/modules/fault","/modules/ack","/summon/ack","/sim/round","/sim/chat","/sim/raid","/sim/eventsub"].includes(path)) {
+    if (["/runner/live","/modules/budget","/modules/fault","/modules/ack","/summon/ack","/sim/round","/sim/chat","/sim/raid","/sim/eventsub"].includes(path)) {
       await post(request,response,async input=>{
         switch(path){
+          case "/modules/budget": {
+            const accepted=primary(input.clientId)&&!!versions?.reportBaseUsage(input.base);
+            return {status:accepted?200:409,value:{accepted}};
+          }
           case "/runner/live": {
             if(!automation?.live||!rounds||rounds.snapshot().phase!=="ideas"||rounds.snapshot().totalIdeas){return {status:409,value:{error:"Live runner requires a key and an empty round."}};}
             if(typeof input.idea!=="string")throw new Error();const round=rounds.snapshot().round;
