@@ -1,3 +1,4 @@
+import { SUMMON_POOL, modulePool, emptyUsage, RenderFailure } from "../shared/limits.js";
 import type { WorldVersion } from "../../server/versions/index.js";
 import type { WorldModuleFactory } from "./api.js";
 import { isChatCommand, hasPhysicalReaction } from "../../server/commands.js";
@@ -39,6 +40,8 @@ export interface RendererOptions {
 
 /** Fixed OBS framebuffer; CSS fits it into any viewport without extra DPR work. */
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions = {}) {
+  const clientId = crypto.randomUUID();
+  const post = (url: string, data: object) => void fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, clientId }) }).catch(() => {});
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(1);
@@ -97,31 +100,33 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const engineResources = new ResourceOwner();
   const base = engineResources.audit(environment);
   base.triangles += citizens.triangleReserve;
-  const ledger = new ResourceLedger(base);
+  const ledger = new ResourceLedger(emptyUsage(), modulePool(base));
+  const summonLedger = new ResourceLedger(emptyUsage(), SUMMON_POOL);
   let moduleRoot = new Group();
   moduleRoot.name = "world modules";
   scene.add(moduleRoot);
   const ack = (state: import("../../server/contracts.js").SummonState, error?: string) => {
-    void fetch("/summon/ack", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: state.id, receipt: state.receipt, ...(error ? { error } : {}) }) }).catch(() => {});
+    post("/summon/ack", { id: state.id, receipt: state.receipt, ...(error ? { error } : {}) });
   };
-  const materializer = new SpecMaterializer({ root: scene, ledger, layout: labelManager, labels: labelLayer,
+  const materializer = new SpecMaterializer({ root: scene, ledger: summonLedger, layout: labelManager, labels: labelLayer,
     effects: { play: effects.play }, camera: { focus: director.focus }, citizens: citizens.services, onVisible: state => ack(state) });
+  const moduleMaterializer = new SpecMaterializer({ root: scene, ledger, layout: labelManager, labels: labelLayer,
+    effects: { play: effects.play }, camera: { focus: director.focus }, citizens: citizens.services });
   const hostOptions: ConstructorParameters<typeof ModuleHost>[0] = {
     root: moduleRoot, ledger, protectedResources: engineResources,
-    services: { citizens: citizens.services, spawnSpec: spec => materializer.spawn(spec), camera: { focus: director.focus }, effects: { play: effects.play }, log },
+    services: { citizens: citizens.services, spawnSpec: spec => moduleMaterializer.spawn(spec), camera: { focus: director.focus }, effects: { play: effects.play }, log },
     onStatus: (event: ModuleStatus) => {
       options.onStatus?.(event);
       if (event.state === "disabled" || event.state === "rejected") {
         stats.value.moduleError = `${event.id}: ${event.reason}`;
-        if (event.state === "disabled" && !pendingAck && activeVersion) void fetch("/modules/fault", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: activeVersion.version, receipt: activeVersion.receipt }) }).catch(() => {});
+        if (event.state === "disabled" && !pendingAck && activeVersion) post("/modules/fault", { version: activeVersion.version, receipt: activeVersion.receipt });
       }
     },
   };
   let host = new ModuleHost(hostOptions);
   let pendingAck: { version: WorldVersion; frames: number } | null = null;
   let activeVersion: WorldVersion | null = null;
-  const moduleReceipt = (version: WorldVersion, ok: boolean) => void fetch("/modules/ack", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: version.version, receipt: version.receipt, ok }) }).catch(() => {});
+  const moduleReceipt = (version: WorldVersion, ok: boolean) => post("/modules/ack", { version: version.version, receipt: version.receipt, ok });
   const probeScene = new Scene(); probeScene.background = new Color("#000000");
   probeScene.add(new HemisphereLight("#ffffff", "#ffffff", 3));
   const probeTarget = new WebGLRenderTarget(96, 54), probePixels = new Uint8Array(96 * 54 * 4);
@@ -156,7 +161,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     if (event.type === "snapshot") {
       void activate(event.version);
       citizens.sync(event.citizens, event.now); stats.value.raidCount = event.raids;
-      for (const summon of materializer.sync(event.summons)) ack(summon, "capacity");
+      for (const failure of materializer.sync(event.summons)) ack(failure.state, failure.code);
     } else if (event.type === "version") { void activate(event.version);
     } else if (event.type === "chat") {
       const spawned = citizens.upsert(event.citizen, event.now);
@@ -178,13 +183,13 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     else if (event.type === "raid") { stats.value.raidCount++; host.onRaid(event.raid); }
     else if (event.type === "summon") {
       try { materializer.spawn(event.summon.spec, event.summon); stats.value.summonFocuses++; }
-      catch { ack(event.summon, "capacity"); }
+      catch (error) { ack(event.summon, error instanceof RenderFailure ? error.code : "render-error"); }
     } else if (event.type === "summon-remove") { for (const id of event.ids) materializer.remove(id); }
     else if (event.type === "reply") options.onReply?.(event.message);
     stats.value.summonCount = materializer.count;
     // Pause/skip/clear controls are broadcast for later lanes, not arbitrary module code.
     stats.value.citizenCount = citizens.count;
-  }, connected => options.onConnection?.(connected));
+  }, connected => options.onConnection?.(connected), clientId);
 
   function frame(now: number) {
     if (disposed || document.hidden) return;
@@ -201,7 +206,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       effects.update(elapsed);
       director.update(dt);
       citizens.update(dt, elapsed, Date.now() + serverOffset, camera, reducedMotion.matches);
-      materializer.update(dt, camera, reducedMotion.matches);
+      materializer.update(dt, camera, reducedMotion.matches); moduleMaterializer.update(dt, camera, reducedMotion.matches);
       labelManager.update(Date.now() + serverOffset, camera, director.focusPoint);
       stats.value.cameraFocuses = director.automaticFocuses;
       host.update(dt);
@@ -294,7 +299,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       canvas.removeEventListener("pointerup", explore);
       canvas.removeEventListener("webglcontextlost", contextLost);
       disconnect(); resizeLabels.disconnect(); citizens.dispose(); labelManager.dispose();
-      host.dispose(); materializer.dispose();
+      host.dispose(); materializer.dispose(); moduleMaterializer.dispose();
       engineResources.dispose(environment); for (const material of replacedMaterials) material.dispose();
       cacheTarget.dispose();
       probeTarget.dispose();

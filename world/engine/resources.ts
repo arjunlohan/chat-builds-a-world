@@ -1,10 +1,7 @@
 import { BufferGeometry, Group, Light, Material, Mesh, Points, Texture, type Object3D } from "three";
 
-export interface Usage { nodes: number; triangles: number; draws: number; lights: number; particles: number }
-export const GLOBAL_CAP: Usage = { nodes: 1024, triangles: 200_000, draws: 256, lights: 8, particles: 2048 };
-export const MODULE_CAP: Usage = { nodes: 64, triangles: 50_000, draws: 64, lights: 4, particles: 512 };
-export const emptyUsage = (): Usage => ({ nodes: 0, triangles: 0, draws: 0, lights: 0, particles: 0 });
-const keys = Object.keys(GLOBAL_CAP) as (keyof Usage)[];
+import { GLOBAL_CAP, MODULE_CAP, emptyUsage, usageKeys as keys, RenderFailure, type Usage } from "../shared/limits.js";
+export { GLOBAL_CAP, MODULE_CAP, emptyUsage, type Usage } from "../shared/limits.js";
 
 export class ResourceOwner {
   readonly geometries = new Set<BufferGeometry>();
@@ -65,14 +62,14 @@ export class ResourceOwner {
 
 export class ResourceLedger {
   private readonly reservations = new Map<string, Usage>();
-  constructor(readonly base: Usage = emptyUsage()) {}
+  constructor(readonly base: Usage = emptyUsage(), private readonly cap: Readonly<Usage> = GLOBAL_CAP) {}
 
   reserve(id: string, usage: Usage) {
     for (const key of keys) {
-      if (!Number.isFinite(usage[key]) || usage[key] < 0 || usage[key] > MODULE_CAP[key]) throw new Error(`${key} module limit exceeded`);
+      if (!Number.isFinite(usage[key]) || usage[key] < 0 || usage[key] > MODULE_CAP[key]) throw new RenderFailure("capacity", `${key} module limit exceeded`);
       let total = this.base[key] + usage[key];
       for (const [owner, used] of this.reservations) if (owner !== id) total += used[key];
-      if (total > GLOBAL_CAP[key]) throw new Error(`${key} world limit exceeded`);
+      if (total > this.cap[key]) throw new RenderFailure("capacity", `${key} world limit exceeded`);
     }
     this.reservations.set(id, usage);
   }

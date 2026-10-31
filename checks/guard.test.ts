@@ -85,7 +85,7 @@ test("45-second ceiling uses a hard kill, kills descendants and supports cancell
     setTimeout(() => controller.abort(), 80); assert.match((await pending).reason, /cancelled/);
   } finally { await rm(home, { recursive: true, force: true }); }
 });
-function roundHarness(review?: (idea: string, context: { fixture: boolean; signal: AbortSignal }) => GuardResult | Promise<GuardResult>) {
+function roundHarness(review?: (idea: string, context: { signal: AbortSignal }) => GuardResult | Promise<GuardResult>) {
   let now = 0;
   const r = new Rounds({ build: async () => ({ ok: true, outcome: "SHIPPED", reason: "Unit builder", durationMs: 0, tokens: { input: 0, output: 0, total: 0 }, version: 1 }), now: () => now, publish() {}, ...(review ? { review } : {}) });
   r.command({ id: "idea", userId: "viewer", displayName: "Moss", color: "#ABCDEF", text: "!idea Grow a lantern orchard by the lake", timestamp: 0 });

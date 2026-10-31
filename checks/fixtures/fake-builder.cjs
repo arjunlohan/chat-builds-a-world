@@ -5,7 +5,7 @@ if(keys!==['PATH','HOME','AWS_BEARER_TOKEN_BEDROCK','CODEX_HOME'].sort().join())
 const args=process.argv.slice(2);
 for(const word of ['exec','workspace-write','--json','--ephemeral','model_reasoning_effort="medium"'])if(!args.includes(word))process.exit(12);
 let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',s=>input+=s);process.stdin.on('end',()=>{
- const decision=JSON.parse(input.split('APPROVED_BUILD_JSON:\n')[1]),kind=decision.spec.description;
+ const decision=JSON.parse(input.split('APPROVED_BUILD_JSON:\n')[1].split('\nSIMULATION_FIXTURE_KIND:')[0]),kind=/SIMULATION_FIXTURE_KIND: (\w+)/.exec(input)?.[1]??decision.spec.description;
  const emit=value=>console.log(JSON.stringify(value));
  emit({type:'turn.started'});emit({type:'item.completed',item:{type:'plan_update',plan:[{step:'Create the approved local visual',status:'in_progress'}]}});
  if(kind==='timeout'){setInterval(()=>{},1000);return;}

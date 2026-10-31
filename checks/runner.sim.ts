@@ -34,7 +34,7 @@ const rounds = new Rounds({ now: () => now, publish: state => pipeline.publish({
 pipeline.attachRounds(rounds);
 let lastReal = Date.now(); const clock = setInterval(() => { const real = Date.now(); now += real - lastReal; lastReal = real; rounds.tick(); }, 50);
 for (let i=0;i<80;i++) pipeline.roster.accept({ id:`seed-${i}`,userId:`sim-${i}`,displayName:`Neighbor${i}`,color:"#79D7CF",text:"hello",timestamp:now },now);
-const app = await createWorldServer(pipeline, undefined, rounds, versions); await new Promise<void>(r => app.server.listen(0,"127.0.0.1",r));
+const app = await createWorldServer(pipeline, undefined, rounds, versions, {live:false, simulationAllowed:true, async fault(){}}); await new Promise<void>(r => app.server.listen(0,"127.0.0.1",r));
 const port = (app.server.address() as {port:number}).port;
 const browser = await chromium.launch({ headless:true, args: process.platform === "darwin" ? ["--use-angle=metal","--enable-gpu"] : ["--enable-gpu"] });
 const results: { round:number; verdict:string; outcome:string; durationMs:number; reason:string; tag?:string; check?:unknown }[]=[];

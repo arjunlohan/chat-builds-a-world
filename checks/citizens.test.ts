@@ -52,10 +52,10 @@ test("shared pipeline deduplicates, limits floods, strips timestamps and does no
   assert.equal(world.chat(chat("1", "Moss")).reason, "duplicate");
   assert.equal(world.chat(chat("2", "Moss")).reason, "rate-limited");
   assert.equal(world.roster.get("Moss")!.lastActive, now);
-  assert.equal(world.chat({ ...chat("3", "Moss", "!pause"), moderator: true }).reason, "moderator-only");
+  assert.equal(world.chat({ ...chat("3", "Other", "!pause"), moderator: true }).reason, "moderator-only");
   assert.equal(world.chat(chat("4", "Mod", "!pause"), { moderator: true }).accepted, true);
   assert.equal(world.chat(chat("5", "Fern")).reason, "paused");
-  world.chat(chat("6", "Mod", "!pause"), { moderator: true });
+  now += 250; world.chat(chat("6", "Mod", "!pause"), { moderator: true });
   now += 1000; assert.equal(world.chat(chat("7", "Moss")).accepted, true);
   assert.equal(world.chat(chat("8", "Bad", "doxxing")).reason, "blocked");
   assert.equal(world.roster.size, 1); assert.ok(events.length > 0);
@@ -108,4 +108,10 @@ test("chat commands never become speech, while normal lines still do", () => {
     assert.equal(result.citizen.speech, ""); assert.equal(result.citizen.speechAt, 0);
   }
   assert.equal(roster.accept(chat("plain", "Moss", "A beautiful garden!"), 2000)!.citizen.speech, "A beautiful garden!");
+});
+test("blocked messages consume admission rate and rejection replies are bounded", () => {
+ let now=1000;const p=new WorldPipeline(()=>now), replies:unknown[]=[];p.subscribe(e=>{if(e.type==="reply")replies.push(e)});
+ assert.equal(p.chat(chat("blocked1","spam","!summon doxxing")).reason,"blocked");
+ for(let i=0;i<100;i++)assert.equal(p.chat(chat(`spam${i}`,"spam","!summon doxxing")).reason,"rate-limited");
+ now+=300;assert.equal(p.chat(chat("blocked2","spam","!summon doxxing")).reason,"blocked");assert.equal(replies.length,1);
 });

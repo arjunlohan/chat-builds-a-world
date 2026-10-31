@@ -1,6 +1,8 @@
+import { simulationAdapters } from "./sim/adapters.js";
+import { bedrockProvider } from "./summon/provider.js";
 import { Runner } from "./runner/index.js";
 import { Versions } from "./versions/index.js";
-import { IdeaGuard, fixtureReview } from "./guard/index.js";
+import { IdeaGuard } from "./guard/index.js";
 import { Rounds } from "./rounds/index.js";
 import { readConfig } from "./config.js";
 import { createWorldServer } from "./http.js";
@@ -9,26 +11,26 @@ import { SummonService } from "./summon/index.js";
 import { connectTwitch } from "./twitch/index.js";
 
 const config = readConfig();
+const simulation = config.fixtureMode && config.simulationAllowed ? simulationAdapters() : undefined;
+const adapters = { reviewer: simulation?.reviewer ?? ((idea: string, context: { signal: AbortSignal }) => guard.review(idea, context.signal)), builder: simulation?.builder, summonProvider: simulation?.summonProvider ?? bedrockProvider(config.summon) };
 const pipeline = new WorldPipeline();
-const summons = new SummonService({ config: config.summon, publish: event => pipeline.publish(event),
+const summons = new SummonService({ config: config.summon, provider: adapters.summonProvider, mode: simulation ? "fixture" : "live", publish: event => pipeline.publish(event),
   reply: async (_chat, message, source) => {
-    pipeline.publish({ type: "reply", message });
-    if (source === "twitch") if (config.twitch) await twitch.sendChat(message);
+    pipeline.reply(_chat, message, async () => { if (source === "twitch" && config.twitch) await twitch.sendChat(message); });
   },
 });
 pipeline.attachSummon(summons);
 const guard = new IdeaGuard();
 const versions = new Versions(process.cwd(), version => pipeline.publish({ type: "version", version })); await versions.init();
 if (versions.current) pipeline.publish({ type: "version", version: versions.current });
-const runner = new Runner({ root: process.cwd(), versions, feed: (kind, text) => rounds.feed(kind, text),
+const runner = new Runner({ root: process.cwd(), versions, ...(adapters.builder ? { builder: adapters.builder } : {}), feed: (kind, text) => rounds.feed(kind, text),
   announce: async message => { pipeline.publish({ type: "reply", message }); if (config.twitch) await twitch.sendChat(message); } });
 await runner.recover();
-const rounds = new Rounds({ build: request => runner.build(request), rollback: requester => runner.rollback(requester), canRollback: () => !!versions.previous(), review: (idea, context) => context.fixture ? fixtureReview(idea) : guard.review(idea, context.signal), publish: state => pipeline.publish({ type: "rounds", state }), simulationAllowed: !config.twitch });
+const rounds = new Rounds({ build: request => runner.build(request), rollback: requester => runner.rollback(requester), canRollback: () => !!versions.previous(), review: adapters.reviewer, publish: state => pipeline.publish({ type: "rounds", state }), simulationAllowed: config.simulationAllowed });
 pipeline.attachRounds(rounds);
-const { server, closeStreams } = await createWorldServer(pipeline, summons, rounds, versions, { live: !!config.summon.key, fault: async () => {
+const { server, closeStreams } = await createWorldServer(pipeline, summons, rounds, versions, { simulationAllowed: config.simulationAllowed, ...(simulation ? { setOutcome: simulation.setOutcome } : {}), live: !!config.summon.key && !simulation, fault: async () => {
   if (versions.current) await versions.invalidate(versions.current.version);
   rounds.cancelForRevert();
-  for (let wait = 0; runner.isBusy && wait < 100; wait++) await new Promise(resolve => setTimeout(resolve, 50));
   rounds.externalResult(await runner.rollback("system", true));
 } });
 const twitch = connectTwitch({ onChat: (event, authority) => { pipeline.chat(event, { ...authority, source: "twitch" }); }, onRaid: event => { pipeline.raid(event); } }, config.twitch);

@@ -29,7 +29,7 @@ async function body(request: IncomingMessage): Promise<unknown> {
   });
 }
 
-export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { live: boolean; fault(): Promise<void> }) {
+export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
   const assets = await buildClient();
   const pages = new Map([
     ["/world", await readFile(new URL("../world/index.html", import.meta.url))],
@@ -37,6 +37,8 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     ["/history", await readFile(new URL("../world/history.html", import.meta.url))],
   ]);
   const clients = new Set<ServerResponse>();
+  const worlds = new Map<string, ServerResponse>();
+  const primary = (clientId: unknown) => typeof clientId === "string" && worlds.keys().next().value === clientId;
   const moduleFailures = new Set<string>();
   const server = createServer((request, response) => { void (async () => {
     response.on("error", () => response.destroy());
@@ -45,8 +47,9 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     response.setHeader("Cache-Control", "no-store");
     const host = request.headers.host ?? "";
     if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host)) { json(response, 421, { error: "Local host required" }); return; }
-    const path = new URL(request.url ?? "/", "http://localhost").pathname;
+    const url = new URL(request.url ?? "/", "http://localhost"), path = url.pathname;
     if (request.headers.origin && request.headers.origin !== `http://${host}`) { json(response, 403, { error: "Same origin required" }); return; }
+    if ((path.startsWith("/sim/") || path === "/runner/live") && !automation?.simulationAllowed) { request.resume(); json(response, 403, { error: "Simulation routes are disabled" }); return; }
     if (path === "/runner/live") {
       if (request.method !== "POST") { json(response, 405, { error: "Use POST" }); return; }
       if (!automation?.live || !rounds || rounds.snapshot().phase !== "ideas" || rounds.snapshot().totalIdeas) { json(response, 409, { error: "Live runner requires a key and an empty round." }); return; }
@@ -59,16 +62,16 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     }
     if (path === "/modules/fault") {
       if (request.method !== "POST") { json(response, 405, { error: "Use POST" }); return; }
-      try { const input = await body(request) as { version?: unknown; receipt?: unknown }; const current = versions?.current;
-        if (!current || input?.version !== current.version || input.receipt !== current.receipt) { json(response, 409, { accepted: false }); return; }
+      try { const input = await body(request) as { version?: unknown; receipt?: unknown; clientId?: unknown }; const current = versions?.current;
+        if (!primary(input?.clientId) || !current || input?.version !== current.version || input.receipt !== current.receipt) { json(response, 409, { accepted: false }); return; }
         json(response, 202, { accepted: true });
         if (!moduleFailures.has(current.receipt)) { moduleFailures.add(current.receipt); if (moduleFailures.size > 128) moduleFailures.delete(moduleFailures.values().next().value!); void automation?.fault().catch(() => {}); }
       } catch { json(response, 400, { error: "Invalid module failure receipt." }); } return;
     }
     if (path === "/modules/ack") {
       if (request.method !== "POST") { json(response, 405, { error: "Use POST" }); return; }
-      try { const input = await body(request) as { version?: unknown; receipt?: unknown; ok?: unknown };
-        const accepted = typeof input?.version === "number" && typeof input.receipt === "string" && typeof input.ok === "boolean" && !!versions?.acknowledge(input.version, input.receipt, input.ok);
+      try { const input = await body(request) as { version?: unknown; receipt?: unknown; ok?: unknown; clientId?: unknown };
+        const accepted = primary(input?.clientId) && typeof input?.version === "number" && typeof input.receipt === "string" && typeof input.ok === "boolean" && !!versions?.acknowledge(input.version, input.receipt, input.ok);
         json(response, accepted ? 200 : 409, { accepted });
       } catch { json(response, 400, { error: "Invalid module receipt" }); }
       return;
@@ -81,8 +84,8 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     }
     if (path === "/summon/ack") {
       if (request.method !== "POST") { json(response, 405, { error: "Use POST" }); return; }
-      try { const input = await body(request) as { id?: unknown; receipt?: unknown; error?: unknown };
-        const ok = typeof input?.id === "string" && typeof input.receipt === "string" && !!await summons?.acknowledge(input.id, input.receipt, typeof input.error === "string" ? input.error : undefined);
+      try { const input = await body(request) as { id?: unknown; receipt?: unknown; error?: unknown; clientId?: unknown };
+        const ok = typeof input?.id === "string" && typeof input.receipt === "string" && !!await summons?.acknowledge(input.id, input.receipt, typeof input.error === "string" ? input.error : undefined, primary(input.clientId));
         json(response, ok ? 200 : 409, { accepted: ok });
       } catch { request.resume(); json(response, 400, { error: "Invalid render acknowledgement" }); }
       return;
@@ -93,6 +96,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       try {
         const input = await body(request) as { outcome?: unknown };
         if (!input || typeof input.outcome !== "string" || !["ship", "fail", "timeout"].includes(input.outcome)) { json(response, 400, { error: "Use outcome ship, fail or timeout" }); return; }
+        automation?.setOutcome?.(input.outcome);
         const result = rounds?.startSimulation(input.outcome as "ship" | "fail" | "timeout") ?? { accepted: false, reason: "simulation-disabled" };
         json(response, result.accepted ? 200 : result.reason === "simulation-disabled" ? 403 : 409, result);
       } catch { request.resume(); json(response, 400, { error: "Invalid rehearsal request" }); }
@@ -103,7 +107,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       try {
         const input = await body(request);
         // Simulator never grants moderator authority from request fields.
-        const result = path === "/sim/chat" ? pipeline.chat(input, { moderator: false, source: "sim", fixture: (input as { fixture?: unknown })?.fixture === true }) : pipeline.raid(input);
+        const result = path === "/sim/chat" ? pipeline.chat(input, { moderator: false, source: "sim" }) : pipeline.raid(input);
         json(response, 200, result);
       } catch { request.resume(); json(response, 400, { error: "Invalid JSON event or body; maximum 8 KiB, application/json required" }); }
       return;
@@ -120,6 +124,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       response.flushHeaders();
       response.write(`retry: 1500\ndata: ${JSON.stringify(pipeline.snapshot())}\n\n`);
       clients.add(response);
+      const clientId = url.searchParams.get("world"); if (clientId && /^[a-f0-9-]{36}$/.test(clientId)) worlds.set(clientId, response);
       const send = (data: string) => {
         if (response.writableEnded || response.destroyed) return;
         // Node's high-water mark is not a disconnect signal. Bound a slow viewer's queue instead.
@@ -128,7 +133,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       };
       const unsubscribe = pipeline.subscribe(event => send(`id: ${event.revision}\ndata: ${JSON.stringify(event)}\n\n`));
       const heartbeat = setInterval(() => send(": heartbeat\n\n"), 15_000);
-      response.once("close", () => { clearInterval(heartbeat); unsubscribe(); clients.delete(response); });
+      response.once("close", () => { clearInterval(heartbeat); unsubscribe(); clients.delete(response); if (clientId && worlds.get(clientId) === response) worlds.delete(clientId); });
       return;
     }
     if (path === "/") { response.writeHead(302, { Location: "/world" }).end(); return; }

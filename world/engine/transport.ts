@@ -1,8 +1,8 @@
 import type { WorldEvent } from "../../server/contracts.js";
 
 /** EventSource reconnects automatically; every new connection begins with a full snapshot. */
-export function connectWorld(onEvent: (event: WorldEvent) => void, onConnection: (connected: boolean) => void) {
-  const stream = new EventSource("/events");
+export function connectWorld(onEvent: (event: WorldEvent) => void, onConnection: (connected: boolean) => void, clientId?: string) {
+  const stream = new EventSource(clientId ? `/events?world=${encodeURIComponent(clientId)}` : "/events");
   let revision = -1;
   stream.onopen = () => onConnection(true);
   stream.onerror = () => onConnection(false);

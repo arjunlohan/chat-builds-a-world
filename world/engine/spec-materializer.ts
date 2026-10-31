@@ -1,3 +1,4 @@
+import { SUMMON_COUNT, RenderFailure } from "../shared/limits.js";
 import {
   AdditiveBlending, BufferGeometry, Color, Float32BufferAttribute, Group, Mesh,
   MeshStandardMaterial, Object3D, PointLight, Points, ShaderMaterial, SpotLight, Vector3,
@@ -33,8 +34,8 @@ export class SpecMaterializer {
   constructor(private readonly options: MaterializerOptions) {}
   get count() { return this.entries.size; }
   spawn(input: SceneSpec, metadata?: SummonState, restore = false): SpecHandle {
-    const spec = parseSceneSpec(JSON.stringify(input));
-    if (this.entries.size >= 24) throw new Error("capacity");
+    let spec: SceneSpec; try { spec = parseSceneSpec(JSON.stringify(input)); } catch { throw new RenderFailure("invalid-spec"); }
+    if (metadata && [...this.entries.values()].filter(e => e.metadata).length >= SUMMON_COUNT) throw new RenderFailure("capacity");
     const id = metadata?.id ?? `module-spec-${++this.sequence}`;
     if (this.entries.has(id)) return { id, root: this.entries.get(id)!.root, usage: this.entries.get(id)!.usage, dispose: () => this.remove(id) };
     const root = new Group(), owner = new ResourceOwner();
@@ -98,10 +99,10 @@ export class SpecMaterializer {
       }
       if (!restore) { if (!metadata) this.options.effects.play("spawn", center); this.options.camera.focus(center, { duration: 2.5, priority: 3 }); }
       return { id, root, usage, dispose: () => this.remove(id) };
-    } catch {
+    } catch (error) {
       this.entries.get(id)?.removeLabel?.();
       this.options.ledger.release(`spec:${id}`); owner.audit(root); owner.dispose(root); this.entries.delete(id);
-      throw new Error("capacity-or-invalid-spec");
+      throw error instanceof RenderFailure ? error : new RenderFailure("allocation");
     }
   }
   update(dt: number, camera: PerspectiveCamera, reducedMotion: boolean) {
@@ -162,8 +163,8 @@ export class SpecMaterializer {
   sync(scenes: readonly SummonState[]) {
     const ids = new Set(scenes.map(s => s.id));
     for (const entry of this.entries.values()) if (entry.metadata && !ids.has(entry.id)) this.remove(entry.id);
-    const rejected: SummonState[] = [];
-    for (const scene of scenes) if (!this.entries.has(scene.id)) { try { this.spawn(scene.spec, scene, true); } catch { rejected.push(scene); } }
+    const rejected: {state: SummonState; code: string}[] = [];
+    for (const scene of scenes) if (!this.entries.has(scene.id)) { try { this.spawn(scene.spec, scene, true); } catch (error) { rejected.push({state: scene, code: error instanceof RenderFailure ? error.code : "render-error"}); } }
     return rejected;
   }
   remove(id: string) {

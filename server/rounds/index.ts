@@ -1,13 +1,12 @@
 import type { BuildRequest, RunResult } from "../runner/index.js";
 import type { GuardResult } from "../guard/index.js";
 import type { ChatEvent } from "../contracts.js";
-import { allowedWish } from "../summon/index.js";
 import type { BuildView, IdeaView, RoundState, StubOutcome, ToastView, VersionView } from "./types.js";
 export type { RoundState, StubOutcome } from "./types.js";
 
 export const ROUND_MS = Object.freeze({ ideas: 120_000, voting: 45_000, guarding: 45_000, building: 180_000, rollback: 30_000 });
 interface Idea { id: string; text: string; requester: string; order: number; normalized: string; supporters: Set<string> }
-interface Options { now?: () => number; publish(state: RoundState): void; simulationAllowed?: boolean; build?: (request: BuildRequest) => Promise<RunResult>; rollback?: (requester: string) => Promise<RunResult>; canRollback?: () => boolean; review?: (idea: string, context: { fixture: boolean; signal: AbortSignal }) => GuardResult | Promise<GuardResult> }
+interface Options { now?: () => number; publish(state: RoundState): void; simulationAllowed?: boolean; build?: (request: BuildRequest) => Promise<RunResult>; rollback?: (requester: string) => Promise<RunResult>; canRollback?: () => boolean; review?: (idea: string, context: { signal: AbortSignal }) => GuardResult | Promise<GuardResult> }
 const stop = new Set("a an the and or to of for please add build make give put some with on in it island".split(" "));
 export function normalizeIdea(text: string) {
   return text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(w => w && !stop.has(w)).join(" ");
@@ -31,7 +30,7 @@ export function similarIdeas(a: string, b: string) {
 }
 const ideaView = (i: Idea): IdeaView => ({ id: i.id, text: i.text, requester: i.requester, supporters: i.supporters.size, order: i.order });
 
-/** Authoritative clock/state machine. Ships/reverts are explicitly stub results, never Git operations. */
+/** Authoritative rounds; only the injected runner may report a ship. */
 export class Rounds {
   private readonly real: () => number;
   private anchorReal: number;
@@ -58,7 +57,6 @@ export class Rounds {
   private runSequence = 0;
   private rollbackVotes = new Map<string, "yes" | "no">();
   private rollbackRequester = "";
-  private fixtureOutcome: StubOutcome = "ship";
   private build: BuildView = { stub: false, status: "idle", progress: 0, idea: "", requester: "", lines: [] };
   private timeline: VersionView[] = [];
   private toasts: ToastView[] = [];
@@ -112,7 +110,7 @@ export class Rounds {
     if (idea) {
       if (this.phase !== "ideas") return { accepted: false, reason: "ideas-closed" };
       const text = idea[1]?.trim() ?? "", normalized = normalizeIdea(text);
-      if (!normalized || [...text].length > 180 || !allowedWish(text)) return { accepted: false, reason: "invalid-idea" };
+      if (!normalized || [...text].length > 180 ) return { accepted: false, reason: "invalid-idea" };
       const match = [...this.ideas.values()].find(i => similarIdeas(i.normalized, normalized));
       if (!match && this.ideas.size >= 100) return { accepted: false, reason: "idea-capacity" };
       if (!this.support.has(chat.userId) && this.support.size >= 5000) return { accepted: false, reason: "round-capacity" };
@@ -159,7 +157,7 @@ export class Rounds {
       this.applyReview(decision);
     };
     try {
-      const result = this.options.review?.(this.winner.text, { fixture: this.simulation, signal: controller.signal }) ?? reject();
+      const result = this.options.review?.(this.winner.text, { signal: controller.signal }) ?? reject();
       if (result instanceof Promise) void result.then(receive, () => receive(reject()));
       else receive(result);
     } catch { receive(reject()); }
@@ -189,7 +187,6 @@ export class Rounds {
     if (!rollback && (!this.approved?.spec || !this.winner)) return;
     this.phase = "building"; this.startedAt = at; this.endsAt = at + ROUND_MS.building;
     const approved = this.approved ? structuredClone(this.approved) : undefined;
-    if (this.simulation && approved?.mode === "fixture" && approved.spec) approved.spec.description = this.fixtureOutcome === "fail" ? "throws" : this.fixtureOutcome === "timeout" ? "timeout" : "good";
     // Rehearsals accelerate voting, never the subprocess/check deadline.
     this.resetSimulation(); this.startedAt = this.now(); this.endsAt = this.startedAt + ROUND_MS.building;
     this.build = { stub: false, status: "running", progress: 0, idea: rollback ? "Restore previous tag" : this.winner!.text, requester: rollback ? this.rollbackRequester : this.winner!.requester, lines: [] };
@@ -251,11 +248,11 @@ export class Rounds {
   }
   cancelForRevert() { this.cancelReview(); this.runSequence++; this.runAbort?.abort(); }
   externalResult(result: RunResult) { this.build.idea = "Restore previous world"; this.build.requester = "system"; this.finishRun(result); }
-  dispose() { this.cancelReview(); this.runSequence++; this.runAbort?.abort(); }
+  dispose() { this.cancelForRevert(); }
   startSimulation(outcome: StubOutcome) {
     if (!this.options.simulationAllowed) return { accepted: false, reason: "simulation-disabled" };
     if (this.phase !== "ideas" || this.ranked().length || this.paused) return { accepted: false, reason: "round-busy" };
-    this.anchorLogical = this.now(); this.anchorReal = this.real(); this.rate = 15; this.simulation = true; this.fixtureOutcome = outcome;
+    this.anchorLogical = this.now(); this.anchorReal = this.real(); this.rate = 15; this.simulation = true;
     this.startedAt = this.now(); this.endsAt = this.startedAt + ROUND_MS.ideas; this.emit(true);
     return { accepted: true, round: this.round };
   }

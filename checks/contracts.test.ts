@@ -50,7 +50,7 @@ test("citizen behaviors require an ID, and every behavior targets an existing no
 });
 test("environment template has names only and no credentials", () => {
   const names = readFileSync(".env.example", "utf8").trim().split("\n");
-  assert.equal(names.length, 11);
+  assert.equal(names.length, 13);
   assert.ok(names.includes("CODEX_BIN"));
   assert.ok(names.every(name => /^[A-Z][A-Z0-9_]*$/.test(name)));
 });

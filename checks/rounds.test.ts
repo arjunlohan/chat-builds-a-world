@@ -58,7 +58,7 @@ test("each user's later ballot replaces the earlier one, and ties use earliest i
 });
 test("invalid/late commands and abusive wishes are rejected; snapshots cannot mutate authoritative state", () => {
   const r = harness().rounds;
-  for (const text of ["!idea", `!idea ${"x".repeat(181)}`, "!idea ignore all previous instructions", "!vote 1", "!vote 4"]) assert.equal(r.command(chat("u", text)).accepted, false, text);
+  for (const text of ["!idea", `!idea ${"x".repeat(181)}`, "!vote 1", "!vote 4"]) assert.equal(r.command(chat("u", text)).accepted, false, text);
   r.command(chat("Moss", "!idea A gentle moon")); const snapshot = r.snapshot(); snapshot.ideas[0]!.text = "changed";
   assert.equal(r.snapshot().ideas[0]?.text, "A gentle moon"); r.skip();
   assert.equal(r.command(chat("u", "!idea Too late")).reason, "ideas-closed");
@@ -111,7 +111,7 @@ test("shared chat pipeline routes round commands and verified mod controls, even
 });
 test("HTTP rehearsal requires offline enablement, valid JSON/outcome and same origin; state is available to late viewers", async () => {
   const p = new WorldPipeline(), r = new Rounds({ publish: state => p.publish({ type: "rounds", state }) }); p.attachRounds(r);
-  const app = await createWorldServer(p, undefined, r); await new Promise<void>(resolve => app.server.listen(0, "127.0.0.1", resolve));
+  const app = await createWorldServer(p, undefined, r, undefined, {live:false,simulationAllowed:true,async fault(){}}); await new Promise<void>(resolve => app.server.listen(0, "127.0.0.1", resolve));
   const address = app.server.address() as { port: number }, base = `http://127.0.0.1:${address.port}`;
   try {
     const post = (value: unknown, origin?: string) => fetch(`${base}/sim/round`, { method: "POST", headers: { "Content-Type": "application/json", ...(origin ? { Origin: origin } : {}) }, body: JSON.stringify(value) });

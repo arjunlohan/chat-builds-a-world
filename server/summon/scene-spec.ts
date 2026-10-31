@@ -1,3 +1,5 @@
+import { MODULE_CAP, WORLD_BOUNDS, SPEC_LIMITS } from "../../world/shared/limits.js";
+export { SPEC_LIMITS } from "../../world/shared/limits.js";
 import type { ValidateFunction } from "ajv";
 import { validateSceneData, validateSceneStructure } from "../../world/engine/scene-validators.generated.js";
 import { Box3, Euler, Matrix4, Vector3 } from "three";
@@ -16,7 +18,6 @@ export interface SceneSpec {
   behaviors: { id: string; kind: "float" | "orbit" | "wander" | "pulse" | "follow-citizen" | "flee"; targetId: string; speed: number; amplitude: number; radius: number; citizenId?: string }[];
 }
 
-export const SPEC_LIMITS = Object.freeze({ maxBytes: 32_768, maxScaledAxis: 24, minY: -8, maxY: 48 });
 const validate = validateSceneData as ValidateFunction<SceneSpec>;
 
 /** Strict canonical validation shared by Node and browser; never strips unknown fields. */
@@ -75,15 +76,15 @@ function checkEnvelope(spec: SceneSpec) {
   for (const node of spec.nodes) {
     const e = nodeEnvelope(spec, node);
     const [x, y, z] = node.position;
-    if (x - e.x < -64 || x + e.x > 64 || z - e.z < -64 || z + e.z > 64 || y - e.y < -8 || y + e.y > 48) throw new Error("Transformed or animated node exceeds world bounds");
+    if (x - e.x < WORLD_BOUNDS.minX || x + e.x > WORLD_BOUNDS.maxX || z - e.z < WORLD_BOUNDS.minZ || z + e.z > WORLD_BOUNDS.maxZ || y - e.y < WORLD_BOUNDS.minY || y + e.y > WORLD_BOUNDS.maxY) throw new Error("Transformed or animated node exceeds world bounds");
   }
   for (const item of [...spec.lights, ...spec.emitters]) {
     const radius = "distance" in item ? item.distance : item.size + item.lifetime * 0.2;
     const [x, y, z] = item.position;
-    if (x - radius < -64 || x + radius > 64 || z - radius < -64 || z + radius > 64 || y - radius < -8 || y + radius > 48) throw new Error("Light or emitter exceeds world bounds");
+    if (x - radius < WORLD_BOUNDS.minX || x + radius > WORLD_BOUNDS.maxX || z - radius < WORLD_BOUNDS.minZ || z + radius > WORLD_BOUNDS.maxZ || y - radius < WORLD_BOUNDS.minY || y + radius > WORLD_BOUNDS.maxY) throw new Error("Light or emitter exceeds world bounds");
   }
   const usage = specUsage(spec);
-  if (usage.triangles > 50_000 || usage.draws > 64 || usage.particles > 512) throw new Error("Scene workload exceeds hard limits");
+  if (usage.triangles > MODULE_CAP.triangles || usage.draws > MODULE_CAP.draws || usage.particles > MODULE_CAP.particles) throw new Error("Scene workload exceeds hard limits");
 }
 const structural = validateSceneStructure as ValidateFunction<SceneSpec>;
 const clamp = (n: number, low: number, high: number) => Math.max(low, Math.min(high, n));

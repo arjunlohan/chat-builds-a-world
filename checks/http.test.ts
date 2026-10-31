@@ -7,7 +7,7 @@ import { WorldPipeline } from "../server/pipeline.js";
 /** Actual HTTP + SSE, using the same server factory as pnpm dev, on an ephemeral port. */
 test("sim HTTP and SSE use the production pipeline, reconnect snapshots and reject unsafe requests", async () => {
   const pipeline = new WorldPipeline();
-  const { server, closeStreams } = await createWorldServer(pipeline);
+  const { server, closeStreams } = await createWorldServer(pipeline, undefined, undefined, undefined, {live:false,simulationAllowed:true,async fault(){}});
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const controller = new AbortController();
@@ -53,20 +53,22 @@ test("fixture Summon HTTP uses the shared lane, validates receipts and enforces 
   const { SummonService } = await import("../server/summon/index.js");
   const pipeline = new WorldPipeline();
   const records: import("../server/summon/index.js").SummonJob[] = [];
-  const summons = new SummonService({ config: { model: "openai.gpt-6.1-sol", effort: "max", tier: "ultrafast" },
+  const summons = new SummonService({ provider: (await import("../server/summon/provider.js")).fixtureProvider, mode:"fixture", config: { model: "openai.gpt-6.1-sol", effort: "max", tier: "ultrafast" },
     publish: event => pipeline.publish(event), reply() {}, record: job => { records.push(job); } });
   pipeline.attachSummon(summons);
-  const { server, closeStreams } = await createWorldServer(pipeline, summons);
+  const { server, closeStreams } = await createWorldServer(pipeline, summons, undefined, undefined, {live:false,simulationAllowed:true,async fault(){}});
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const post = (path: string, input: object) => fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+  const clientId = "00000000-0000-4000-8000-000000000001", controller = new AbortController();
+  const stream = await fetch(`${base}/events?world=${clientId}`, {signal:controller.signal}); await stream.body!.getReader().read();
   try {
     const chat = { id: "fixture-http", userId: "viewer", displayName: "Viewer", color: "#79D7CF", text: "!summon a jellyfish", fixture: true };
     assert.equal((await post("/sim/chat", chat)).status, 200);
     await new Promise(resolve => setImmediate(resolve));
     const scene = pipeline.snapshot().summons[0]!; assert.ok(scene);
     assert.equal((await post("/summon/ack", { id: scene.id, receipt: "wrong" })).status, 409);
-    assert.equal((await post("/summon/ack", { id: scene.id, receipt: scene.receipt })).status, 200);
+    assert.equal((await post("/summon/ack", { id: scene.id, receipt: scene.receipt, clientId })).status, 200);
     const job = await (await fetch(`${base}/api/summons/${scene.id}`)).json();
     assert.equal(job.status, "rendered"); assert.equal(job.valid, true); assert.equal(records.length, 1);
     const spoof = { ...chat, id: "forged-clear", userId: "outsider", text: "!clear", moderator: true };
@@ -74,5 +76,10 @@ test("fixture Summon HTTP uses the shared lane, validates receipts and enforces 
     assert.equal(summons.active().length, 1);
     pipeline.chat({ ...chat, id: "real-clear", userId: "verified-mod", text: "!clear" }, { moderator: true });
     assert.equal(summons.active().length, 0);
-  } finally { closeStreams(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+  } finally { controller.abort(); closeStreams(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+test("all simulator and live automation routes are disabled without wiring permission", async () => {
+ const app=await createWorldServer(new WorldPipeline());await new Promise<void>(r=>app.server.listen(0,"127.0.0.1",r));const base=`http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+ try { for(const route of ["/sim/chat","/sim/raid","/sim/round","/runner/live"])assert.equal((await fetch(base+route,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})).status,403); }
+ finally{app.closeStreams();await new Promise<void>(r=>app.server.close(()=>r()))}
 });

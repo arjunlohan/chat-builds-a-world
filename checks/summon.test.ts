@@ -31,9 +31,10 @@ for (const prompt of prompts) test(`${prompt.id}: ${prompt.expected}: ${prompt.p
   let published: import("../server/contracts.js").SummonState | undefined;
   const service = new SummonService({ config, now: () => 1000, record: j => { records.push(j); },
     publish: e => { if (e.type === "summon") published = e.summon; }, reply: (_c, text) => { replies.push(text); },
-    fixture: { async generate() { return { json: JSON.stringify(mutate(fixtureFor(prompt.fixture) as SceneSpec, "mutate" in prompt ? prompt.mutate : undefined)), usage: zeroUsage() }; } },
+    mode: "fixture", provider: { async generate() { return { json: JSON.stringify(mutate(fixtureFor(prompt.fixture) as SceneSpec, "mutate" in prompt ? prompt.mutate : undefined)), usage: zeroUsage() }; } },
   });
-  const job = await service.submit({ id: prompt.id, userId: "tester", displayName: "FixtureTester", color: "#79D7CF", text: `!summon ${prompt.prompt}`, timestamp: 1000 }, { fixture: true });
+  if (prompt.expected === "blocked") { const { allowedWish } = await import("../server/content-policy.js"); assert.equal(allowedWish(prompt.prompt),false); return; }
+  const job = await service.submit({ id: prompt.id, userId: "tester", displayName: "FixtureTester", color: "#79D7CF", text: `!summon ${prompt.prompt}`, timestamp: 1000 });
   if (prompt.expected === "render") {
     assert.equal(job.status, "awaiting-render"); assert.ok(published);
     const scene = published;
@@ -70,13 +71,13 @@ test("full tags are for near/recent/arriving/focused citizens; speech wins colli
 test("60s user and 5s global limits, failure replies, receipts and moderator clear", async () => {
   let now = 0; const records: SummonJob[] = [];
   const pipeline = new WorldPipeline(() => now);
-  const service = new SummonService({ config, now: () => now, record: job => { records.push(job); }, publish: event => pipeline.publish(event), reply() {} });
+  const service = new SummonService({ provider: fixtureProvider, mode: "fixture", config, now: () => now, record: job => { records.push(job); }, publish: event => pipeline.publish(event), reply() {} });
   pipeline.attachSummon(service);
   const chat = (id: string, user = "one", text = "!summon jellyfish") => ({ id, userId: user, displayName: user, color: "#79D7CF", text, timestamp: now });
-  assert.equal((await service.submit(chat("a"), { fixture: true })).status, "awaiting-render");
-  assert.equal((await service.submit(chat("b"), { fixture: true })).reason, "user-cooldown");
-  assert.equal((await service.submit(chat("c", "two"), { fixture: true })).reason, "global-cooldown");
-  now = 5000; assert.equal((await service.submit(chat("d", "two"), { fixture: true })).status, "awaiting-render");
+  assert.equal((await service.submit(chat("a"))).status, "awaiting-render");
+  assert.equal((await service.submit(chat("b"))).reason, "user-cooldown");
+  assert.equal((await service.submit(chat("c", "two"))).reason, "global-cooldown");
+  now = 5000; assert.equal((await service.submit(chat("d", "two"))).status, "awaiting-render");
   assert.equal(await service.acknowledge("d", "forged"), false);
   const scene = service.active().at(-1)!; now = 5300;
   assert.equal(await service.acknowledge(scene.id, scene.receipt), true); assert.equal(service.status(scene.id)!.latencyMs, 300);
@@ -84,7 +85,7 @@ test("60s user and 5s global limits, failure replies, receipts and moderator cle
   assert.equal(pipeline.chat(chat("clear-no", "outsider", "!clear")).reason, "moderator-only");
   pipeline.chat(chat("clear-yes", "mod", "!clear"), { moderator: true });
   assert.equal(service.active().length, 1);
-  now = 60_000; assert.equal((await service.submit(chat("e"), { fixture: true })).status, "awaiting-render");
+  now = 60_000; assert.equal((await service.submit(chat("e"))).status, "awaiting-render");
   assert.ok(records.length > 0);
 });
 test("missing key never silently falls back to fixtures; provider errors contain no raw body", async () => {
@@ -155,12 +156,27 @@ test("all behavior kinds stay bounded and missing citizen targets idle safely", 
 
 test("unobserved scenes have null latency; late receipts update metrics without inventing provider tokens", async () => {
   let now = 0; const records: SummonJob[] = [];
-  const service = new SummonService({ config, now: () => now, publish() {}, reply() {}, record: job => { records.push(job); } });
-  await service.submit({ id: "late", userId: "late", displayName: "Late", color: "#ffffff", text: "!summon jellyfish", timestamp: now }, { fixture: true });
+  const service = new SummonService({ provider: fixtureProvider, mode: "fixture", config, now: () => now, publish() {}, reply() {}, record: job => { records.push(job); } });
+  await service.submit({ id: "late", userId: "late", displayName: "Late", color: "#ffffff", text: "!summon jellyfish", timestamp: now });
   const scene = service.active()[0]!;
   now = 31_000; service.prune(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(service.status(scene.id)!.latencyMs, null);
   now = 40_000; await service.acknowledge(scene.id, scene.receipt);
   assert.equal(service.status(scene.id)!.latencyMs, 40_000); assert.equal(service.status(scene.id)!.reason, null);
   assert.equal(records.at(-1)!.usage!.total, 0);
+});
+test("reservation charges in-flight worst case, evicts FIFO before provider, commits and releases", async () => {
+  const { SummonReservations, WORST_SPEC, emptyUsage } = await import("../world/shared/limits.js");
+  const evicted: string[] = [], pool = new SummonReservations(id => evicted.push(id));
+  assert.equal(pool.reserve("a"),true); assert.deepEqual(pool.usage(),WORST_SPEC);
+  assert.equal(pool.reserve("b"),false,"Pending worst-case reservations cannot be evicted");
+  pool.commit("a",{...emptyUsage(),triangles:15000});assert.equal(pool.reserve("b"),true);
+  pool.commit("b",{...emptyUsage(),triangles:15000});assert.equal(pool.reserve("c"),true);assert.deepEqual(evicted,["a"]);
+  pool.release("c");assert.equal(pool.usage().triangles,15000);pool.release("b");assert.equal(pool.size,0);
+});
+test("render timeout is an observation metric; secondary render failures never remove scenes", async () => {
+ let now=0,replies=0;const service=new SummonService({provider:fixtureProvider,mode:"fixture",config,now:()=>now,publish(){},reply(){replies++},record(){}});
+ await service.submit({id:"metric",userId:"metric",displayName:"M",color:"#ffffff",text:"!summon jellyfish",timestamp:now});
+ const scene=service.active()[0]!;assert.equal(await service.acknowledge(scene.id,scene.receipt,"capacity",false),false);assert.equal(service.active().length,1);
+ now=31000;service.prune();await new Promise(r=>setImmediate(r));assert.equal(service.status(scene.id)!.status,"awaiting-render");assert.equal(service.status(scene.id)!.renderTimedOut,true);assert.equal(replies,0);
 });

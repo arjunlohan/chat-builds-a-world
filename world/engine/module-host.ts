@@ -1,10 +1,11 @@
+import { ACTIVE_MODULE_CAP, WORLD_BOUNDS } from "../shared/limits.js";
 import { Group, Vector3 } from "three";
 import type { ChatEvent, RaidEvent } from "../../server/contracts.js";
 import type { Citizen, SpawnHandle, WorldModule, WorldModuleFactory, WorldServices } from "./api.js";
 import { emptyUsage, MODULE_CAP, ResourceLedger, ResourceOwner, type Usage } from "./resources.js";
 
 export const MODULE_BUDGET = Object.freeze({
-  maxActive: 8, perModuleMs: 2, totalMs: 4, maxDtSeconds: 0.05,
+  maxActive: ACTIVE_MODULE_CAP, perModuleMs: 2, totalMs: 4, maxDtSeconds: 0.05,
   overrunWindow: 60, disableAfterOverruns: 3, lifecycleMs: 8,
   maxEvents: 128, eventsPerFrame: 16,
 });

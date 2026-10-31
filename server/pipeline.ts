@@ -1,3 +1,4 @@
+import { allowedWish } from "./content-policy.js";
 import type { WorldVersion } from "./versions/index.js";
 import type { ChatEvent, RaidEvent, WorldEvent, LaneEvent } from "./contracts.js";
 import type { SummonService } from "./summon/index.js";
@@ -24,6 +25,8 @@ export function parseRaid(value: unknown): RaidEvent {
 export class WorldPipeline {
   readonly roster = new CitizenRoster();
   private readonly seen = new Map<string, number>();
+  private readonly replyAt = new Map<string, number>();
+  private lastReply = -Infinity;
   private readonly cooldowns = new Map<string, number>();
   private readonly listeners = new Set<(event: WorldEvent) => void>();
   private summonLane: SummonService | undefined;
@@ -44,6 +47,12 @@ export class WorldPipeline {
   private messages = 0;
   constructor(private readonly now = () => Date.now(), private readonly blocklist = ["doxxing", "kill yourself"]) {}
   subscribe(listener: (event: WorldEvent) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
+  reply(chat: ChatEvent, message: string, send?: () => Promise<void> | void) {
+    const now = this.now();
+    if (now - (this.replyAt.get(chat.userId) ?? -Infinity) < 10_000 || now - this.lastReply < 1000) return;
+    this.replyAt.set(chat.userId, now); this.lastReply = now; this.publish({ type: "reply", message });
+    try { void Promise.resolve(send?.()).catch(() => {}); } catch {}
+  }
   private emit(event: WorldEvent) {
     for (const listener of this.listeners) { try { listener(event); } catch { this.listeners.delete(listener); } }
   }
@@ -56,9 +65,13 @@ export class WorldPipeline {
     while (this.seen.size > 10_000) this.seen.delete(this.seen.keys().next().value!);
     return false;
   }
-  chat(input: unknown, authority: { moderator: boolean; fixture?: boolean; source?: "sim" | "twitch" } = { moderator: false }): { accepted: boolean; reason?: string; count?: number } {
+  chat(input: unknown, authority: { moderator: boolean; source?: "sim" | "twitch" } = { moderator: false }): { accepted: boolean; reason?: string; count?: number } {
     const event = parseChat(input), now = this.now();
     if (this.duplicate(`chat:${event.id}`, now)) return { accepted: false, reason: "duplicate" };
+    const second = Math.floor(now / 1000);
+    if (this.window !== second) { this.window = second; this.messages = 0; }
+    if (now - (this.cooldowns.get(event.userId) ?? -Infinity) < 250 || this.messages >= 200) return { accepted: false, reason: "rate-limited" };
+    this.messages++; this.cooldowns.set(event.userId, now);
     const mod = /^!(pause|skip|clear)$/i.exec(event.text.trim());
     if (mod) {
       if (!authority.moderator) return { accepted: false, reason: "moderator-only" };
@@ -70,23 +83,21 @@ export class WorldPipeline {
       return { accepted: true, count: this.roster.size };
     }
     if (this.paused) return { accepted: false, reason: "paused" };
-    if (this.blocklist.some(term => event.text.toLocaleLowerCase().includes(term))) {
-      if (/^!summon\b/i.test(event.text) && this.summonLane) { void this.summonLane.submit(event, authority); return { accepted: true, count: this.roster.size }; }
+    const wish = /^!(summon|idea)(?:\s|$)/i.test(event.text.trim()) ? event.text.replace(/^!\w+\s*/, "") : event.text;
+    if (this.blocklist.some(term => event.text.toLocaleLowerCase().includes(term)) || !allowedWish(wish)) {
+      this.reply(event, `@${event.displayName} Please use a safe, original visual idea.`);
       return { accepted: false, reason: "blocked" };
     }
-    const second = Math.floor(now / 1000);
-    if (this.window !== second) { this.window = second; this.messages = 0; }
-    if (now - (this.cooldowns.get(event.userId) ?? -Infinity) < 250 || this.messages >= 200) return { accepted: false, reason: "rate-limited" };
-    this.messages++; this.cooldowns.set(event.userId, now);
     const roundCommand = /^!(idea|vote|rollback)(?:\s|$)/i.test(event.text.trim());
     const roundResult = roundCommand ? this.rounds?.command(event) : undefined;
     if (roundResult && !roundResult.accepted) return roundResult;
+    const summonCommand = /^!summon(?:\s|$)/i.test(event.text.trim());
+    if (summonCommand) void this.summonLane?.submit({ ...event, timestamp: now }, { source: authority.source ?? "sim" });
     const result = this.roster.accept({ ...event, timestamp: now }, now);
-    if (!result) return roundResult ?? { accepted: false, reason: "capacity" };
+    if (!result) return roundResult ?? (summonCommand ? { accepted: true, count: this.roster.size } : { accepted: false, reason: "capacity" });
     this.emit({ type: "chat", revision: ++this.revision, now, chat: { ...event, timestamp: now }, ...result });
     if (result.spawned && [1, 10, 25, 50, 80, 100, 150, 200, 250, 300].includes(this.roster.size))
       this.rounds?.toast("citizens", `${this.roster.size} citizens`, `Welcome, ${event.displayName}.`);
-    if (/^!summon(?:\s|$)/i.test(event.text.trim())) void this.summonLane?.submit({ ...event, timestamp: now }, authority);
     return { accepted: true, count: this.roster.size };
   }
   raid(input: unknown) {
@@ -100,6 +111,7 @@ export class WorldPipeline {
     const now = this.now();
     const ids = this.roster.prune(now);
     if (ids.length) this.emit({ type: "remove", revision: ++this.revision, now, ids });
+    for (const [id, timestamp] of this.replyAt) if (now - timestamp > 60_000) this.replyAt.delete(id);
     for (const [id, timestamp] of this.cooldowns) if (now - timestamp > 60_000) this.cooldowns.delete(id);
     for (const [id, timestamp] of this.seen) if (now - timestamp > 30 * 60_000) this.seen.delete(id);
   }
