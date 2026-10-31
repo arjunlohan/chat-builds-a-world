@@ -79,7 +79,7 @@ left to Arjun; preview measurements and inspected frames are recorded below.
 `demo/renders/` and Python bytecode are ignored. Commit scripts and documentation,
 not generated media or `.blend` files.
 
-## Verified previews
+## Initial preview verification (36cdaaa)
 
 Verified on the M1 Pro with Blender 5.2.3 LTS. Times include Blender startup, scene
 creation, PNG rendering and movie encoding; they are measured previews, not full
@@ -112,3 +112,26 @@ are left to Arjun.
 `pnpm check` passed 208/208, strict TypeScript and browser bundling. No changes were
 made under server/, world/, overlay/ or checks/. Generated verification metadata
 is ignored in `demo/renders/preview-verification.json` and `demo/renders/full-probes/`.
+
+## Overlay endpoint correction
+
+The dog is now twice its original linear scale with a larger carrot and shadow.
+The carrot leads the chase in from the left, and both leave on the right before
+the final frames. The celebration scales in after a short transparent lead-in;
+its whole group, including shadows, floats off-screen before the end. The worm's
+takeover, wiggle and exit are unchanged; only its first .2 seconds start slightly
+farther left so its initial frame is fully transparent.
+
+All three scripts request strict endpoint validation in `finish`. It measures
+every alpha sample in the first and last saved PNG, including antialiasing and
+faint shadows. `render.json` reports each endpoint's visible pixels, coverage
+percent and maximum alpha. Any nonzero alpha raises an assertion, records
+`failed-endpoint-alpha`, and fails the driver before movie encoding. An old movie
+is removed first so a failed run cannot leave a stale movie appearing successful.
+
+`pnpm demo:render --preview` passed all three assertions, with 0% first/last
+coverage for every clip. The chase's middle coverage is about 11%, compared with
+about 3% previously, consistent with doubling its linear size. A deliberate check
+against a visible frame raised the expected assertion and exited Blender with
+code 1. `pnpm check` passed 208/208. All changes in this pass are confined to
+`demo/blender/`; the product remains frozen.

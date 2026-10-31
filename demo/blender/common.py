@@ -1,5 +1,6 @@
 """Original procedural demo art. Not imported or used by the running product."""
 import argparse
+from array import array
 import json
 import math
 import sys
@@ -142,11 +143,32 @@ def setup(name, seconds, center=1.5, width=13.2):
     return scene, options
 
 
-def finish(scene, options, name):
+def endpoint_alpha(path):
+    """Measure saved RGBA pixels, including tiny antialiased or shadow remnants."""
+    image = bpy.data.images.load(str(path), check_existing=False)
+    try:
+        pixels = array("f", [0]) * len(image.pixels)
+        image.pixels.foreach_get(pixels)
+        alpha = pixels[3::4]
+        visible = sum(a > 0 for a in alpha)
+        return {"file": path.name, "visiblePixels": visible,
+                "coveragePercent": 100 * visible / len(alpha), "maxAlpha": max(alpha)}
+    finally:
+        bpy.data.images.remove(image)
+
+
+def assert_empty_endpoints(endpoints):
+    if any(frame["visiblePixels"] for frame in endpoints.values()):
+        raise AssertionError("Overlay endpoints must be fully transparent: " + json.dumps(endpoints))
+
+
+def finish(scene, options, name, require_empty_ends=False):
     """Render once to PNG, then encode that sequence through Blender's VSE, without rerendering 3D."""
     output = options.output.resolve() / ("preview" if options.preview else "")
     frames = output / "frames"
     frames.mkdir(parents=True, exist_ok=True)
+    movie = output / f"{name}{'-preview' if options.preview else ''}.mov"
+    movie.unlink(missing_ok=True)
     # Never mix an old, longer sequence with this invocation.
     for old in frames.glob("frame_*.png"):
         old.unlink()
@@ -163,7 +185,18 @@ def finish(scene, options, name):
         if index == 1 or index % 15 == 0:
             print(f"DEMO frame {index} / {scene.frame_end // step}", flush=True)
     render_seconds = time.perf_counter() - start
-    movie = output / f"{name}{'-preview' if options.preview else ''}.mov"
+    endpoints = {"first": endpoint_alpha(paths[0]), "last": endpoint_alpha(paths[-1])}
+    result = {"name": name, "prerendered": True, "engine": "EEVEE", "preview": options.preview,
+              "width": scene.render.resolution_x, "height": scene.render.resolution_y, "fps": fps,
+              "frames": len(paths), "durationSeconds": len(paths) / fps, "codec": "QuickTime PNG RGBA",
+              "renderSeconds": round(render_seconds, 2), "endpoints": endpoints, "status": "validating"}
+    if require_empty_ends:
+        try:
+            assert_empty_endpoints(endpoints)
+        except AssertionError:
+            result["status"] = "failed-endpoint-alpha"
+            (output / "render.json").write_text(json.dumps(result, indent=2) + "\n")
+            raise
     encode = bpy.data.scenes.new("encode PNG alpha sequence")
     encode.render.resolution_x, encode.render.resolution_y = scene.render.resolution_x, scene.render.resolution_y
     encode.render.resolution_percentage, encode.render.fps = 100, fps
@@ -184,9 +217,6 @@ def finish(scene, options, name):
     strip.alpha_mode = "STRAIGHT"
     encode.frame_start, encode.frame_end = 1, len(paths)
     bpy.ops.render.render(animation=True, scene=encode.name)
-    result = {"name": name, "prerendered": True, "engine": "EEVEE", "preview": options.preview,
-              "width": scene.render.resolution_x, "height": scene.render.resolution_y, "fps": fps,
-              "frames": len(paths), "durationSeconds": len(paths) / fps, "codec": "QuickTime PNG RGBA",
-              "renderSeconds": round(render_seconds, 2), "totalSeconds": round(time.perf_counter() - start, 2)}
+    result.update(status="passed", totalSeconds=round(time.perf_counter() - start, 2))
     (output / "render.json").write_text(json.dumps(result, indent=2) + "\n")
     print("DEMO result " + json.dumps(result), flush=True)

@@ -38,6 +38,8 @@ for f in range(1, scene.frame_end + 1):
     else:
         size = 3.05 - 2.80 * ease((t - 4.7) / 1.3)
         x = -.45 + 8.3 * ease((t - 5.6) / 1.4)
+    # Preserve the existing animation after .2s; the first pose starts fully outside.
+    x -= 1 - ease(t / .2)
     worm.scale = (size, size, size)
     worm.location = (x, 0, .05)
     for i, segment in enumerate(segments):
@@ -47,4 +49,4 @@ for f in range(1, scene.frame_end + 1):
     head.rotation_euler.y = math.sin(t * 4) * .08
     key(head, f)
     key(worm, f)
-finish(scene, options, "worm-takeover")
+finish(scene, options, "worm-takeover", require_empty_ends=True)

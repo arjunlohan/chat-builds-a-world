@@ -9,6 +9,7 @@ scene, options = setup("dog-carrot", 7, center=1.1, width=13.2)
 oat, cream, ink = material("oat fur", "amber"), material("cream muzzle", "cream"), material("eyes", "ink")
 rose, white = material("blush", "rose"), material("eye glints", "FFFFFF")
 dog = empty("small rounded dog")
+dog.scale = (2, 2, 2)
 body = ico("round body", (0, 0, .73), (.78, .40, .43), oat, dog)
 ico("cream bib", (.48, -.12, .70), (.34, .32, .32), cream, dog)
 head = empty("curious head", dog)
@@ -33,6 +34,7 @@ tail = empty("wagging tail", dog)
 tail.location = (-.68, 0, .85)
 tube("curled tail", [(0, 0, 0), (-.23, 0, .25), (-.24, 0, .52), (-.10, 0, .58)], .10, oat, tail)
 carrot = empty("bouncing carrot")
+carrot.scale = (1.6, 1.6, 1.6)
 orange, green = material("carrot orange", "orange"), material("carrot leaves", "jade")
 root = cone("tapered carrot", (0, 0, 0), .25, .86, orange, carrot, tip=.045)
 root.rotation_euler.y = math.pi
@@ -40,11 +42,13 @@ for i, angle in enumerate([-.5, .0, .5]):
     leaf = ico("carrot top", (math.sin(angle) * .16, i * .035, .58), (.11, .065, .32), green, carrot)
     leaf.rotation_euler.y = angle
 shade = shadow("running shadow", 0, 1.1, .44)
+shade.scale = (2, 2, 1)
 for f in range(1, scene.frame_end + 1):
     t = (f - 1) / 30
-    x = -4.45 + 8.15 * ease(t / 7)
+    # Carrot leads the dog into view; both clear the right edge with a quiet tail.
+    x = -12 + 8 * ease(t / .95) + 7 * ease((t - .8) / 5) + 9 * ease((t - 5.2) / 1.35)
     stride = t * math.tau * 2.7
-    dog.location = (x, -.10, abs(math.sin(stride)) * .14)
+    dog.location = (x, -.10, abs(math.sin(stride)) * .28)
     dog.rotation_euler.z = math.sin(t * 2) * .035
     head.rotation_euler = (0, -.08 + math.sin(stride) * .045, -.18)
     for i, leg in enumerate(feet):
@@ -54,9 +58,9 @@ for f in range(1, scene.frame_end + 1):
         ear.rotation_euler.x = math.sin(stride + i) * .18
         key(ear, f, "rotation_euler")
     tail.rotation_euler.x = math.sin(t * 15) * .6
-    carrot.location = (x + 1.75 + math.sin(t * 2) * .14, .06, .92 + abs(math.sin(t * 5.2)) * .85)
+    carrot.location = (x + 3.4 + math.sin(t * 2) * .14, .06, 1.6 + abs(math.sin(t * 5.2)) * 1.0)
     carrot.rotation_euler = (.12, .55 + math.sin(t * 5.2) * .32, -.18)
     shade.location.x = x
     for obj in [dog, head, tail, carrot, shade]:
         key(obj, f)
-finish(scene, options, "dog-carrot")
+finish(scene, options, "dog-carrot", require_empty_ends=True)
