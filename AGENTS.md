@@ -912,9 +912,10 @@ Full JSON schema (keep identical to the canonical file):
 ## Phase 7 admission and execution guarantees
 
 - `world/shared/limits.ts` is the shared server/browser budget contract. Summon
-  admission reserves a slot and the full Scene Spec envelope before a paid call,
-  counts in-flight work, then commits actual usage or releases. Committed summons
-  are evicted FIFO to admit new work. The client gives modules their own pool from
+  admission reserves one count slot before a paid call, including in-flight work,
+  then commits actual validated usage synchronously through ResourceLedger or
+  releases the slot. Committed summons are evicted FIFO only as count or actual
+  resource limits require. The client gives modules their own pool from
   remaining world headroom; they cannot consume the Summon pool.
 - Provider schemas use the strict grammar subset; full canonical validation still
   checks uniqueness, references and bounds locally. Guard and builder errors are
@@ -939,8 +940,10 @@ Full JSON schema (keep identical to the canonical file):
   feature controls disabling plugin sync/prefetch, remote plugins, apps, hooks and
   skill dependency installation, plus skipped host skill discovery. Own and drain
   its complete process group even after successful exit. A late cleanup writer
-  must never replace a verdict with an exception; retry, warn redacted and reclaim
-  stale leased homes at startup. Never delete a live invocation's home.
+  must never replace a verdict with an exception. Delete once after draining; warn
+  redacted on failure. One memoized startup sweep removes homes with dead owning
+  PIDs. Never delete a live invocation's home. Discovery controls live only in
+  config, read once per invocation; generic process code has no Codex-home policy.
 - The gate measures actual RAF frame intervals, not Playwright polling gaps. Its
   check-only trace records frame timestamps and CPU/render/probe work. Visibility
   probes happen outside the 15-second production-performance window. Keep the
@@ -950,8 +953,9 @@ Full JSON schema (keep identical to the canonical file):
   retaining world occlusion. A ship needs at least 4096 contrasted full-HD
   pixel-equivalents spanning at least 64x64px in two of three observations,
   including the last. Distinguish raw 192x108 probe pixels from HD equivalents.
-  Aim builder geometry at a clear 96x96px silhouette. A standby runner test client
-  renders only after a version event, avoiding self-imposed GPU contention.
+  Aim builder geometry at a clear 96x96px silhouette. The runner benchmark freezes
+  its own Chromium page and observes versions through SSE outside the page, then
+  resumes for hot swap. Keep this orchestration out of the production renderer.
 
 ## Working agreements
 

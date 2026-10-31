@@ -148,16 +148,18 @@ and ephemeral mode. The child inherits only PATH, HOME, the Bedrock bearer token
 and a private writable CODEX_HOME under `.codex-runtime/runs/`. Each invocation
 is seeded from the tracked `.codex-runtime/config.toml` and cleaned on completion;
 CLI preference writes cannot dirty that canonical file.
-Runtime argv uses `--no-daemon`, `--strict-config`, disables plugins, remote
-plugins, plugin prefetch, apps, skill dependency installation and hooks, and
-skips host skill discovery. These switches were checked against the installed
+Runtime argv uses `--no-daemon` and `--strict-config`. The isolated config disables
+plugins, remote plugins, plugin prefetch, apps, skill dependency installation and
+hooks, and skips host skill discovery. These switches were checked against the installed
 0.166.0-alpha.5.1 CLI's `exec --help` and `features list`, using its supported
 [feature controls](https://learn.chatgpt.com/docs/config-file/config-reference).
 The owned process group is killed/drained on normal exit as well as cancellation,
-including descendants with ignored stdio. Home removal retries transient races;
-cleanup failures warn with secret redaction and preserve the verdict. Startup
-reclaims inactive/dead-owner and stale legacy homes while preserving live leases.
- No Twitch credentials
+including descendants with ignored stdio. Home removal runs once after process-group draining; failures warn with secret
+redaction and preserve the verdict. One memoized background startup sweep reclaims
+homes whose owning PID is dead, while preserving live invocations. Config is read
+once per invocation. CLI lines are redacted before callbacks or collection;
+success requires exit 0, turn.completed and no turn.failed. Error events alone
+are diagnostics. No Twitch credentials
 are inherited. The approved plan and locked World Module API become the prompt;
 no runtime dependencies are installed. The overlay shows short plan/file/check
 lines, never raw JSON, shell commands, private reasoning or stderr.
@@ -193,9 +195,10 @@ Every check retains `state/checks/<id>/input.json`, `result.json`, incremental
 and a canvas screenshot when the page is responsive. Timeouts retain the last
 checkpoint and candidate source. `pnpm check:gate` tests a readable, an occluded
 and a tiny fixture in real Chromium. These artifacts are local and ignored.
-The live benchmark's world client starts with `?standby=1`: it keeps SSE connected
-without rendering while the independent gate runs, then wakes on the new version
-for the real hot-swap acknowledgement. Normal `/world` is unchanged.
+The live benchmark suspends its own Chromium page through the DevTools lifecycle
+API while the independent gate runs. Its Node-side SSE observer resumes the page
+on a version event for the real hot-swap acknowledgement. The production renderer
+has no benchmark-only standby option.
 
 On pass, commit `vN: <title> (requested by @user)` in the worktree, recheck master,
 fast-forward it and tag vN. Immutable local module bundles share the engine's
@@ -418,9 +421,10 @@ materials, capped emitters, local lights and float/orbit/wander/pulse/follow/fle
 behaviors. Summons get an on-screen spawn effect, requester credit and camera
 focus. Verified Twitch mods can `!clear` the last summon; disposal releases all
 owned scene resources. Admission uses `world/shared/limits.ts` on both sides. Before a provider request,
-the server atomically reserves one of 24 slots and the full schema envelope,
-including in-flight work. It evicts committed summons oldest-first until the
-reservation fits, commits actual usage on validation, or releases on failure.
+the server reserves one of 24 count slots, including in-flight work. After
+validation, a synchronous commit admits actual usage through the shared resource
+ledger, evicting committed summons oldest-first only when that usage needs room.
+Failed generation releases its slot.
 The browser has a dedicated Summon pool and a separate module pool computed from
 base-world headroom, so module allocations cannot consume reserved Summon capacity.
 
