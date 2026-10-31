@@ -41,8 +41,9 @@ Ignored authoring outputs live in `assets/renders/<scene>/` (or `preview/`):
 Full renders also write `assets/reactions/<id>.webm`, VP9 with alpha, no audio.
 The encoder tries CRF 36, 42 then 48 to stay below the runner's 2 MiB per-file
 inventory limit. Preview WebMs stay in the ignored preview directory.
-The first and last saved frames must have exactly zero visible alpha; rendering
-fails before encoding if either endpoint violates that rule.
+The first and last frames must have exactly zero visible alpha; the renderer
+checks saved PNGs, the encoder forces a final keyframe and checks decoded WebM
+alpha, and either stage fails if an endpoint violates that rule.
 
 ## Verify playback
 
@@ -52,5 +53,28 @@ pnpm check:reactions
 
 This loads every committed WebM in Chromium, checks transparent endpoints and
 nonempty midpoints, and exercises overlay ending, clock expiry and pause/resume.
-It needs Playwright Chromium, not Blender or ffmpeg. `pnpm check` also needs
-neither authoring tool. Open `/capture` to record the world and overlay together.
+It needs Playwright Chromium, not Blender or ffmpeg, and is also part of
+`pnpm check`. Neither authoring tool is needed by the checks. Open `/capture` to record the world and overlay together.
+
+## Catalog
+
+Aliases match whole tokens, case-insensitively. `<3` and `/s` are punctuation
+aliases; phrase aliases allow whitespace. Substrings such as W inside “will”
+do not count. Only the two extra clips below are vote-only.
+
+| Reaction | Triggers | Original animation |
+| --- | --- | --- |
+| laugh | `lul`, `lulw`, `kekw`, `kek`, `omegalul`, `lol`, `lmao`, `lmfao`, `rofl`, `haha`, `hahaha`, `hahahaha`, `hehe` | A cream creature tumbles with floating amber laughter droplets. |
+| hype | `pog`, `pogchamp`, `poggers`, `lets go`, `let's go`, `letsgo`, `lfg` | Three rounded creatures bounce through a confetti celebration. |
+| love | `<3`, `❤`, `❤️`, `♥`, `♥️`, `love`, `hearts` | Rose creatures lift a ring of sculpted hearts. |
+| w | `w`, `win`, `winning`, `ws` | Mint creatures hoist a golden W built from beams. |
+| l | `l`, `loss`, `ls` | A lavender creature catches a wobbling geometric L. |
+| gg | `gg`, `ggs`, `ggwp`, `good game` | Two cream creatures meet beneath paired geometric Gs. |
+| f | `f`, `rip`, `biblethump`, `pepehands`, `respects` | A quiet creature presents a beam-built F and warm petals. |
+| dance | `dinodance`, `catjam`, `dance`, `dancing`, `vibing` | Mint and peach creatures swing in a staggered dance. |
+| nervous | `monkas`, `monkaw`, `nervous`, `sweating` | A trembling creature shelters under a cloud of teal droplets. |
+| sleepy | `residentsleeper`, `zzz`, `zzzz`, `zzzzz`, `zzzzzz`, `sleepy`, `snooze` | A sleepy creature drifts across a crescent with small stars. |
+| rage | `smorc`, `mald`, `malding`, `rage`, `raging` | A peach creature stomps, releasing soft geometric steam puffs. |
+| sarcasm | `kappa`, `/s`, `surely`, `yeah right` | A tilted lavender creature balances an exaggerated seesaw of stars. |
+| dog-carrot | Vote only | A dog chases a bouncing carrot in from the left and off the right. |
+| worm-takeover | Vote only | A worm crawls in, grows across the frame, wiggles, shrinks and leaves. |
