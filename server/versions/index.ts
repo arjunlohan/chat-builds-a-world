@@ -68,5 +68,9 @@ export class Versions {
     const previous = this.data.history.slice(0, -1).reverse().find(v => v.healthy !== false && signature(v) !== current);
     return previous ? structuredClone(previous) : null;
   }
+  fallbackTarget(excludingCommit=this.data.current?.commit):Pick<WorldVersion,"commit"|"tag"|"modules">|null {
+    const current=this.current;
+    return (current?.healthy===true&&current.commit!==excludingCommit?current:this.previous())??(this.data.baseline?{commit:this.data.baseline,tag:"v0",modules:[]}:null);
+  }
   close() { for (const w of this.waiters.values()) { clearTimeout(w.timer); w.resolve(false); } this.waiters.clear(); }
 }

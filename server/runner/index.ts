@@ -9,7 +9,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateDecision, type GuardResult } from "../guard/index.js";
 import { Versions, type WorldVersion } from "../versions/index.js";
-import { auditDiff, cleanMaster, commitTree, createTree, git, inventory, promote, removeTree } from "./git.js";
+import { auditDiff, discardUnshippedTag, cleanMaster, commitTree, createTree, git, inventory, promote, removeTree } from "./git.js";
 import { compileModule } from "./policy.js";
 import { runCodex, BUILD_TIMEOUT_MS } from "./codex.js";
 import { candidateCheck, type CheckResult } from "./check.js";
@@ -40,10 +40,10 @@ export class Runner {
         const tag=`v${advanced?pending!.version:current!.version}`,tagHead=await git(this.root,"rev-parse",`refs/tags/${tag}`).catch(()=>"");
         if(head!==tagHead)throw new Error("Master advanced outside the interrupted run; recovery left it unchanged.");
         await cleanMaster(this.root);
-        const target=(current?.healthy===true?current:this.options.versions.previous())??(this.options.versions.baseline?{commit:this.options.versions.baseline,tag:"v0",modules:[]}:null);if(!target)throw new Error("No known-good version is available for recovery.");
+        const target=this.options.versions.fallbackTarget(head);if(!target)throw new Error("No known-good version is available for recovery.");
         if(pending)await removeTree(this.root,pending.path);
         await this.restoreForward(head,target,"Recovered previous world","system",false);
-      }else if(pending)await removeTree(this.root,pending.path);
+      }else if(pending){await discardUnshippedTag(this.root,pending.version);await removeTree(this.root,pending.path);}
       await this.options.versions.setPending();
   }
   private async reserve() {
@@ -65,7 +65,6 @@ export class Runner {
     let tree = "", version = 0, merged = false, base = "", check: CheckResult | undefined;
     let tokens: Usage = { input: null, output: null, total: null };
     const requester = request.requester.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 64) || "viewer";
-    const previous = this.options.versions.current;
     const feed = this.options.feed;
     try {
       const { latencyMs: _latency, mode: _mode, reviewed: _reviewed, ...data } = request.decision;
@@ -85,7 +84,7 @@ export class Runner {
       }
       const nodeModules = fileURLToPath(new URL("../../node_modules", import.meta.url));
       const compiled = await compileModule(tree, approved.files[0]!, approved.spec.moduleId, nodeModules, approved.files);
-      const retained = (previous?.modules ?? []).filter(m => m.id !== compiled.id);
+      const retained = (this.options.versions.current?.modules ?? []).filter(m => m.id !== compiled.id);
       const modules = [...retained.map(m => ({ ...m, code: this.options.versions.bundle(m.hash)! })), { ...compiled, file: approved.files[0]! }];
       if (modules.length > ACTIVE_MODULE_CAP) throw new Error("Eight active modules maximum.");
       feed("check", "SwiftShader · 300 citizens · 15-second candidate gate.");
@@ -110,7 +109,8 @@ export class Runner {
       tokens = (error as { tokens?: Usage })?.tokens ?? tokens;
       const reason = signal.aborted ? "Build timed out or was cancelled." : redact(detail, protectedValues(this.options.env ?? process.env));
       if (merged && tree) {
-        await this.restoreForward(await git(this.root,"rev-parse","master"),previous??{commit:base,tag:"v0",modules:[]},"Automatic revert",requester,false);
+        const head=await git(this.root,"rev-parse","master"),target=this.options.versions.fallbackTarget(head);if(!target)throw new Error("No healthy world is available for restoration.");
+        await this.restoreForward(head,target,"Automatic revert",requester,false);
       }
       feed("error", `REVERTED · ${reason}`);
       const result: RunResult = { ...reverted(reason,Math.round(performance.now()-start),tokens), builderMs, ...(check?{check}:{}) };
@@ -124,8 +124,7 @@ export class Runner {
     return this.queue.enqueue(() => this.rollbackNow(requester, automatic), automatic);
   }
   private async rollbackNow(requester: string, automatic: boolean): Promise<RunResult> {
-    const baseline = this.options.versions.baseline;
-    const start = performance.now(), target = this.options.versions.previous() ?? (automatic && baseline ? { version: 0, tag: "v0", commit: baseline, title: "Original world", requester: "system", modules: [], receipt: "" } : null), tokens = { input: 0, output: 0, total: 0 };
+    const start = performance.now(), target = (automatic||this.options.versions.previous())?this.options.versions.fallbackTarget():null, tokens = { input: 0, output: 0, total: 0 };
     if (!target) return reverted("No previous tag to restore.",0,tokens);
     try {
       const base = await cleanMaster(this.root);
