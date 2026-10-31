@@ -1,5 +1,9 @@
 # Phase 10 verification
 
+The subsequent Gate C import, builder-diagnostic and temporary-worktree checks are
+recorded in [gatec-followups.md](gatec-followups.md). Results below retain their
+original source revisions.
+
 ## Final cleanup verification
 
 The final cleanup walkthrough ran from a fresh clone of **2637004** on October 31,
