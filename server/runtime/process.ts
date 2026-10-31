@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { homedir } from "node:os";
 import { readFile, mkdir, mkdtemp, writeFile, rm, readdir, stat } from "node:fs/promises";
 import { resolve, dirname, basename } from "node:path";
@@ -7,7 +7,7 @@ export function redact(text: string, values: readonly string[]) { for (const val
 export function minimalEnvironment(env: NodeJS.ProcessEnv, root?: string): NodeJS.ProcessEnv {
   return { PATH: env.PATH ?? "/usr/bin:/bin", HOME: env.HOME ?? homedir(), ...(root ? { AWS_BEARER_TOKEN_BEDROCK: env.AWS_BEARER_TOKEN_BEDROCK ?? "", CODEX_HOME: resolve(root, ".codex-runtime") } : {}) };
 }
-interface HomeLease { owner: number; active: boolean; group?: number }
+interface HomeLease { owner: number; active: boolean; group?: number; groupStarted?: string }
 interface HomeOptions { remove?: typeof rm; warn?: (message: string) => void }
 const activeHomes = new Set<string>();
 const startup = new Map<string, Promise<void>>();
@@ -16,18 +16,27 @@ const pause = (ms: number) => new Promise<void>(done => setTimeout(done,ms));
 function warning(error: unknown, env: NodeJS.ProcessEnv, warn = console.warn) { warn(`Runtime home cleanup deferred: ${redact(error instanceof Error ? error.message : "filesystem error",protectedValues(env))}`); }
 async function removeHome(owned: string, env: NodeJS.ProcessEnv, options: HomeOptions = {}) {
   const remove=options.remove??rm;
-  for(let attempt=0;attempt<6;attempt++)try{await remove(owned,{recursive:true,force:true,maxRetries:2,retryDelay:40});return true;}catch(error){
+  for(let attempt=0;attempt<6;attempt++)try{await remove(owned,{recursive:true,force:true,maxRetries:2,retryDelay:40});await pause(30);if(await stat(owned).then(()=>true).catch(()=>false)){if(attempt<5)continue;throw Object.assign(new Error("Late runtime writer recreated its home"),{code:"ENOTEMPTY"});}return true;}catch(error){
     if(attempt===5||!["ENOTEMPTY","EBUSY","EPERM"].includes((error as NodeJS.ErrnoException).code??"")){warning(error,env,options.warn);return false;}
     await pause(40*(attempt+1));
   }
   return false;
 }
 /** Drain the entire owned process group, including children with ignored stdio, on success too. */
+async function groupIdentity(pid: number) {
+  return new Promise<string>(done=>execFile("ps",["-p",String(pid),"-o","lstart="],{env:minimalEnvironment(process.env),timeout:500,maxBuffer:4096},(error,output)=>done(error?"":output.trim())));
+}
 async function drainGroup(pid: number) {
   if(process.platform==="win32")return;
   try{process.kill(-pid,"SIGKILL");}catch{return;}
   for(let attempt=0;attempt<40;attempt++){try{process.kill(-pid,0);}catch{return;}await pause(10);}
   // A reparented zombie cannot write; SIGKILL has already stopped all live members.
+}
+async function emptyTree(path: string, depth=0):Promise<boolean> {
+ if(depth>20)return false;const entries=await readdir(path,{withFileTypes:true});
+ if(entries.length>128)return false;
+ for(const entry of entries)if(!entry.isDirectory()||!await emptyTree(resolve(path,entry.name),depth+1))return false;
+ return true;
 }
 export async function cleanupStaleCodexHomes(root: string, env: NodeJS.ProcessEnv = process.env, options: HomeOptions = {}) {
   const directory=resolve(root,".codex-runtime/runs");
@@ -39,8 +48,8 @@ export async function cleanupStaleCodexHomes(root: string, env: NodeJS.ProcessEn
     const lease:HomeLease|undefined=await readFile(resolve(owned,".owner.json"),"utf8").then(JSON.parse).catch(()=>undefined);
     if(lease?.active&&Number.isSafeInteger(lease.owner)&&lease.owner>1&&exists(lease.owner))continue;
     // Legacy homes lack a lease. Avoid another old server's possible 180s builder.
-    if(!lease&&Date.now()-(await stat(owned)).mtimeMs<210_000)continue;
-    if(lease?.group&&Number.isSafeInteger(lease.group)&&lease.group>1)await drainGroup(lease.group);
+    if(!lease){const age=Date.now()-(await stat(owned)).mtimeMs;if(age<3000||(age<210_000&&!await emptyTree(owned)))continue;}
+    if(lease?.group&&Number.isSafeInteger(lease.group)&&lease.group>1&&lease.groupStarted&&await groupIdentity(lease.group)===lease.groupStarted)await drainGroup(lease.group);
     await removeHome(owned,env,options);
     } catch(error) { if((error as NodeJS.ErrnoException).code!=="ENOENT")warning(error,env,options.warn); }
   }
@@ -93,7 +102,7 @@ export async function runBounded(o: BoundedOptions): Promise<{ output: string; c
     catch { reason = "start"; finish(null); return; }
     o.signal?.addEventListener("abort", abort, { once: true }); if (o.signal?.aborted) abort();
     const home=o.env.CODEX_HOME;
-    if(child.pid&&home&&basename(home)===".codex-runtime"&&/^invocation-[a-zA-Z0-9]+$/.test(basename(dirname(home))))leaseWrite=writeFile(resolve(home,"../.owner.json"),JSON.stringify({owner:process.pid,active:true,group:child.pid} satisfies HomeLease)).catch(()=>{});
+    if(child.pid&&home&&basename(home)===".codex-runtime"&&/^invocation-[a-zA-Z0-9]+$/.test(basename(dirname(home))))leaseWrite=(async()=>{const groupStarted=await groupIdentity(child.pid!);await writeFile(resolve(home,"../.owner.json"),JSON.stringify({owner:process.pid,active:true,group:child.pid!,groupStarted} satisfies HomeLease));})().catch(()=>{});
     child.once("exit",()=>{o.onKill?.();drained=drainGroup(child.pid!);});
     child.stdout!.setEncoding("utf8"); child.stdout!.on("data", (chunk: string) => {
       bytes += Buffer.byteLength(chunk); if (bytes > o.maxBytes) { kill("output-limit"); return; }

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtemp, mkdir, readFile, writeFile, rm, utimes, readdir } from "node:fs/promises";
@@ -20,7 +21,7 @@ test("normal CLI exit drains a background writer with ignored stdio before home 
   const writer=`const fs=require('fs'),p=require('path');const dir=p.join(process.env.CODEX_HOME,'.tmp','plugins-clone-test','skills');fs.mkdirSync(dir,{recursive:true});setInterval(()=>{fs.writeFileSync(p.join(dir,'late-'+Date.now()),'fixture')},2);process.send('ready');`;
   const leader=`const c=require('child_process').spawn(process.execPath,['-e',${JSON.stringify(writer)}],{stdio:['ignore','ignore','ignore','ipc']});c.once('message',()=>{console.log(JSON.stringify({pid:c.pid}));process.exit(0)});`;
   const result=await runBounded({bin:process.execPath,args:["-e",leader],cwd:root,env:childEnv,timeoutMs:3000,maxBytes:8192});
-  assert.equal(result.code,0);pid=(JSON.parse(result.output) as {pid:number}).pid;assert.throws(()=>process.kill(pid,0),/ESRCH/);return "accept";
+  assert.equal(result.code,0);pid=(JSON.parse(result.output) as {pid:number}).pid;try { process.kill(pid,0); const status=execFileSync("ps",["-p",String(pid),"-o","stat="],{encoding:"utf8"}).trim();assert.match(status,/^Z/,"A surviving PID must be an exited zombie, never a writer"); } catch(error) { if((error as NodeJS.ErrnoException).code!=="ESRCH" && !(error as {status?:number}).status)throw error; }return "accept";
  });assert.equal(verdict,"accept");await assert.rejects(readFile(join(home,"config.toml")));assert.deepEqual(await readdir(join(root,".codex-runtime/runs")),[]);
  }finally{if(pid)try{process.kill(pid,"SIGKILL")}catch{}await rm(root,{recursive:true,force:true})}
 });
