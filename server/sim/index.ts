@@ -47,6 +47,6 @@ try {
   if (!process.argv.includes("--round-only") && count !== SIM_CROWD) throw new Error("Crowd count mismatch");
   console.log(`Simulator: ${accepted} events accepted, ${count}/${SIM_CROWD} scripted citizens, ${world.citizens.length} total citizens, ${world.raids} raid event(s), ${world.summons.length} fixture summons.`);
 } catch {
-  console.error(`Simulator could not complete. Start pnpm dev on port ${port}; use an unpaused, empty idea round with capacity for 80 citizens. Rehearsals require sim-only mode.`);
+  console.error(`Simulator could not complete. Start pnpm dev on port ${port}; use an unpaused, empty idea round with capacity for 80 chatters plus 24 raiders. Rehearsals require sim-only mode.`);
   process.exitCode = 1;
 }

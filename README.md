@@ -43,11 +43,11 @@ raid through the same pipeline as Twitch. It also adds three hand-written fixtur
 summons at 5.1-second intervals, then runs a complete 15× round rehearsal in about
 about 11 seconds of accelerated voting plus the real candidate gate (roughly
 50 seconds for the full crowd + checked ship). Expect
-**184 accepted events, 80 citizens and three fixture summons**, including seven
+**184 accepted events, 80 chatters plus 24 raiders (104 citizens), and three fixture summons**, including seven
 round proposals and 13 ballots. A dev-server restart
 clears the in-memory roster/scenes. Repeat runs reuse those identities and respect
 the 60-second summon cooldown; use a fresh dev server for deterministic checks.
-Raid intake is implemented; its portal/parade is a later tier.
+Raid portal/parade and history playback are implemented in Phase 8 below.
 
 Open [the world](http://127.0.0.1:3000/world) in a WebGL 2-capable browser. It uses a
 fixed **1920×1080 framebuffer at DPR 1**, fitted to the viewport at 16:9 without
@@ -114,14 +114,14 @@ implemented in Phase 7 and described below.
 
 ## Crowd performance verification
 
-With `pnpm dev` running on port 3000 and capacity for 80 citizens:
+With `pnpm dev` running on port 3000 and capacity for 104 citizens (80 chatters and 24 raiders):
 
 ```sh
 pnpm exec tsx checks/crowd.performance.ts
 ```
 
 The hardware-backed Chromium check opens `/world?debug=1`, executes **pnpm sim**,
-compares all 80 server IDs with browser tags, verifies Twitch colors and all four
+compares all 104 server IDs with browser tags, verifies Twitch colors and all four
 commands, checks bounded bubbles and raid delivery, warms up and samples 15 seconds.
 It requires both measured FPS and `window.__worldStats.avgFps` >=50, no console
 errors and bounded automatic fly-tos. Screenshots go to `test-results/`.
@@ -380,7 +380,7 @@ This runs the crowd + ship, then a failed round, in hardware-backed headless
 Chromium. It checks transparency, hidden world chrome, four deduplicated ideas,
 three vote bars, replacement counts, requester credit, progress, retained v1,
 reconnect state, a clear island center, unclipped panels and zero console errors.
-It requires ≥50 measured and rolling-average FPS with 80 citizens and three summons.
+It requires ≥50 measured and rolling-average FPS with 104 citizens and three summons.
 Screenshots of ideas, voting, building, ship and revert are saved in ignored
 `test-results/phase6-overlay-*.png` (the voting screenshot shows the compact mid-round view). This verifies the overlay; the separate runtime-module gate runs during builds. The M1 Pro/Metal composite verification held
 59.8 measured FPS and a 59.5 rolling average with 80 citizens and three fixture
@@ -581,3 +581,51 @@ available without credentials.
   `.codex-runtime/` except `config.toml` are ignored. No secrets are committed.
 - All interaction uses chat commands; no Twitch Extensions or Affiliate-only
   features. No third-party logos, unlicensed fonts or copyrighted audio.
+
+### Phase 8: raids and history
+
+An incoming `channel.raid` opens a pooled mint-and-gold portal for 30 seconds.
+Representative citizens emerge in a staggered parade, with the source channel in
+their names and a stream-readable arrival banner. EventSub does not supply raider
+identities; these creatures represent the viewer count. Up to 150 arrive, one per
+viewer, within the existing **300 total citizen cap**. Free seats are used first,
+then only the oldest citizens idle for at least `IDLE_MS` can be replaced. Recent
+chatters are never evicted. If there are too few eligible seats, fewer arrive.
+Raid citizens have the same 20-minute idle fade and expiry as other citizens.
+Reconnect snapshots restore a recent portal without replaying the raid event.
+
+With Twitch credentials configured, local admin routes require an explicit opt-in:
+
+```sh
+SIMULATION_ALLOWED=1 pnpm dev
+pnpm sim:raid --viewers=150 --channel=AuroraCrew --screenshot=state/raid-preview.png
+```
+
+The simulator posts a hand-written **EventSub notification envelope** to the local
+`/sim/eventsub` route. It shares `incomingRaid` with the live Twitch WebSocket:
+notification type, `channel.raid`, recipient filtering, field validation,
+deduplication, admission and the renderer all use the production path. It cannot
+inject chat/moderator authority. Omit `--screenshot` to use an already-open OBS
+source; a new browser can also recover the active arrival for 30 seconds. The
+screenshot option opens a real 1920×1080 production world and reports measured FPS.
+No request is sent to Twitch by this command.
+
+`pnpm check:raid` runs an offline browser load test: 300 pre-raid citizens, 150
+eligible idle replacements, then **150 raiders + 150 retained citizens = 300**.
+It checks production resolution, physical GPU, about 60 FPS, zero console errors,
+and reconnect behavior. It saves `state/phase8-raid-150.png` and performance JSON.
+A simultaneous 450-citizen scene would violate the cap and is not admitted.
+Gate D remains the manual live test: raid the configured channel from a second
+account, then confirm the source banner, parade and raid count in `/world?debug=1`.
+Have free or eligible idle seats if the test should visibly admit citizens.
+
+`/history` plays healthy shipped versions from v1 to vN, with title and requester,
+chapter selection, play/pause, replay and 1×/2×/4× speed. Reduced-motion viewers
+start paused. The player uses checked immutable module bundles through an isolated
+renderer: it never subscribes to live world events, registers as the primary OBS
+client, sends acknowledgements/faults or changes the live version. Failed versions
+are excluded. A fresh checkout displays **No versions yet**, with a live-world link.
+`GET /api/history` provides ordered public chapters without live receipt tokens.
+
+Run checks with `SIMULATION_ALLOWED=1 pnpm check` when `.env` contains Twitch
+credentials. Browser captures and live-test state remain ignored under `state/`.

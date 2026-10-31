@@ -75,7 +75,7 @@ try {
   assert.ok((await overlay.locator(".version.ship .credit").textContent())?.includes("Comet04"));
   const end = await page.evaluate(() => ({ ...window.__worldStats, now: performance.now() }));
   const measuredFps = (end.frame - start.frame) * 1000 / (end.now - start.now);
-  assert.equal(end.citizenCount, 80); assert.equal(end.summonCount, 3);
+  assert.equal(end.citizenCount, 104); assert.equal(end.summonCount, 3);
   assert.ok(end.avgFps >= 50); assert.ok(measuredFps >= 50);
   const failed = await promisify(execFile)("pnpm", ["sim", "--round-only", "--outcome=fail"], { cwd: process.cwd(), timeout: 60_000 }); console.log(failed.stdout.trim());
   await overlay.waitForSelector('.version[data-kind="revert"]'); await overlay.waitForSelector(".toast.revert");

@@ -25,7 +25,7 @@ try {
   await page.waitForFunction(() => window.__worldStats.citizenCount === 80);
   await page.waitForTimeout(400);
   async function readableLabels() {
-    return page.locator(".citizen-label:visible, .summon-label:visible").evaluateAll(labels => {
+    return page.locator(".citizen-label:visible, .summon-label:visible, .raid-label:visible").evaluateAll(labels => {
       const rects = labels.map(label => { const r = label.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; });
       let overlaps = 0;
       for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
@@ -41,10 +41,10 @@ try {
   await page.waitForSelector('.summon-label[data-spawn-effect="played"]:visible', { timeout: 20_000 });
   await page.screenshot({ path: "test-results/fixture-jellyfish.png" });
   const sim = await simRun; console.log(sim.stdout.trim());
-  await page.waitForFunction(() => window.__worldStats.citizenCount === 80);
+  await page.waitForFunction(() => window.__worldStats.citizenCount === 104);
   const response = await fetch("http://127.0.0.1:3000/api/world");
   const snapshot = await response.json() as { citizens: CitizenState[]; raids: number; summons: { id: string }[] };
-  assert.equal(snapshot.citizens.length, 80);
+  assert.equal(snapshot.citizens.length, 104);
   const rendered = await page.locator(".citizen-label").evaluateAll(labels => labels.map(label => ({
     id: (label as HTMLElement).dataset.userId!, command: (label as HTMLElement).dataset.command!, color: (label as HTMLElement).dataset.color!,
   })));
@@ -74,7 +74,7 @@ try {
   await page.waitForTimeout(15_000);
   const stats = await page.evaluate(() => ({ ...window.__worldStats, now: performance.now() }));
   const measuredFps = (stats.frame - start.frame) * 1000 / (stats.now - start.now);
-  assert.equal(stats.citizenCount, 80);
+  assert.equal(stats.citizenCount, 104);
   assert.equal(stats.raidCount, snapshot.raids);
   assert.ok(stats.raidCount >= 1);
   assert.ok(stats.avgFps >= 50, `Crowd rolling average ${stats.avgFps.toFixed(1)} is below 50`);

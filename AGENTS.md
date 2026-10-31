@@ -965,3 +965,21 @@ verify `/world` with `pnpm dev`. Keep README instructions reproducible from a fr
 clone and include the safety model. API keys are not needed for scaffold checks.
 The external product brief is read-only, outside this repository: never edit or
 copy it into the repo. This file is the implementation contract, not a brief copy.
+
+## Phase 8 raids and playback
+
+- Raid policy lives in `server/citizens/raid-policy.ts`: desired=min(viewers,150),
+  free slots first, then oldest `lastActive <= now-IDLE_MS` citizens only. Never
+  evict recent chatters or exceed 300 active citizens. All raid citizens use normal
+  activity/fade/expiry and have server-owned source-channel metadata.
+- Both live EventSub and `/sim/eventsub` use `incomingRaid`; the simulator accepts
+  only incoming raid notifications, never forged chat authority. Local simulator
+  routes require SIMULATION_ALLOWED=1 when Twitch is configured. Real Gate D is
+  performed by Arjun from a second account.
+- The portal is one pooled base-world allocation (128 sparks, no local lights).
+  Repeated raids retarget it; citizen arrivals are staged six per render frame.
+  Recent arrival snapshots preserve its original age after reconnect.
+- `/history` consumes healthy immutable version bundles in ascending order, with
+  public title/requester credits. Playback is isolated from live transport,
+  primary-world selection, receipts and fault/reversion endpoints. Keep the empty
+  state honest; never fabricate shipped history for an empty checkout.
