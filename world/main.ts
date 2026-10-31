@@ -13,6 +13,7 @@ const labels = document.querySelector<HTMLElement>("#citizen-labels");
 const count = document.querySelector<HTMLElement>("#citizen-count");
 const connection = document.querySelector<HTMLElement>("#connection-status");
 const query = new URLSearchParams(location.search);
+document.body.classList.toggle("overlay-active", query.get("overlay") === "1");
 if (fps) fps.hidden = query.get("debug") !== "1";
 const phases: Record<string, number> = { dawn: 0.25, day: 0.5, dusk: 0.75, night: 0 };
 const phase = phases[query.get("time") ?? ""];

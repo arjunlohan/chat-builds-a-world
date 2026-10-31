@@ -1,2 +1,11 @@
-/** TODO: bounded accessible success, rejection and rollback toasts. */
-export const toasts = () => "Toasts: no events yet";
+import type { ToastView } from "../server/rounds/types.js";
+import { cached, el } from "./dom.js";
+const labels: Record<ToastView["kind"], string> = { summon: "A LITTLE MAGIC", citizens: "THE GARDEN GROWS", ship: "A NEW CHAPTER", revert: "SAFE & SOUND", notice: "GARDEN NOTE" };
+export function toasts() {
+  const root = el("aside", "toasts"); root.setAttribute("aria-live", "polite"); root.setAttribute("aria-label", "World moments");
+  const draw = cached<ToastView[]>(root, value => value.slice(-2).map(toast => {
+    const card = el("article", `toast ${toast.kind}`); card.dataset.toastId = String(toast.id);
+    card.append(el("p", "eyebrow", labels[toast.kind]), el("h3", "", toast.title), el("p", "toast-detail", toast.detail)); return card;
+  }));
+  return { root, update: draw };
+}

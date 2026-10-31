@@ -21,7 +21,7 @@ try {
     return info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "unknown";
   });
   assert.ok(!/swiftshader|llvmpipe|software|unknown/i.test(gpu), `Physical GPU required, found ${gpu}`);
-  const simRun = promisify(execFile)("pnpm", ["sim"], { cwd: process.cwd(), timeout: 40_000 });
+  const simRun = promisify(execFile)("pnpm", ["sim"], { cwd: process.cwd(), timeout: 70_000 });
   await page.waitForFunction(() => window.__worldStats.citizenCount === 80);
   await page.waitForTimeout(400);
   async function readableLabels() {

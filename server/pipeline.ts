@@ -1,5 +1,6 @@
 import type { ChatEvent, RaidEvent, WorldEvent, LaneEvent } from "./contracts.js";
 import type { SummonService } from "./summon/index.js";
+import type { Rounds } from "./rounds/index.js";
 import { CitizenRoster } from "./citizens/index.js";
 
 const id = (v: unknown): v is string => typeof v === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(v);
@@ -25,8 +26,14 @@ export class WorldPipeline {
   private readonly cooldowns = new Map<string, number>();
   private readonly listeners = new Set<(event: WorldEvent) => void>();
   private summonLane: SummonService | undefined;
+  private rounds: Rounds | undefined;
+  attachRounds(rounds: Rounds) { this.rounds = rounds; }
   attachSummon(lane: SummonService) { this.summonLane = lane; }
-  publish(event: LaneEvent) { this.emit({ ...event, revision: ++this.revision, now: this.now() }); }
+  publish(event: LaneEvent) {
+    this.emit({ ...event, revision: ++this.revision, now: this.now() });
+    if (event.type === "summon") this.rounds?.toast("summon", event.summon.spec.name, `Summoned by ${event.summon.requester}`);
+    if (event.type === "summon-remove") this.rounds?.toast("notice", "Summon cleared", "The garden has a little more room.");
+  }
   private revision = 0;
   private paused = false;
   private raids = 0;
@@ -38,7 +45,7 @@ export class WorldPipeline {
     for (const listener of this.listeners) { try { listener(event); } catch { this.listeners.delete(listener); } }
   }
   snapshot(): Extract<WorldEvent, { type: "snapshot" }> {
-    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, summons: this.summonLane?.active() ?? [] };
+    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null };
   }
   private duplicate(key: string, now: number) {
     if (this.seen.has(key)) return true;
@@ -46,14 +53,15 @@ export class WorldPipeline {
     while (this.seen.size > 10_000) this.seen.delete(this.seen.keys().next().value!);
     return false;
   }
-  chat(input: unknown, authority: { moderator: boolean; fixture?: boolean; source?: "sim" | "twitch" } = { moderator: false }) {
+  chat(input: unknown, authority: { moderator: boolean; fixture?: boolean; source?: "sim" | "twitch" } = { moderator: false }): { accepted: boolean; reason?: string; count?: number } {
     const event = parseChat(input), now = this.now();
     if (this.duplicate(`chat:${event.id}`, now)) return { accepted: false, reason: "duplicate" };
     const mod = /^!(pause|skip|clear)$/i.exec(event.text.trim());
     if (mod) {
       if (!authority.moderator) return { accepted: false, reason: "moderator-only" };
       const action = mod[1]!.toLowerCase() as "pause" | "skip" | "clear";
-      if (action === "pause") this.paused = !this.paused;
+      if (action === "pause") { this.paused = !this.paused; this.rounds?.setPaused(this.paused); }
+      if (action === "skip") this.rounds?.skip();
       if (action === "clear") void this.summonLane?.clearLatest();
       this.emit({ type: "control", revision: ++this.revision, now, action, paused: this.paused });
       return { accepted: true, count: this.roster.size };
@@ -66,10 +74,15 @@ export class WorldPipeline {
     const second = Math.floor(now / 1000);
     if (this.window !== second) { this.window = second; this.messages = 0; }
     if (now - (this.cooldowns.get(event.userId) ?? -Infinity) < 250 || this.messages >= 200) return { accepted: false, reason: "rate-limited" };
-    const result = this.roster.accept({ ...event, timestamp: now }, now);
-    if (!result) return { accepted: false, reason: "capacity" };
     this.messages++; this.cooldowns.set(event.userId, now);
+    const roundCommand = /^!(idea|vote)(?:\s|$)/i.test(event.text.trim());
+    const roundResult = roundCommand ? this.rounds?.command(event) : undefined;
+    if (roundResult && !roundResult.accepted) return roundResult;
+    const result = this.roster.accept({ ...event, timestamp: now }, now);
+    if (!result) return roundResult ?? { accepted: false, reason: "capacity" };
     this.emit({ type: "chat", revision: ++this.revision, now, chat: { ...event, timestamp: now }, ...result });
+    if (result.spawned && [1, 10, 25, 50, 80, 100, 150, 200, 250, 300].includes(this.roster.size))
+      this.rounds?.toast("citizens", `${this.roster.size} neighbors, one little world`, `Welcome, ${event.displayName}.`);
     if (/^!summon(?:\s|$)/i.test(event.text.trim())) void this.summonLane?.submit({ ...event, timestamp: now }, authority);
     return { accepted: true, count: this.roster.size };
   }

@@ -28,7 +28,8 @@ Build in this order; cut scope from the bottom:
    scaled to viewer count within the citizen cap. `/history` replays v1…vN as a
    time-lapse. Cross-channel module gifts are stretch scope.
 
-Phase 4 provides the procedural world, instanced citizens, shared Twitch/simulator
+Phase 5 provides the transparent stream overlay and authoritative idea/vote/stub-build
+round loop in addition to the procedural world, instanced citizens, shared Twitch/simulator
 pipeline, readable collision-managed labels, and the data-only Summon fast lane.
 Twitch and Bedrock are optional: missing Twitch configuration keeps sim-only mode
 running; missing Bedrock credentials fails live Summon without substituting a
@@ -50,7 +51,8 @@ Version playback → /history
 
 Use pnpm, ES modules, strict TypeScript, Node >=20 and the committed lockfile.
 `pnpm dev` serves local pages, `pnpm sim` posts a scripted crowd of 80 chatters
-and one raid to the running server, and `pnpm check` type-checks all sources,
+and one raid, three fixture summons and an accelerated scripted round to the running
+server, and `pnpm check` type-checks all sources,
 tests contracts/integrations and bundles browser entrypoints. Restart dev after browser-source changes.
 No external CDN, fonts, logos or audio. Browser networking is same-origin only;
 Twitch networking and credentials stay on the Node server.
@@ -192,6 +194,42 @@ configuration and latency will be verified when the integration is built.
   sequentially through `/sim/chat` with fixture:false, respects the five-second
   global limit, and prints validity, provider/screen latency and token counts.
   The live benchmark has not been run without a key and is never faked.
+
+## Phase 5 rounds and stream overlay contract
+
+- Normal rounds collect `!idea <text>` for **120 seconds**, vote with `!vote 1|2|3`
+  for **45 seconds**, then build with a **180-second hard deadline**. Empty rounds
+  collect again. Top three rank by unique backers, then earliest idea. Normalize
+  case/punctuation/stop words and conservatively merge near-identical wishes.
+  One backed idea/user; a later idea moves that support. Preserve original credit.
+- One vote/user; later votes replace earlier votes. Tied results choose the
+  earliest original idea, regardless of candidate order. Server time owns all
+  deadlines. Pause freezes the clock; verified moderator `!skip` advances a phase
+  or fails the current stub build. Roster capacity never prevents a round ballot.
+- The build is **explicitly a stub**: deterministic progress at 15-second intervals,
+  simulated success/failure at 90 seconds or timeout at 180 seconds. No subprocess,
+  Codex call, edits, merge, Git tag or module activation occurs. Stub versions are
+  in-memory rehearsal records, separate from future real `server/versions` history.
+  Failure retains the last successful stub version; the overlay calls this a revert.
+- Up to 100 ideas, 5,000 backers/voters, eight displayed queue items (four visible),
+  three candidates, 12 timeline entries (two visible), eight pending toasts (two
+  visible). Publish bounded snapshots at most ten times/second, with idle 1 Hz
+  clock updates. SSE sends current state on reconnect. All user text is textContent.
+- `/overlay` is a transparent 1920×1080 source. Panels stay in the side rails,
+  preserving the center rectangle X=500..1420, Y=150..910. Local system fonts,
+  readable cream/teal type, reduced-motion support, no external assets. Use
+  `/world?overlay=1` beneath it to hide the large world title and interaction hint.
+- `POST /sim/round` starts a 15× rehearsal only with Twitch disabled and an empty,
+  unpaused collection phase. It selects `ship|fail|timeout`; real durations remain
+  120/45/180 seconds on the same logical clock and state machine. `pnpm sim`
+  submits seven ideas and 13 ballots through `/sim/chat`, verifies four distinct
+  ideas, three candidates, 12 voters [1,9,2] and the credited stub result.
+  `--round-only --outcome=fail|timeout` exercises other outcomes. Rehearsal mode is
+  clearly labelled on stream, resets to normal speed on completion and needs no keys.
+- `checks/overlay.smoke.ts` composites the actual sources in hardware-backed
+  Chromium, drives a ship and a failure via `pnpm sim`, checks vote totals,
+  attribution, transparency, clear center, late-viewer state and console errors,
+  measures crowd FPS and saves screenshots to ignored `test-results/`.
 
 ## World Module API v1
 

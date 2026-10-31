@@ -4,6 +4,7 @@ export const SIM_CROWD = 80;
 const colors = ["#E9A18E", "#79D7CF", "#9FB3E7", "#E5C775", "#CFA3DA", "#9DCA83", "#D88FAD", "#83BDE0"];
 const names = ["Moss", "Pebble", "Clover", "Comet", "Juniper", "Wisp", "Fern", "Puddle", "Willow", "Saffron"];
 const lines = ["Hello, little world!", "Found my quiet corner", "That waterfall is lovely", "Lantern garden crew", "Let's explore together", "A good day to be a tiny creature", "More moss, please", "I live here now"];
+export const simChatter = (i: number) => ({ userId: `sim-viewer-${i}`, displayName: `${names[i % names.length]}${String(i + 1).padStart(2, "0")}`, color: colors[i % colors.length]! });
 export interface SimStep { kind: "chat" | "raid"; event: ChatEvent | RaidEvent; delay: number }
 export function crowdScenario(runId: string): SimStep[] {
   const result: SimStep[] = [];

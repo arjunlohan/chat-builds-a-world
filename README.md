@@ -4,7 +4,7 @@ Twitch chat builds a living 3D world on stream. Every chatter becomes a creature
 small wishes become objects, bigger ideas become live-coded systems, and raids
 arrive through a portal. A Codex x TwitchCon Hackathon entry by Arjun.
 
-This is **Phase 4 of 10: Summon (fast lane)**. `/world` renders the Lantern Garden: an
+This is **Phase 5 of 10: overlay and rounds**. `/world` renders the Lantern Garden: an
 original procedural island with jade terrain, layered basalt cliffs, coral trees,
 a spring and waterfall, a moon gate and glowing lanterns. The painted sky follows
 a ten-minute day/night cycle. Soft shadows, shader ripples, GPU fireflies and bloom
@@ -22,8 +22,8 @@ animate them. The server caps the roster at 300; six instanced draws render the
 creatures, which fade five seconds after becoming idle for 20 minutes. Automatic
 arrival/action camera shots coalesce and are at least eight seconds apart.
 The Summon fast lane now materializes validated data; live-coded modules and
-version playback remain future work. `/overlay` and `/history`
-remain placeholders. Integration stubs fail explicitly if called.
+version playback remain future work. `/overlay` now shows live rounds and
+explicitly labelled stub builds; `/history` remains a placeholder. Integration stubs fail explicitly if called.
 
 ## Run from a fresh clone
 
@@ -39,8 +39,10 @@ pnpm dev
 In a second terminal at the repository root, run `pnpm sim`. It replays 80 named
 chatters in varied colors, 80 chat lines, 80 commands (20 of each kind), and one
 raid through the same pipeline as Twitch. It also adds three hand-written fixture
-summons at 5.1-second intervals. Expect
-**164 accepted events, 80 citizens and three fixture summons**. A dev-server restart
+summons at 5.1-second intervals, then runs a complete 15× round rehearsal in about
+17 seconds (roughly 34 seconds for the whole demo). Expect
+**184 accepted events, 80 citizens and three fixture summons**, including seven
+round proposals and 13 ballots. A dev-server restart
 clears the in-memory roster/scenes. Repeat runs reuse those identities and respect
 the 60-second summon cooldown; use a fresh dev server for deterministic checks.
 Raid intake is implemented; its portal/parade is a later tier.
@@ -73,13 +75,14 @@ Never commit `.env` or put secrets into browser bundles.
 
 ## Checks and local simulation
 
-- `pnpm check`: generated-validator consistency, strict TypeScript checks and 77
+- `pnpm check`: generated-validator consistency, strict TypeScript checks and 88
   contract/engine/integration tests covering lifecycle,
   budgets, queues, cleanup, roster/cap/expiry, HTTP/SSE, Twitch reconnect/refresh,
-  camera and FPS, and compilation of both browser bundles. No external API calls.
+  camera and FPS, round deadlines/dedup/vote replacement/ties/pause/failure/timeout,
+  and compilation of both browser bundles. No external API calls.
 - `pnpm sim`: sends the scripted crowd to the running server, verifies the roster
   and prints counts. It exits with an error if dev is not running or events fail.
-- `pnpm dev`: starts the local Node server and serves the world and placeholder pages.
+- `pnpm dev`: starts the local Node server and serves the world, transparent overlay and history placeholder.
 
 Optional browser verification (downloads Chromium on first setup):
 
@@ -123,6 +126,69 @@ errors and bounded automatic fly-tos. Screenshots go to `test-results/`.
 The previous M1 Pro/Metal development run held about 60 FPS at 1920×1080 with 80
 citizens; the Phase 4 check also verifies fixture effects, credits, camera focus,
 render receipts and zero label overlaps. Performance depends on hardware and load.
+
+## Stream overlay and rounds
+
+In OBS, add two **1920×1080 browser sources**, in this order:
+
+1. `http://127.0.0.1:3000/world?overlay=1` — hides the large title card and hint.
+2. `http://127.0.0.1:3000/overlay` — transparent phase/countdown, ideas/votes,
+   build feed, credited version timeline and moment toasts.
+
+Keep the overlay browser background transparent. The side rails leave the island's
+center clear (X=500..1420, Y=150..910). Text, vote fills and toast motion respect
+reduced-motion preferences. `/world` without the flag retains its standalone title.
+
+Rounds start automatically: **120 seconds** to `!idea <wish>` (up to 180 characters),
+then **45 seconds** to `!vote 1|2|3`. Similar ideas share one proposal and unique
+backers; a later idea replaces your earlier support. The top three rank by backers
+then arrival order. Each viewer has one vote; voting again replaces it. Ties go to
+the earliest original idea. Empty rounds restart collection. Verified Twitch mods
+can `!pause` to freeze/resume deadlines and `!skip` to advance the phase or fail a build.
+Commands go through the same chat pipeline even when all 300 citizen slots are full.
+
+The build phase has a **180-second timeout**. The current runner is a **stub**:
+progress lines simulate a plan, module edits and checks, with a result at 90 seconds.
+The feed always says **STUB RUNNER**; ships, retained versions and requester credits
+are rehearsal state. It does not call Codex, change code/Git or activate modules.
+Failure/timeout shows a revert and keeps the previous successful stub version.
+The state, queue and timeline are in memory and reset on restart. Real guard,
+runner, persistence and rollback votes are later phases.
+
+`pnpm sim` starts an explicit offline-only **15× rehearsal** using those same
+120/45/180-second windows. It submits seven proposals → four distinct ideas → three
+candidates, then 13 ballots → 12 voters with counts **[1,9,2]**. The lantern-orchard
+winner is credited to **Comet04**. On completion normal-speed collection resumes.
+Rehearsal acceleration is disabled when Twitch is configured. Run alternate stub
+outcomes without repeating the crowd/summons:
+
+```sh
+pnpm sim --round-only --outcome=fail
+pnpm sim --round-only --outcome=timeout
+```
+
+Start from an empty collection phase; existing ideas cause a clear simulator failure.
+The timeout rehearsal takes about 23 seconds. The overlay reconnects with a full
+snapshot, including the latest build and timeline. All viewer text uses textContent;
+arrays and send buffers are bounded. Summons, citizen milestones, ships and retained
+versions produce moment toasts, with at most two visible at once.
+
+With a **fresh `pnpm dev`** on port 3000, verify the actual combined OBS view:
+
+```sh
+pnpm exec tsx checks/overlay.smoke.ts
+```
+
+This runs the crowd + ship, then a failed round, in hardware-backed headless
+Chromium. It checks transparency, hidden world chrome, four deduplicated ideas,
+three vote bars, replacement counts, requester credit, progress, retained v1,
+reconnect state, a clear island center, unclipped panels and zero console errors.
+It requires ≥50 measured and rolling-average FPS with 80 citizens and three summons.
+Screenshots of ideas, voting, building, ship and revert are saved in ignored
+`test-results/overlay-*.png`. This is a rehearsal integration check, not the future
+runtime-module candidate gate. The M1 Pro/Metal composite verification held
+59.9 measured FPS and a 60.0 rolling average with 80 citizens and three fixture
+summons, with zero console errors.
 
 ## Summon and readable stream labels
 
@@ -232,7 +298,10 @@ deduplication, cooldowns, capacity, commands and broadcasts are identical.
 - `POST /sim/raid`: JSON with `id`, `broadcasterId`, `broadcasterName`, `viewerCount`
   (positive integer <=1,000,000). It feeds the same raid hook and counter; it does
   not invent viewers or spawn raid citizens yet.
-- `GET /api/world`: current authoritative roster and raid/control metadata.
+- `GET /api/world`: current authoritative roster, summons, rounds and raid/control metadata.
+- `GET /api/rounds`: current authoritative round, build, timeline and toast snapshot.
+- `POST /sim/round`: offline-only empty-round rehearsal with JSON `outcome`
+  (`ship`, `fail`, `timeout`); 403 when Twitch is configured.
 - `GET /events`: SSE snapshot then revisioned deltas, 15-second heartbeats,
   automatic browser reconnect and fresh snapshots. At most 16 local viewers.
 
@@ -241,7 +310,7 @@ requests. No simulator body can claim moderator privileges. Incoming chat is
 limited to one accepted message/user/250 ms and 200 messages/second globally.
 Only server-verified Twitch broadcaster/moderator roles may invoke `!pause`,
 `!skip`, `!clear`. Pause gates new actions, clear removes the latest active summon, and skip
-publishes a control for the future Build lane. Current blocklist filtering is basic. Speech is always textContent,
+advances the round or fails a running stub build. Current blocklist filtering is basic. Speech is always textContent,
 never HTML; at most eight recent bubbles are visible and each expires after 5.5s.
 
 ## Layout and implementation order
@@ -263,7 +332,7 @@ state/        future persisted world/round/version data (ignored; created at run
 
 Build the independently demo-able tiers in order: world/citizens, Summon,
 Build, then raids/history. The live server routes Twitch EventSub events to the world over same-origin SSE;
-the future overlay can consume that stream. Summon generates validated data via Bedrock Responses (or explicit local fixtures);
+the overlay consumes the same revisioned stream. Summon generates validated data via Bedrock Responses (or explicit local fixtures);
 Build will guard proposals, write isolated world modules, check them and activate
 versioned changes.
 

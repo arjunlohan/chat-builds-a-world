@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { buildClient } from "./assets.js";
 import type { SummonService } from "./summon/index.js";
+import type { Rounds } from "./rounds/index.js";
 import { WorldPipeline } from "./pipeline.js";
 
 function json(response: ServerResponse, status: number, value: unknown) {
@@ -27,7 +28,7 @@ async function body(request: IncomingMessage): Promise<unknown> {
   });
 }
 
-export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService) {
+export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds) {
   const assets = await buildClient();
   const pages = new Map([
     ["/world", await readFile(new URL("../world/index.html", import.meta.url))],
@@ -53,6 +54,16 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       return;
     }
     if (path.startsWith("/api/summons/")) { const job = summons?.status(path.slice(13)); json(response, job ? 200 : 404, job ?? { error: "Unknown summon" }); return; }
+    if (path === "/sim/round") {
+      if (request.method !== "POST") { json(response, 405, { error: "Use POST" }); return; }
+      try {
+        const input = await body(request) as { outcome?: unknown };
+        if (!input || typeof input.outcome !== "string" || !["ship", "fail", "timeout"].includes(input.outcome)) { json(response, 400, { error: "Use outcome ship, fail or timeout" }); return; }
+        const result = rounds?.startSimulation(input.outcome as "ship" | "fail" | "timeout") ?? { accepted: false, reason: "simulation-disabled" };
+        json(response, result.accepted ? 200 : result.reason === "simulation-disabled" ? 403 : 409, result);
+      } catch { request.resume(); json(response, 400, { error: "Invalid rehearsal request" }); }
+      return;
+    }
     if (path === "/sim/chat" || path === "/sim/raid") {
       if (request.method !== "POST") { response.setHeader("Allow", "POST"); json(response, 405, { error: "Use POST" }); return; }
       try {
@@ -66,6 +77,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     if (request.method !== "GET" && request.method !== "HEAD") {
       response.writeHead(405, { Allow: "GET, HEAD" }).end(); return;
     }
+    if (path === "/api/rounds") { json(response, rounds ? 200 : 503, rounds?.snapshot() ?? { error: "Rounds unavailable" }); return; }
     if (path === "/api/world") { json(response, 200, pipeline.snapshot()); return; }
     if (path === "/events") {
       if (request.method === "HEAD") { response.writeHead(200).end(); return; }
@@ -74,10 +86,14 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       response.flushHeaders();
       response.write(`retry: 1500\ndata: ${JSON.stringify(pipeline.snapshot())}\n\n`);
       clients.add(response);
-      const unsubscribe = pipeline.subscribe(event => {
-        if (!response.writableEnded && !response.destroyed && !response.write(`id: ${event.revision}\ndata: ${JSON.stringify(event)}\n\n`)) response.end();
-      });
-      const heartbeat = setInterval(() => { if (!response.writableEnded && !response.destroyed && !response.write(": heartbeat\n\n")) response.end(); }, 15_000);
+      const send = (data: string) => {
+        if (response.writableEnded || response.destroyed) return;
+        // Node's high-water mark is not a disconnect signal. Bound a slow viewer's queue instead.
+        if (response.writableLength + Buffer.byteLength(data) > 2_097_152) response.end();
+        else response.write(data);
+      };
+      const unsubscribe = pipeline.subscribe(event => send(`id: ${event.revision}\ndata: ${JSON.stringify(event)}\n\n`));
+      const heartbeat = setInterval(() => send(": heartbeat\n\n"), 15_000);
       response.once("close", () => { clearInterval(heartbeat); unsubscribe(); clients.delete(response); });
       return;
     }

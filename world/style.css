@@ -39,3 +39,8 @@ body { margin: 0; min-height: 100vh; }
 .summon-label { position: absolute; left: 0; top: 0; pointer-events: none; text-align: center; padding: 5px 8px; background: #193a43dc; border-radius: 6px; font: 13px/18px system-ui, sans-serif; color: #f8efd8; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .summon-label small { display: block; font-size: 11px; color: #b8ddd1; }
 .citizen-label .citizen-name { max-width: 100%; }
+
+/* OBS uses a separate transparent overlay; keep the garden clear beneath it. */
+.overlay-active .world-heading, .overlay-active .world-label, .overlay-active .world-hint,
+.overlay-active .connection-status { display: none; }
+.overlay-active .module-status { top: auto; right: auto; left: 40px; bottom: 28px; width: 420px; max-width: 420px; }
