@@ -85,7 +85,7 @@ try {
  assert.deepEqual(await Promise.all(names.map(async name => createHash("sha256").update(await readFile(join(source,name))).digest("hex"))),ownHashes);
  assert.equal(await git(source,"rev-parse","HEAD"),ownHead);assert.equal(await git(source,"status","--porcelain","--untracked-files=all"),ownStatus);
  await mkdir(join(source,"test-results"),{recursive:true});await page.screenshot({path:join(source,"test-results/runner-ten-rounds.png")});
- await mkdir(join(source,"state"),{recursive:true});await copyFile(join(root,"state/runner-metrics.jsonl"),join(source,"state/runner-sim-metrics.jsonl"));await writeFile(join(source,"state/runner-sim-results.json"),JSON.stringify({results,navigations,announcements,consoleErrors:errors.length,ownCheckoutUntouched:true},null,2));
+ await mkdir(join(source,"state"),{recursive:true});await copyFile(join(root,"state/runner-metrics.jsonl"),join(source,"state/runner-sim-metrics.jsonl"));await writeFile(join(source,"state/runner-sim-results.json"),JSON.stringify({results,navigations,announcements,consoleErrors:errors.length,initialLoads:1,reloads:navigations-1,ownCheckoutUntouched:true},null,2));
  console.log(`10 rounds passed; ${announcements.length} chat announcements; one navigation; no leaked worktrees; original checkout untouched.`);
 } finally {
  clearInterval(clock); rounds.dispose();versions.close();await browser.close();app.closeStreams();await new Promise<void>(r=>app.server.close(()=>r()));await rm(root,{recursive:true,force:true});

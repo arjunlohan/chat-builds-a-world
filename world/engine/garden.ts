@@ -1,3 +1,4 @@
+import { indexGeometry } from "./index-geometry.js";
 import {
   BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, DodecahedronGeometry,
   Float32BufferAttribute, Group, IcosahedronGeometry, InstancedMesh, Mesh,
@@ -19,7 +20,7 @@ export function createGarden() {
   const teal = new MeshStandardMaterial({ color: "#b2f5d6", emissive: "#74e1cc", emissiveIntensity: 1.3, roughness: 0.5 });
 
   function instances(geometry: BufferGeometry, material: MeshStandardMaterial, count: number, name: string, shadows = true) {
-    const mesh = new InstancedMesh(geometry, material, count);
+    const mesh = new InstancedMesh(indexGeometry(geometry), material, count);
     mesh.name = name;
     mesh.castShadow = shadows;
     mesh.receiveShadow = shadows;

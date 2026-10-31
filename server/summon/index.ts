@@ -1,6 +1,6 @@
+import { protectedValues } from "../runtime/process.js";
 import { SummonReservations } from "../../world/shared/limits.js";
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir } from "node:fs/promises";
 import type { ChatEvent, LaneEvent, SummonState } from "../contracts.js";
 import { normalizeSceneSpec, specUsage } from "./scene-spec.js";
 import { bedrockProvider, fixtureProvider, SummonError, type Provider, type SummonConfig, type TokenUsage } from "./provider.js";
@@ -15,15 +15,8 @@ export interface SummonJob {
   renderTimedOut?: boolean; renderError?: string; valid: boolean; clamped: boolean; usage: TokenUsage | null; reason: string | null;
 }
 interface InternalJob { public: SummonJob; chat: ChatEvent; source: "sim" | "twitch"; receipt: string; logged: boolean }
-export function metricWriter(directory = "state", filename = "summon-metrics.jsonl") {
-  let tail = Promise.resolve();
-  return (job: unknown) => {
-    const record = JSON.stringify(job) + "\n";
-    tail = tail.then(async () => { await mkdir(directory, { recursive: true }); await appendFile(`${directory}/${filename}`, record, { mode: 0o600 }); })
-      .catch(() => { console.warn("Metrics could not be saved to state/."); });
-    return tail;
-  };
-}
+export { metricWriter } from "../runtime/metrics.js";
+import { metricWriter } from "../runtime/metrics.js";
 interface Options {
   config: SummonConfig; publish(event: LaneEvent): void;
   reply(chat: ChatEvent, message: string, source: "sim" | "twitch"): Promise<void> | void;
@@ -81,6 +74,7 @@ export class SummonService {
     try {
       const provider = this.options.provider ?? bedrockProvider(this.options.config);
       const generated = await provider.generate(wish);
+      if (protectedValues(process.env).some(secret => generated.json.includes(secret))) throw new SummonError("protected-output",generated.usage);
       job.public.providerMs = this.now() - now; job.public.usage = generated.usage;
       const { spec, clamped } = normalizeSceneSpec(generated.json);
       if (!allowedWish(spec.name)) throw new SummonError("blocked-output");

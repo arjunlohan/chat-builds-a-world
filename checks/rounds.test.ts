@@ -27,9 +27,9 @@ test("production rounds use exact windows and finish only when the runner report
   r.command(chat("voter", "!vote 2")); h.advance(45_000);
   assert.equal(r.snapshot().phase, "building"); assert.equal(r.snapshot().endsAt - r.snapshot().startedAt, 180_000);
   assert.equal(r.snapshot().winner?.requester, "Fern"); r.feed("edit", "Edited world/modules/unit.ts"); r.feed("check", "Independent checks running");
-  assert.equal(r.snapshot().build.lines.length, 2); assert.equal(r.snapshot().build.stub, false);
+  assert.equal(r.snapshot().build.lines.length, 2);
   await h.complete(true); const s = r.snapshot(); assert.equal(s.phase, "ideas"); assert.equal(s.timeline[0]?.version, 1);
-  assert.equal(s.timeline[0]?.stub, false); assert.equal(s.timeline[0]?.requester, "Fern");
+ assert.equal(s.timeline[0]?.requester, "Fern");
 });
 test("near-identical ideas coalesce with original attribution and distinct backers", () => {
   const r = harness().rounds;
@@ -122,4 +122,13 @@ test("HTTP rehearsal requires offline enablement, valid JSON/outcome and same or
     const state = await (await fetch(`${base}/api/rounds`)).json() as RoundState; assert.equal(state.phase, "ideas");
     const snapshot = await (await fetch(`${base}/api/world`)).json() as { rounds: RoundState }; assert.equal(snapshot.rounds.endsAt - snapshot.rounds.startedAt, ROUND_MS.ideas);
   } finally { app.closeStreams(); await new Promise<void>(resolve => app.server.close(() => resolve())); }
+});
+test("idle countdowns do not broadcast each second and published views do not mutate rounds", () => {
+ const h=harness();h.rounds.tick();const count=h.states.length;h.advance(5000);assert.equal(h.states.length,count);
+ choices(h.rounds);h.advance(100);const state=h.states.at(-1)!;state.build.lines.push({id:999,kind:"error",text:"mutated"});assert.ok(!h.rounds.snapshot().build.lines.some(l=>l.id===999));
+});
+test("simulation timing never rewrites the guard-approved spec", async () => {
+ let now=0;const approved:GuardResult={verdict:"accept",title:"Orchard",reason:"Safe",spec:{moduleId:"orchard",description:"A small original orchard",steps:["Plant"],checks:["Cleanup"],estimatedSeconds:60},files:["world/modules/orchard.ts"],mode:"fixture",latencyMs:0};
+ let description="";const r=new Rounds({now:()=>now,publish(){},simulationAllowed:true,review:()=>approved,build:async request=>{description=request.decision.spec!.description;return{ok:false,outcome:"REVERTED",reason:"Unit",durationMs:0,tokens:{input:0,output:0,total:0}}}});
+ r.startSimulation("fail");r.command(chat("viewer","!idea Original orchard"));now=11000;r.tick();await new Promise(r=>setImmediate(r));assert.equal(description,"A small original orchard");assert.equal(approved.spec!.description,description);r.dispose();
 });

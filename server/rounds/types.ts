@@ -4,10 +4,10 @@ export interface IdeaView { id: string; text: string; requester: string; support
 export interface VoteOption extends IdeaView { slot: number; votes: number }
 export interface FeedLine { id: number; text: string; kind: "plan" | "edit" | "check" | "ship" | "error" }
 export interface BuildView {
-  stub: boolean; status: "idle" | "reviewing" | "running" | "shipped" | "failed"; progress: number;
+  status: "idle" | "reviewing" | "running" | "shipped" | "failed"; progress: number;
   completedAt?: number; idea: string; requester: string; lines: FeedLine[];
 }
-export interface VersionView { id: number; version: number; kind: "ship" | "revert"; title: string; requester: string; reason: string; stub: boolean }
+export interface VersionView { id: number; version: number; kind: "ship" | "revert"; title: string; requester: string; reason: string }
 export interface ToastView { id: number; kind: "summon" | "citizens" | "ship" | "revert" | "notice"; title: string; detail: string; expiresAt: number }
 export interface RoundState {
   round: number; phase: RoundPhase; startedAt: number; endsAt: number;

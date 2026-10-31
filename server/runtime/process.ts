@@ -12,13 +12,15 @@ export async function codexArgs(root: string, sandbox: "read-only" | "workspace-
   const setting = (key: string, fallback: string) => new RegExp(`^${key}\\s*=\\s*"([a-zA-Z0-9_.-]+)"`, "m").exec(config)?.[1] ?? fallback;
   return ["exec", "--sandbox", sandbox, "--ephemeral", "--json", ...(schema ? ["--output-schema", schema] : []), "-c", `model_reasoning_effort="${effort}"`, "-c", 'approval_policy="never"', "-c", `model_provider="${setting("model_provider", "amazon-bedrock")}"`, "--model", setting("model", "openai.gpt-6.1-sol"), "-"];
 }
+type CliEvent = { type?: string; message?: string; level?: string; severity?: string; error_type?: string; error?: { message?: string }; item?: { type?: string; message?: string; text?: string; level?: string; severity?: string; error_type?: string } };
+export function isCliWarning(event: unknown) {
+  const e=event as CliEvent;if(!e||e.type==="turn.failed")return false;
+  const message=e.error?.message??e.message??e.item?.message??e.item?.text??"";
+  return [e.level,e.severity,e.error_type,e.item?.level,e.item?.severity,e.item?.error_type,e.item?.type].some(v=>v==="warning") || /^(warning\b|reconnecting\b)|\b(?:ignored config|config warning)\b/i.test(message);
+}
 export function cliFailure(event: unknown): string | undefined {
-  const e = event as { type?: string; message?: string; level?: string; severity?: string; error?: { message?: string }; item?: { type?: string; message?: string; text?: string; level?: string } };
-  if (!e || e.level === "warning" || e.severity === "warning" || e.item?.level === "warning") return;
-  const message = e.error?.message ?? e.message ?? e.item?.message ?? e.item?.text;
-  // Codex emits nonfatal configuration and stream-retry notices as error events.
-  if (e.type === "error" && /^(warning\b|reconnecting\b)|\b(?:ignored config|config warning)\b/i.test(message ?? "")) return;
-  if (e.type === "turn.failed" || e.type === "error") return message || "Codex turn failed";
+  const e=event as CliEvent;if(!e||isCliWarning(e))return;
+  if(e.type==="turn.failed"||e.type==="error"||e.item?.type==="error")return e.error?.message??e.message??e.item?.message??e.item?.text??"Codex turn failed";
 }
 export interface BoundedOptions { bin: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv; input?: string; signal?: AbortSignal | undefined; timeoutMs: number; maxBytes: number; onLine?(line: string): void; onKill?(): void }
 /** All callers wait for close after cancellation, so queued Git operations never race child cleanup. */

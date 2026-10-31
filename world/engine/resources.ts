@@ -9,7 +9,8 @@ export class ResourceOwner {
   readonly textures = new Set<Texture>();
   private readonly objects = new Set<Object3D>();
 
-  constructor(private readonly protectedResources?: ResourceOwner) {}
+  private readonly scannedMaterials = new WeakSet<Material>();
+  constructor(private readonly protectedResources?: ResourceOwner, private readonly changed?: () => void) {}
 
   /** Audit a bounded tree. Assets removed later still belong to this owner. */
   audit(root: Object3D, limit = 2048): Usage {
@@ -18,6 +19,7 @@ export class ResourceOwner {
     while (stack.length) {
       if (++visited > limit) throw new Error("scene graph limit exceeded");
       const object = stack.pop()!;
+      if (!this.objects.has(object) && this.changed) { object.addEventListener("childadded", this.changed); object.addEventListener("childremoved", this.changed); }
       this.objects.add(object);
       for (const child of object.children) stack.push(child);
       if (object instanceof Mesh || object instanceof Points) {
@@ -27,12 +29,13 @@ export class ResourceOwner {
         for (const material of materials) {
           if (this.protectedResources?.materials.has(material)) throw new Error("engine material is not module-owned");
           this.materials.add(material);
-          for (const value of Object.values(material)) {
+          if (!this.scannedMaterials.has(material)) for (const value of Object.values(material)) {
             if (value instanceof Texture) {
               if (this.protectedResources?.textures.has(value)) throw new Error("engine texture is not module-owned");
               this.textures.add(value);
             }
           }
+          this.scannedMaterials.add(material);
         }
         const count = "isInstancedMesh" in object ? (object as Mesh & { count: number }).count : 1;
         const vertices = object.geometry.index?.count ?? object.geometry.getAttribute("position")?.count ?? 0;
@@ -40,7 +43,7 @@ export class ResourceOwner {
         if (object instanceof Points) usage.particles += vertices;
         else { usage.nodes++; usage.triangles += vertices / 3 * count; }
       }
-      if (object instanceof Light && object.type !== "HemisphereLight" && object.type !== "AmbientLight") usage.lights++;
+      if (object instanceof Light && object.type !== "HemisphereLight" && object.type !== "AmbientLight" && object.type !== "DirectionalLight") usage.lights++;
     }
     return usage;
   }
@@ -51,6 +54,7 @@ export class ResourceOwner {
     for (const material of this.materials) material.dispose();
     for (const texture of this.textures) texture.dispose();
     for (const object of this.objects) {
+      if (this.changed) { object.removeEventListener("childadded",this.changed); object.removeEventListener("childremoved",this.changed); }
       const disposable = object as Object3D & { dispose?: () => void; shadow?: { dispose(): void } };
       if (object instanceof Mesh && "isInstancedMesh" in object) disposable.dispose?.();
       if (object instanceof Light) disposable.shadow?.dispose();

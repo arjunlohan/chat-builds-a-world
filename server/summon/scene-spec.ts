@@ -109,15 +109,15 @@ export function normalizeSceneSpec(json: string): { spec: SceneSpec; clamped: bo
     const geometry = spec.geometries.find(g => g.id === node.geometryId);
     if (!geometry) throw new Error("Unknown node reference");
     const pulse = spec.behaviors.filter(b => b.targetId === node.id && b.kind === "pulse").reduce((f, b) => f * (1 + Math.min(0.5, b.amplitude * 0.1)), 1);
-    node.scale = node.scale.map((n, axis) => Math.min(n, 24 / geometry.size[axis]! / pulse)) as Vec3;
+    node.scale = node.scale.map((n, axis) => Math.min(n, SPEC_LIMITS.maxScaledAxis / geometry.size[axis]! / pulse)) as Vec3;
     const e = nodeEnvelope(spec, node);
-    if (e.x > 64 || e.z > 64 || e.y > 28) throw new Error("Animation envelope cannot fit world bounds");
-    node.position = [clamp(node.position[0], -64 + e.x, 64 - e.x), clamp(node.position[1], -8 + e.y, 48 - e.y), clamp(node.position[2], -64 + e.z, 64 - e.z)];
+    if (e.x > (WORLD_BOUNDS.maxX-WORLD_BOUNDS.minX)/2 || e.z > (WORLD_BOUNDS.maxZ-WORLD_BOUNDS.minZ)/2 || e.y > (WORLD_BOUNDS.maxY-WORLD_BOUNDS.minY)/2) throw new Error("Animation envelope cannot fit world bounds");
+    node.position = [clamp(node.position[0], WORLD_BOUNDS.minX + e.x, WORLD_BOUNDS.maxX - e.x), clamp(node.position[1], WORLD_BOUNDS.minY + e.y, WORLD_BOUNDS.maxY - e.y), clamp(node.position[2], WORLD_BOUNDS.minZ + e.z, WORLD_BOUNDS.maxZ - e.z)];
   }
   for (const item of [...spec.lights, ...spec.emitters]) {
     if ("distance" in item) item.distance = Math.min(item.distance, 24);
     const r = "distance" in item ? item.distance : item.size + item.lifetime * 0.2;
-    item.position = [clamp(item.position[0], -64 + r, 64 - r), clamp(item.position[1], -8 + r, 48 - r), clamp(item.position[2], -64 + r, 64 - r)];
+    item.position = [clamp(item.position[0], WORLD_BOUNDS.minX + r, WORLD_BOUNDS.maxX - r), clamp(item.position[1], WORLD_BOUNDS.minY + r, WORLD_BOUNDS.maxY - r), clamp(item.position[2], WORLD_BOUNDS.minZ + r, WORLD_BOUNDS.maxZ - r)];
   }
   const encoded = JSON.stringify(spec);
   return { spec: parseSceneSpec(encoded), clamped: encoded !== before };

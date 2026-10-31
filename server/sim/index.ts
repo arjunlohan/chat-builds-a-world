@@ -1,3 +1,4 @@
+import { readConfig } from "../config.js";
 import { config as loadEnv } from "dotenv";
 import { setTimeout as delay } from "node:timers/promises";
 import { scriptedRound } from "./round.js";
@@ -5,7 +6,7 @@ import type { StubOutcome } from "../rounds/types.js";
 import { crowdScenario, SIM_CROWD } from "./scenario.js";
 
 loadEnv({ quiet: true });
-const port = Number(process.env.PORT ?? 3000);
+const port = readConfig().port;
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");
 const base = `http://127.0.0.1:${port}`;
 let accepted = 0;
@@ -23,7 +24,7 @@ try {
     for (let i = 0; i < 3; i++) {
       if (i) await delay(5100);
       const wish = ["a glowing jellyfish above the lake", "a rose mushroom grove", "an orbit of amber crystals"][i]!;
-      const event = { id: `sim-${run}-summon-${i}`, userId: `sim-viewer-${i}`, displayName: ["Moss01", "Pebble02", "Clover03"][i], color: ["#E9A18E", "#79D7CF", "#9FB3E7"][i], text: `!summon ${wish}`, fixture: true };
+      const event = { id: `sim-${run}-summon-${i}`, userId: `sim-viewer-${i}`, displayName: ["Moss01", "Pebble02", "Clover03"][i], color: ["#E9A18E", "#79D7CF", "#9FB3E7"][i], text: `!summon ${wish}` };
       const response = await fetch(`${base}/sim/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(event) });
       if (!response.ok || !(await response.json() as { accepted: boolean }).accepted) throw new Error("Fixture summon was rejected");
       let valid = false;

@@ -13,7 +13,7 @@ import { connectTwitch } from "./twitch/index.js";
 const config = readConfig();
 const simulation = config.fixtureMode && config.simulationAllowed ? simulationAdapters() : undefined;
 const adapters = { reviewer: simulation?.reviewer ?? ((idea: string, context: { signal: AbortSignal }) => guard.review(idea, context.signal)), builder: simulation?.builder, summonProvider: simulation?.summonProvider ?? bedrockProvider(config.summon) };
-const pipeline = new WorldPipeline();
+const pipeline = new WorldPipeline(Date.now, ["doxxing", "kill yourself"], async (message,source) => { if(source==="twitch"&&config.twitch)await twitch.sendChat(message); });
 const summons = new SummonService({ config: config.summon, provider: adapters.summonProvider, mode: simulation ? "fixture" : "live", publish: event => pipeline.publish(event),
   reply: async (_chat, message, source) => {
     pipeline.reply(_chat, message, async () => { if (source === "twitch" && config.twitch) await twitch.sendChat(message); });

@@ -1,6 +1,7 @@
+import { reverted } from "../runtime/results.js";
 import { OperationQueue } from "../runtime/queue.js";
 import { protectedValues, redact } from "../runtime/process.js";
-import { metricWriter } from "../summon/index.js";
+import { metricWriter } from "../runtime/metrics.js";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +13,7 @@ import { runCodex, BUILD_TIMEOUT_MS } from "./codex.js";
 import { candidateCheck, type CheckResult } from "./check.js";
 import type { Usage } from "./events.js";
 export interface BuildRequest { decision: GuardResult; requester: string; signal: AbortSignal }
-export interface RunResult { ok: boolean; outcome: "SHIPPED" | "REVERTED" | "ROLLED BACK"; reason: string; durationMs: number; tokens: Usage; version?: number; tag?: string; check?: CheckResult }
+export interface RunResult { ok: boolean; outcome: "SHIPPED" | "REVERTED" | "ROLLED BACK"; reason: string; durationMs: number; builderMs?: number; tokens: Usage; version?: number; tag?: string; check?: CheckResult }
 interface Options {
   root: string; versions: Versions; bin?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number;
   feed(kind: "plan" | "edit" | "check" | "ship" | "error", text: string): void;
@@ -49,6 +50,7 @@ export class Runner {
     const cancel = () => controller.abort(); request.signal.addEventListener("abort", cancel, { once: true });
     if (request.signal.aborted) controller.abort(); const signal = controller.signal;
     const timer = setTimeout(() => controller.abort(), Math.min(this.options.timeoutMs ?? BUILD_TIMEOUT_MS, BUILD_TIMEOUT_MS));
+    let builderMs = 0;
     let tree = "", version = 0, merged = false, base = "", check: CheckResult | undefined;
     let tokens: Usage = { input: null, output: null, total: null };
     const requester = request.requester.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 64) || "viewer";
@@ -62,7 +64,8 @@ export class Runner {
       tree = await createTree(this.root, version, base); await this.options.versions.setPending({ path: tree, base, version });
       const before = await inventory(tree); feed("plan", `Created isolated worktree v${version}.`);
       const sourceEnv = this.options.env ?? process.env;
-      tokens = await (this.options.builder ?? runCodex)({ root: this.root, tree, bin: this.options.bin ?? sourceEnv.CODEX_BIN ?? "codex", env: sourceEnv, decision: approved, signal, feed, ...(this.options.timeoutMs ? { timeoutMs: this.options.timeoutMs } : {}) });
+      const builderStart = performance.now();
+      try { tokens = await (this.options.builder ?? runCodex)({ root: this.root, tree, bin: this.options.bin ?? sourceEnv.CODEX_BIN ?? "codex", env: sourceEnv, decision: approved, signal, feed, ...(this.options.timeoutMs ? { timeoutMs: this.options.timeoutMs } : {}) }); } finally { builderMs = Math.round(performance.now()-builderStart); }
       await auditDiff(tree, base, before, approved.files); feed("check", "Approved paths verified; compiling the candidate.");
       const secrets = protectedValues(sourceEnv);
       for (const file of approved.files) {
@@ -88,7 +91,7 @@ export class Runner {
       feed("ship", `v${version} checked; activating without a page reload.`);
       const active = await this.options.versions.activate({ version, tag: `v${version}`, commit, title: approved.title, requester, modules: artifacts });
       if (!active) throw new Error("Live activation did not acknowledge; restoring the previous world.");
-      const result: RunResult = { ok: true, outcome: "SHIPPED", reason: "Checks passed and live module swap acknowledged.", durationMs: Math.round(performance.now() - start), tokens, version, tag: `v${version}`, check };
+      const result: RunResult = { ok: true, outcome: "SHIPPED", reason: "Checks passed and live module swap acknowledged.", builderMs, durationMs: Math.round(performance.now() - start), tokens, version, tag: `v${version}`, check };
       await this.log(result, request.decision.mode);
       try { await this.options.announce(`Shipped v${version}: ${approved.title} — requested by @${requester}`); } catch { feed("check", "Shipped; Twitch announcement unavailable."); } return result;
     } catch (error) {
@@ -103,7 +106,7 @@ export class Runner {
         await this.options.versions.activate({ version: next, tag: `v${next}`, commit: restored, title: "Automatic revert", requester, modules: previous?.modules ?? [], restoredFrom: previous?.tag ?? "v0" }, false);
       }
       feed("error", `REVERTED · ${reason}`);
-      const result: RunResult = { ok: false, outcome: "REVERTED", reason, durationMs: Math.round(performance.now() - start), tokens, ...(check ? { check } : {}) };
+      const result: RunResult = { ...reverted(reason,Math.round(performance.now()-start),tokens), builderMs, ...(check?{check}:{}) };
       await this.log(result, request.decision.mode); return result;
     } finally {
       clearTimeout(timer); request.signal.removeEventListener("abort", cancel); controller.abort();
@@ -116,7 +119,7 @@ export class Runner {
   private async rollbackNow(requester: string, automatic: boolean): Promise<RunResult> {
     const baseline = this.options.versions.baseline;
     const start = performance.now(), target = this.options.versions.previous() ?? (automatic && baseline ? { version: 0, tag: "v0", commit: baseline, title: "Original world", requester: "system", modules: [], receipt: "" } : null), tokens = { input: 0, output: 0, total: 0 };
-    if (!target) return { ok: false, outcome: "REVERTED", reason: "No previous tag to restore.", durationMs: 0, tokens };
+    if (!target) return reverted("No previous tag to restore.",0,tokens);
     let tree = "";
     try {
       const base = await cleanMaster(this.root), version = await this.reserve();
@@ -128,7 +131,7 @@ export class Runner {
       if (!ok) throw new Error("Rollback activation did not acknowledge.");
       const result: RunResult = { ok: true, outcome: "ROLLED BACK", reason: `Restored ${target.tag} without resetting master.`, version, tag: `v${version}`, durationMs: Math.round(performance.now() - start), tokens };
       this.options.feed("ship", `Restored ${target.tag}.`); await this.log(result, "rollback"); try { await this.options.announce(`Rolled back to ${target.tag}.`); } catch { this.options.feed("check", "Restored; Twitch announcement unavailable."); } return result;
-    } catch (error) { const result: RunResult = { ok: false, outcome: "REVERTED", reason: error instanceof Error ? error.message : "Rollback failed.", durationMs: Math.round(performance.now() - start), tokens }; await this.log(result, "rollback"); return result; }
+    } catch (error) { const result: RunResult = reverted(redact(error instanceof Error ? error.message : "Rollback failed.",protectedValues(this.options.env??process.env)),Math.round(performance.now()-start),tokens); await this.log(result, "rollback"); return result; }
     finally { if (tree) await removeTree(this.root, tree); await this.options.versions.setPending(); }
   }
 }

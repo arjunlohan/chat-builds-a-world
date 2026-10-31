@@ -1,3 +1,4 @@
+import { indexGeometry } from "./index-geometry.js";
 import {
   BackSide, Color, DirectionalLight, FogExp2, Group, HemisphereLight,
   IcosahedronGeometry, InstancedMesh, MathUtils, Mesh,
@@ -72,7 +73,7 @@ export function createSky(scene: Scene, fixedTime?: number) {
       void main(){float edge=pow(max(0.0,dot(normalize(vNormal),normalize(vView))),2.0);
       gl_FragColor=vec4(uColor,edge*uOpacity);}`,
   });
-  const clouds = new InstancedMesh(new IcosahedronGeometry(1, 2), cloudMaterial, 48);
+  const clouds = new InstancedMesh(indexGeometry(new IcosahedronGeometry(1, 2)), cloudMaterial, 48);
   clouds.name = "low cloud banks";
   const rng = random(199);
   const dummy = new Object3D();

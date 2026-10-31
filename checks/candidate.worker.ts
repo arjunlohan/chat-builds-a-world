@@ -31,9 +31,9 @@ try {
     await page.waitForTimeout(Math.max(0, sampleStart + (sample + 1) * 1000 - performance.now()));
     const value = await page.evaluate(() => new Promise<{ frame: number; now: number; error: string; hash: number; lit: number; pixels: number; avg: number; renderer: string }>(resolve => requestAnimationFrame(() => {
       const stats = window.__worldStats, gl = document.querySelector("canvas")!.getContext("webgl2")!;
-      const info = gl.getExtension("WEBGL_debug_renderer_info"), pixels = new Uint8Array(1920 * 1080 * 4); let hash = 2166136261, lit = 0;
-      gl.readPixels(0, 0, 1920, 1080, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-      for (let y = 20; y < 1080; y += 40) for (let x = 20; x < 1920; x += 40) { const i = (y * 1920 + x) * 4; if (pixels[i]! + pixels[i+1]! + pixels[i+2]! > 24) lit++; for (let k = 0; k < 4; k++) hash = Math.imul(hash ^ pixels[i+k]!, 16777619); }
+      const info = gl.getExtension("WEBGL_debug_renderer_info"), width=gl.drawingBufferWidth, height=gl.drawingBufferHeight, pixels = new Uint8Array(width * height * 4); let hash = 2166136261, lit = 0;
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      for (let y = 2; y < height; y += 5) for (let x = 2; x < width; x += 5) { const i = (y * width + x) * 4; if (pixels[i]! + pixels[i+1]! + pixels[i+2]! > 24) lit++; for (let k = 0; k < 4; k++) hash = Math.imul(hash ^ pixels[i+k]!, 16777619); }
       resolve({ frame: stats.frame, now: performance.now(), error: stats.moduleError, hash, lit, pixels: stats.modulePixels, avg: stats.avgFps, renderer: info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "" });
     })));
     if (!/swiftshader/i.test(value.renderer)) throw new Error("Candidate did not use SwiftShader.");

@@ -1,10 +1,11 @@
+import { PRODUCTION_PROFILE, type RenderProfile } from "./render-profile.js";
 import { SUMMON_POOL, modulePool, emptyUsage, RenderFailure } from "../shared/limits.js";
 import type { WorldVersion } from "../../server/versions/index.js";
 import type { WorldModuleFactory } from "./api.js";
 import { isChatCommand, hasPhysicalReaction } from "../../server/commands.js";
 import {
   ACESFilmicToneMapping, Group, PCFSoftShadowMap, PerspectiveCamera, Raycaster,
-  Scene, SRGBColorSpace, Vector2, WebGLRenderer, Mesh, MeshStandardMaterial, MeshBasicMaterial, WebGLRenderTarget, HemisphereLight, Color, DepthTexture, UnsignedIntType, Matrix4,
+  Scene, SRGBColorSpace, Vector2, WebGLRenderer, WebGLRenderTarget, HemisphereLight, Color,
 } from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -26,7 +27,7 @@ import { SpecMaterializer } from "./spec-materializer.js";
 import { log } from "./log.js";
 
 export interface RendererOptions {
-  checkMode?: boolean;
+  profile?: Readonly<RenderProfile>;
   probeId?: string;
   fixedTime?: number;
   labels?: HTMLElement;
@@ -40,16 +41,19 @@ export interface RendererOptions {
 
 /** Fixed OBS framebuffer; CSS fits it into any viewport without extra DPR work. */
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions = {}) {
+  const profile = options.profile ?? PRODUCTION_PROFILE;
+  let shadowDirty = true;
   const clientId = crypto.randomUUID();
   const post = (url: string, data: object) => void fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, clientId }) }).catch(() => {});
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(1);
-  renderer.setSize(1920, 1080, false);
+  renderer.info.autoReset = false;
+  renderer.setSize(profile.width, profile.height, false);
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  renderer.shadowMap.enabled = !options.checkMode;
+  renderer.shadowMap.enabled = profile.shadows;
   renderer.shadowMap.type = PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true;
@@ -57,7 +61,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const environment = new Group();
   scene.add(environment);
   const camera = new PerspectiveCamera(38, 16 / 9, 0.1, 300);
-  const director = new CameraDirector(camera, reducedMotion.matches || !!options.checkMode);
+  const director = new CameraDirector(camera, reducedMotion.matches);
   const terrain = createTerrain();
   const garden = createGarden();
   const water = createWater();
@@ -65,9 +69,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const sky = createSky(scene, options.fixedTime);
   const effects = createEffects();
   const labelLayer = options.labels ?? document.createElement("div");
-  if (options.checkMode) labelLayer.style.display = "none";
   const labelManager = new LabelManager();
-  const citizens = new Citizens(labelLayer, labelManager, !!options.checkMode);
+  const citizens = new Citizens(labelLayer, labelManager);
   const resizeLabels = new ResizeObserver(entries => {
     labelLayer.style.transform = `scale(${entries[0]!.contentRect.width / 1920})`;
   });
@@ -76,30 +79,17 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   const composer = new EffectComposer(renderer);
   const renderPass = new RenderPass(scene, camera);
-  const bloom = new UnrealBloomPass(new Vector2(960, 540), 0.38, 0.65, 1.05);
+  const bloom = new UnrealBloomPass(new Vector2(profile.width / 2, profile.height / 2), 0.38, 0.65, 1.05);
   const output = new OutputPass();
   composer.addPass(renderPass);
-  composer.addPass(bloom);
+  if (profile.bloom) composer.addPass(bloom);
   composer.addPass(output);
-  composer.setSize(1920, 1080);
-  // Bloom's expensive blur chain runs at half size; primary scene stays full HD.
-  bloom.setSize(960, 540);
+  composer.setSize(profile.width, profile.height);
+  bloom.setSize(profile.width / 2, profile.height / 2);
 
-  const replacedMaterials: MeshStandardMaterial[] = [];
-  if (options.checkMode) environment.traverse(object => {
-    if (object instanceof Mesh && object.material instanceof MeshStandardMaterial) {
-      const original = object.material; replacedMaterials.push(original);
-      object.material = new MeshBasicMaterial({ color: original.color, vertexColors: original.vertexColors, transparent: original.transparent, opacity: original.opacity, side: original.side });
-    }
-  });
-  const cacheTarget = new WebGLRenderTarget(1920, 1080);
-  cacheTarget.depthTexture = new DepthTexture(1920, 1080, UnsignedIntType);
-  let cacheFramebuffer: WebGLFramebuffer | null = null;
-  const cachedCamera = new Matrix4(); let cacheReady = false;
-  if (options.checkMode) scene.add(new HemisphereLight("#ffffff", "#97b9b0", 2));
+
   const engineResources = new ResourceOwner();
   const base = engineResources.audit(environment);
-  base.triangles += citizens.triangleReserve;
   const ledger = new ResourceLedger(emptyUsage(), modulePool(base));
   const summonLedger = new ResourceLedger(emptyUsage(), SUMMON_POOL);
   let moduleRoot = new Group();
@@ -116,7 +106,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     root: moduleRoot, ledger, protectedResources: engineResources,
     services: { citizens: citizens.services, spawnSpec: spec => moduleMaterializer.spawn(spec), camera: { focus: director.focus }, effects: { play: effects.play }, log },
     onStatus: (event: ModuleStatus) => {
-      options.onStatus?.(event);
+      shadowDirty = true; options.onStatus?.(event);
       if (event.state === "disabled" || event.state === "rejected") {
         stats.value.moduleError = `${event.id}: ${event.reason}`;
         if (event.state === "disabled" && !pendingAck && activeVersion) post("/modules/fault", { version: activeVersion.version, receipt: activeVersion.receipt });
@@ -127,13 +117,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   let pendingAck: { version: WorldVersion; frames: number } | null = null;
   let activeVersion: WorldVersion | null = null;
   const moduleReceipt = (version: WorldVersion, ok: boolean) => post("/modules/ack", { version: version.version, receipt: version.receipt, ok });
-  const probeScene = new Scene(); probeScene.background = new Color("#000000");
-  probeScene.add(new HemisphereLight("#ffffff", "#ffffff", 3));
-  const probeTarget = new WebGLRenderTarget(96, 54), probePixels = new Uint8Array(96 * 54 * 4);
+  const probeScene = profile.probe ? new Scene() : undefined;
+  if (probeScene) { probeScene.background = new Color("#000000"); probeScene.add(new HemisphereLight("#ffffff", "#ffffff", 3)); }
+  const probeTarget = profile.probe ? new WebGLRenderTarget(96, 54) : undefined;
+  const probePixels = profile.probe ? new Uint8Array(96 * 54 * 4) : undefined;
   let lastProbe = -1;
   let activation = 0;
   async function activate(version: WorldVersion | null) {
-    const generation = ++activation;
+    const generation = ++activation; shadowDirty = true;
     try {
       const factories = await Promise.all((version?.modules ?? []).map(async module => {
         if (!/^\/modules\/[a-f0-9]{64}\.js$/.test(module.url)) throw new Error("Invalid module asset");
@@ -158,6 +149,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   let serverOffset = 0;
   const disconnect = connectWorld(event => {
     serverOffset = event.now - Date.now();
+    if (["snapshot", "summon", "summon-remove", "version"].includes(event.type)) shadowDirty = true;
     if (event.type === "snapshot") {
       void activate(event.version);
       citizens.sync(event.citizens, event.now); stats.value.raidCount = event.raids;
@@ -199,6 +191,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     // Reduced motion keeps composition still but retains rendered, measurable frames.
     const visualTime = reducedMotion.matches ? 0 : elapsed;
     try {
+      renderer.info.reset();
       const cpuStart = performance.now();
       sky.update(visualTime);
       water.update(visualTime, sky.day);
@@ -214,32 +207,13 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         if (stats.value.moduleError) { moduleReceipt(pendingAck.version, false); pendingAck = null; }
         else if (++pendingAck.frames >= 8) { moduleReceipt(pendingAck.version, true); pendingAck = null; }
       }
-      if (host.activeCount || ((citizens.count > 0 || materializer.count > 0) && stats.value.frame % 2 === 0)) renderer.shadowMap.needsUpdate = true;
+      if (shadowDirty) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; }
       materializer.beforeRender(camera);
       const renderStart = performance.now(); stats.value.updateMs = renderStart - cpuStart;
-      if (options.checkMode) {
-        const staticRoots = environment.children.filter(root => root !== citizens.root && root !== effects.root);
-        camera.updateMatrixWorld();
-        const refreshed = !cacheReady || !cachedCamera.equals(camera.matrixWorld);
-        if (refreshed) {
-          stats.value.cacheRenders++;
-          for (const root of staticRoots) root.visible = true;
-          const citizenVisible = citizens.root.visible; citizens.root.visible = false; moduleRoot.visible = false;
-          renderer.setRenderTarget(cacheTarget); renderer.render(scene, camera);
-          cacheFramebuffer = renderer.getContext().getParameter(renderer.getContext().FRAMEBUFFER_BINDING) as WebGLFramebuffer;
-          renderer.setRenderTarget(null);
-          citizens.root.visible = citizenVisible; moduleRoot.visible = true; cachedCamera.copy(camera.matrixWorld); cacheReady = true;
-        }
-        for (const root of staticRoots) root.visible = false;
-        const gl = renderer.getContext() as WebGL2RenderingContext;
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, cacheFramebuffer); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-        gl.blitFramebuffer(0, 0, 1920, 1080, 0, 0, 1920, 1080, gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT, gl.NEAREST);
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null); renderer.resetState();
-        renderer.autoClear = false; renderer.render(scene, camera); renderer.autoClear = true;
-      } else composer.render(dt);
+      composer.render(dt);
       stats.value.renderMs = performance.now() - renderStart; stats.value.triangles = renderer.info.render.triangles;
       materializer.rendered(camera);
-      if (options.checkMode && options.probeId && elapsed - lastProbe > 0.75 && stats.value.moduleCount) {
+      if (probeScene && probeTarget && probePixels && options.probeId && elapsed - lastProbe > 0.75 && stats.value.moduleCount) {
         lastProbe = elapsed;
         const roots = host.visualRoots(options.probeId), parents = roots.map(root => root.parent);
         for (const root of roots) probeScene.add(root);
@@ -300,9 +274,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       canvas.removeEventListener("webglcontextlost", contextLost);
       disconnect(); resizeLabels.disconnect(); citizens.dispose(); labelManager.dispose();
       host.dispose(); materializer.dispose(); moduleMaterializer.dispose();
-      engineResources.dispose(environment); for (const material of replacedMaterials) material.dispose();
-      cacheTarget.dispose();
-      probeTarget.dispose();
+      engineResources.dispose(environment);
+      probeTarget?.dispose();
       bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose(); renderer.dispose();
     },
   };

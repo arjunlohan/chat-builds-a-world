@@ -28,7 +28,7 @@ export class WorldPipeline {
   private readonly replyAt = new Map<string, number>();
   private lastReply = -Infinity;
   private readonly cooldowns = new Map<string, number>();
-  private readonly listeners = new Set<(event: WorldEvent) => void>();
+  private readonly listeners = new Set<(event: WorldEvent, serialized: string) => void>();
   private summonLane: SummonService | undefined;
   private version: WorldVersion | null = null;
   private rounds: Rounds | undefined;
@@ -45,8 +45,8 @@ export class WorldPipeline {
   private raids = 0;
   private window = -1;
   private messages = 0;
-  constructor(private readonly now = () => Date.now(), private readonly blocklist = ["doxxing", "kill yourself"]) {}
-  subscribe(listener: (event: WorldEvent) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
+  constructor(private readonly now = () => Date.now(), private readonly blocklist = ["doxxing", "kill yourself"], private readonly sendRejection?: (message: string, source: "sim" | "twitch") => Promise<void>) {}
+  subscribe(listener: (event: WorldEvent, serialized: string) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   reply(chat: ChatEvent, message: string, send?: () => Promise<void> | void) {
     const now = this.now();
     if (now - (this.replyAt.get(chat.userId) ?? -Infinity) < 10_000 || now - this.lastReply < 1000) return;
@@ -54,7 +54,8 @@ export class WorldPipeline {
     try { void Promise.resolve(send?.()).catch(() => {}); } catch {}
   }
   private emit(event: WorldEvent) {
-    for (const listener of this.listeners) { try { listener(event); } catch { this.listeners.delete(listener); } }
+    const serialized = JSON.stringify(event);
+    for (const listener of this.listeners) { try { listener(event, serialized); } catch { this.listeners.delete(listener); } }
   }
   snapshot(): Extract<WorldEvent, { type: "snapshot" }> {
     return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null, version: this.version };
@@ -84,8 +85,9 @@ export class WorldPipeline {
     }
     if (this.paused) return { accepted: false, reason: "paused" };
     const wish = /^!(summon|idea)(?:\s|$)/i.test(event.text.trim()) ? event.text.replace(/^!\w+\s*/, "") : event.text;
-    if (this.blocklist.some(term => event.text.toLocaleLowerCase().includes(term)) || !allowedWish(wish)) {
-      this.reply(event, `@${event.displayName} Please use a safe, original visual idea.`);
+    if (this.blocklist.some(term => event.text.toLocaleLowerCase().includes(term)) || (/^!(summon|idea)(?:\s|$)/i.test(event.text.trim()) && !allowedWish(wish))) {
+      const message=`@${event.displayName} Please use a safe, original visual idea.`;
+      this.reply(event,message,()=>this.sendRejection?.(message,authority.source??"sim"));
       return { accepted: false, reason: "blocked" };
     }
     const roundCommand = /^!(idea|vote|rollback)(?:\s|$)/i.test(event.text.trim());

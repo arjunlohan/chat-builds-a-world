@@ -15,7 +15,7 @@ type Event = { kind: "onChat"; value: Readonly<ChatEvent> } |
 export interface ModuleStatus { id: string; state: "active" | "disabled" | "rejected" | "disposed"; reason: string }
 interface RecordState {
   module: WorldModule; id: string; key: string; root: Group; owner: ResourceOwner;
-  queue: Event[]; overruns: number[]; handles: Set<SpawnHandle>; spawnUsage: Map<SpawnHandle, Usage>; spawnRoots: Map<SpawnHandle, Group>; active: boolean; cleaned: boolean;
+  queue: Event[]; overruns: number[]; handles: Set<SpawnHandle>; spawnUsage: Map<SpawnHandle, Usage>; spawnRoots: Map<SpawnHandle, Group>; auditDirty: boolean; lastAudit: number; cleaned: boolean;
   window: number; effects: number; logs: number; lastFocus: number; lastQueueWarning: number;
 }
 interface HostOptions {
@@ -26,13 +26,13 @@ interface HostOptions {
   now?: () => number;
   onStatus?: (status: ModuleStatus) => void;
 }
-const snapshot = (citizen: Citizen): Citizen => Object.freeze({
+const snapshot = (citizen: Citizen): Citizen => Object.isFrozen(citizen) && Object.isFrozen(citizen.position) ? citizen : Object.freeze({
   id: citizen.id, displayName: citizen.displayName, color: citizen.color,
   position: Object.freeze(new Vector3(citizen.position.x, citizen.position.y, citizen.position.z)),
 });
 const position = (p: Readonly<Vector3>) => {
   if (![p.x, p.y, p.z].every(Number.isFinite)) throw new Error("invalid position");
-  return new Vector3(Math.max(-64, Math.min(64, p.x)), Math.max(-8, Math.min(48, p.y)), Math.max(-64, Math.min(64, p.z)));
+  return new Vector3(Math.max(WORLD_BOUNDS.minX, Math.min(WORLD_BOUNDS.maxX, p.x)), Math.max(WORLD_BOUNDS.minY, Math.min(WORLD_BOUNDS.maxY, p.y)), Math.max(WORLD_BOUNDS.minZ, Math.min(WORLD_BOUNDS.maxZ, p.z)));
 };
 
 /** Cooperative hook isolation; candidate code still requires the external guard/check gate. */
@@ -46,6 +46,7 @@ export class ModuleHost {
   private serial = 0;
   private cursor = 0;
   private paused = false;
+  private citizenList: readonly Citizen[] | undefined;
 
   constructor(private readonly options: HostOptions) {
     this.now = options.now ?? (() => performance.now());
@@ -79,7 +80,7 @@ export class ModuleHost {
       scene: record.root,
       citizens: Object.freeze({
         get: (id: string) => { allow(); const citizen = this.options.services.citizens.get(id); return citizen ? snapshot(citizen) : undefined; },
-        list: () => { allow(); return Object.freeze(this.options.services.citizens.list().map(snapshot)); },
+        list: () => { allow(); return this.citizenList ??= Object.freeze(this.options.services.citizens.list().map(snapshot)); },
       }),
       spawnSpec: (spec: Parameters<WorldServices["spawnSpec"]>[0]) => {
         allow();
@@ -124,7 +125,7 @@ export class ModuleHost {
       if (total > MODULE_CAP[key]) throw new Error(`${key} module limit exceeded`);
     }
     // Materializer reservations already charge global usage; only raw scene resources go here.
-    this.ledger.reserve(record.key, raw);
+    this.ledger.reserve(record.key, raw); record.auditDirty = false; record.lastAudit = this.now();
   }
 
   /** Init and audit candidate before retiring a previous instance with the same ID. */
@@ -142,8 +143,8 @@ export class ModuleHost {
     const root = new Group();
     root.name = `module:${module.id}`;
     const record: RecordState = {
-      module, id: module.id, root, key: `${this.namespace}:${module.id}:${++this.serial}`, owner: new ResourceOwner(this.options.protectedResources),
-      queue: [], overruns: [], handles: new Set<SpawnHandle>(), active: false, cleaned: false,
+      module, id: module.id, root, key: `${this.namespace}:${module.id}:${++this.serial}`, owner: new ResourceOwner(this.options.protectedResources, () => { record.auditDirty = true; }),
+      queue: [], overruns: [], handles: new Set<SpawnHandle>(), auditDirty: true, lastAudit: -Infinity, cleaned: false,
       spawnUsage: new Map(), spawnRoots: new Map(), window: -1, effects: 0, logs: 0, lastFocus: -Infinity, lastQueueWarning: -Infinity,
     };
     const services = this.services(record);
@@ -161,7 +162,6 @@ export class ModuleHost {
     const previous = this.records.get(module.id);
     if (previous) this.cleanup(previous);
     this.options.root.add(root);
-    record.active = true;
     this.records.set(module.id, record);
     this.status(module.id, "active", "module activated");
     return true;
@@ -169,7 +169,6 @@ export class ModuleHost {
 
   private cleanup(record: RecordState) {
     if (record.cleaned) return;
-    record.active = false;
     record.cleaned = true;
     try {
       if (this.invoke(record, "dispose", () => record.module.dispose()) > MODULE_BUDGET.lifecycleMs) {
@@ -212,7 +211,7 @@ export class ModuleHost {
 
   update(dt: number) {
     if (this.paused || this.records.size === 0) return;
-    this.frame++;
+    this.frame++; this.citizenList = undefined;
     const start = this.now();
     const records = [...this.records.values()];
     const disabled: RecordState[] = [];
@@ -236,13 +235,12 @@ export class ModuleHost {
           elapsed += this.invoke(record, "update", () => record.module.update(seconds));
         }
         if (record.root.parent !== this.options.root) throw new Error("module group escaped ownership");
-        this.audit(record);
+        if (record.auditDirty || this.now() - record.lastAudit >= 1000) this.audit(record);
         record.overruns = record.overruns.filter(frame => frame > this.frame - MODULE_BUDGET.overrunWindow);
         if (elapsed > MODULE_BUDGET.perModuleMs) record.overruns.push(this.frame);
         if (record.overruns.length >= MODULE_BUDGET.disableAfterOverruns) throw new Error("three 2 ms overruns in 60 frames");
       } catch (error) {
-        record.active = false;
-        record.root.visible = false;
+            record.root.visible = false;
         this.status(record.id, "disabled", error instanceof Error ? error.message : "hook failed");
         disabled.push(record);
       }

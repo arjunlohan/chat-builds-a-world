@@ -110,3 +110,14 @@ test("preemption awaits aborted operation cleanup before rollback and exposes id
   const rollback = queue.enqueue(async () => { events.push("rollback"); }, true);
   await queue.idle(); await Promise.all([build,rollback]); assert.deepEqual(events,["build","cleaned","rollback"]); assert.equal(queue.busy,false);
 });
+test("a metrics write failure cannot revert a successfully activated version", async () => {
+ const root=await repository();
+ try{
+  await mkdir(join(root,"world/engine"));await writeFile(join(root,"world/engine/api.ts"),'import type {Group} from "three"; export interface WorldModule {id:string;init(s:{scene:Group}):void;update(dt:number):void;onChat():void;onCitizenSpawn():void;onRaid():void;dispose():void;}');
+  await writeFile(join(root,"AGENTS.md"),"## World Module API v1\nSynchronous hooks only.\n## Scene Spec v1\n");await git(root,"add",".");await git(root,"-c","user.name=Test","-c","user.email=test@localhost","commit","--no-gpg-sign","-m","Contract");
+  let versions!:Versions;versions=new Versions(root,v=>{if(v)versions.acknowledge(v.version,v.receipt,true)});
+  const runner=new Runner({root,versions,bin:resolve("checks/fixtures/fake-builder.cjs"),env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"synthetic-fixture-secret"},feed(){},announce:async()=>{},record(){throw new Error("disk full")},check:async()=>({ok:true,fps:60,avgFps:60})});
+  const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"Test",reason:"Safe",spec:{moduleId:"metric",description:"good",steps:["Small visual"],checks:["Cleanup"],estimatedSeconds:60},files:["world/modules/metric.ts"],mode:"live",latencyMs:0}});
+  assert.equal(result.outcome,"SHIPPED");assert.equal(versions.current?.tag,"v1");assert.equal(await git(root,"tag","--list"),"v1");await runner.idle();assert.equal(runner.isBusy,false);versions.close();
+ }finally{await rm(root,{recursive:true,force:true})}
+});

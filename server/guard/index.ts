@@ -1,5 +1,5 @@
-import { runBounded, minimalEnvironment, codexArgs, cliFailure, protectedValues, redact } from "../runtime/process.js";
-import { metricWriter } from "../summon/index.js";
+import { runBounded, minimalEnvironment, codexArgs, cliFailure, isCliWarning, protectedValues, redact } from "../runtime/process.js";
+import { metricWriter } from "../runtime/metrics.js";
 import { lstat, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -66,6 +66,7 @@ export function parseGuardStream(stdout: string): unknown {
     const event = JSON.parse(line) as { type?: string; item?: { type?: string; text?: string } };
     if (!event || typeof event.type !== "string") throw new Error("Invalid Codex event");
     const failure = cliFailure(event); if (failure) throw new Error(failure);
+    if (isCliWarning(event)) continue;
     if (event.item && !["agent_message", "reasoning"].includes(event.item.type ?? "")) throw new Error("Guard used a tool");
     if (event.type === "item.completed" && event.item?.type === "agent_message") { final = event.item.text; completed = false; }
     if (event.type === "turn.completed") completed = true;

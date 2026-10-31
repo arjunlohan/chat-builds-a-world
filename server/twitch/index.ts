@@ -99,12 +99,15 @@ export class TwitchClient {
     // Force-close a peer that never completes the close handshake.
     connection.socket.terminate();
   }
-  private failed(error: unknown) {
-    if (this.stopped) return;
+  private teardown() {
     for (const connection of this.connections) this.retire(connection);
     this.active = undefined; this.pending = undefined;
     if (this.validateTimer) this.clearTimer(this.validateTimer);
     this.validateTimer = undefined;
+  }
+  private failed(error: unknown) {
+    if (this.stopped) return;
+    this.teardown();
     if (this.retryTimer) return;
     if (error instanceof TwitchError && (error.status === 400 || error.status === 401 || error.status === 403)) {
       this.log("Twitch authorization/scopes are unavailable; sim-only mode remains active. Update credentials and restart.");
@@ -186,9 +189,7 @@ export class TwitchClient {
   stop() {
     this.stopped = true;
     if (this.retryTimer) this.clearTimer(this.retryTimer);
-    if (this.validateTimer) this.clearTimer(this.validateTimer);
-    for (const connection of this.connections) this.retire(connection);
-    this.active = undefined; this.pending = undefined;
+    this.teardown();
   }
 }
 

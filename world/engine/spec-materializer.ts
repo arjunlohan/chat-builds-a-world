@@ -1,4 +1,4 @@
-import { SUMMON_COUNT, RenderFailure } from "../shared/limits.js";
+import { SUMMON_COUNT, WORLD_BOUNDS, RenderFailure } from "../shared/limits.js";
 import {
   AdditiveBlending, BufferGeometry, Color, Float32BufferAttribute, Group, Mesh,
   MeshStandardMaterial, Object3D, PointLight, Points, ShaderMaterial, SpotLight, Vector3,
@@ -134,8 +134,8 @@ export class SpecMaterializer {
       entry.center.set(0, 0, 0); let top = -Infinity;
       for (const node of entry.nodes.values()) {
         node.mesh.position.copy(node.base).add(node.drift).add(node.offset);
-        node.mesh.position.set(clamp(node.mesh.position.x, -64 + node.extent.x, 64 - node.extent.x),
-          clamp(node.mesh.position.y, -8 + node.extent.y, 48 - node.extent.y), clamp(node.mesh.position.z, -64 + node.extent.z, 64 - node.extent.z));
+        node.mesh.position.set(clamp(node.mesh.position.x, WORLD_BOUNDS.minX + node.extent.x, WORLD_BOUNDS.maxX - node.extent.x),
+          clamp(node.mesh.position.y, WORLD_BOUNDS.minY + node.extent.y, WORLD_BOUNDS.maxY - node.extent.y), clamp(node.mesh.position.z, WORLD_BOUNDS.minZ + node.extent.z, WORLD_BOUNDS.maxZ - node.extent.z));
         node.mesh.scale.copy(node.scale).multiplyScalar(node.pulse);
         entry.center.add(node.mesh.position); top = Math.max(top, node.mesh.position.y + node.extent.y);
       }
@@ -143,18 +143,20 @@ export class SpecMaterializer {
       for (const emitter of entry.emitters) emitter.uTime.value = time;
     }
   }
+  private onScreen(entry: Entry, camera: PerspectiveCamera) {
+    if (!entry.label || entry.label.hidden) return false; this.projection.copy(entry.center).project(camera);
+    return Math.abs(this.projection.x)<=1 && Math.abs(this.projection.y)<=1 && Math.abs(this.projection.z)<=1;
+  }
   beforeRender(camera: PerspectiveCamera) {
     for (const entry of this.entries.values()) if (entry.spawnPending && entry.label && !entry.label.hidden) {
-      this.projection.copy(entry.center).project(camera);
-      if (Math.abs(this.projection.x) > 1 || Math.abs(this.projection.y) > 1 || Math.abs(this.projection.z) > 1) continue;
+      if (!this.onScreen(entry,camera)) continue;
       this.options.effects.play("spawn", entry.center); entry.spawnPending = false; entry.label.dataset.spawnEffect = "played";
     }
   }
   /** Called after compositing; the next RAF receipt is after the first visible paint. */
   rendered(camera: PerspectiveCamera) {
     for (const entry of this.entries.values()) if (entry.needsAck && entry.metadata && entry.label && !entry.label.hidden) {
-      this.projection.copy(entry.center).project(camera);
-      if (Math.abs(this.projection.x) > 1 || Math.abs(this.projection.y) > 1 || Math.abs(this.projection.z) > 1) continue;
+      if (!this.onScreen(entry,camera)) continue;
       entry.needsAck = false;
       const metadata = entry.metadata;
       requestAnimationFrame(() => { if (this.entries.has(entry.id) && !document.hidden) this.options.onVisible?.(metadata); });

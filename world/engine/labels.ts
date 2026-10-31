@@ -31,11 +31,12 @@ export function citizenLabelMode(distance: number, spokeAge: number, arrivedAge:
 }
 type Describe = (now: number, camera: PerspectiveCamera, focus: Readonly<Vector3> | undefined) => Omit<LabelCandidate, "id"> | undefined;
 export class LabelManager {
-  private readonly entries = new Map<string, { element: HTMLElement; describe: Describe }>();
+  private readonly entries = new Map<string, { element: HTMLElement; describe: Describe; candidate: LabelCandidate }>();
+  private visible = new Set<string>();
   private last = -Infinity;
   add(id: string, element: HTMLElement, describe: Describe) {
-    this.entries.set(id, { element, describe });
-    return () => { this.entries.delete(id); element.remove(); };
+    this.entries.set(id, { element, describe, candidate: {id,x:0,y:0,width:0,height:0,priority:0,kind:"quiet",opacity:0} });
+    return () => { this.entries.delete(id); this.visible.delete(id); element.remove(); };
   }
   update(now: number, camera: PerspectiveCamera, focus?: Readonly<Vector3>) {
     if (now - this.last < 50) return;
@@ -43,17 +44,20 @@ export class LabelManager {
     const candidates: LabelCandidate[] = [];
     for (const [id, entry] of this.entries) {
       const description = entry.describe(now, camera, focus);
-      if (description) candidates.push({ id, ...description });
-      entry.element.hidden = true;
+      if (description) candidates.push(Object.assign(entry.candidate, description));
     }
     const chosen = packLabels(candidates);
+    for (const id of this.visible) if (!chosen.has(id)) { const element=this.entries.get(id)?.element;if(element) element.hidden=true; }
     for (const c of candidates) if (chosen.has(c.id)) {
       const element = this.entries.get(c.id)!.element;
-      element.hidden = false; element.dataset.mode = c.kind;
-      element.style.width = `${c.width}px`;
-      element.style.transform = `translate3d(${c.x.toFixed(1)}px,${c.y.toFixed(1)}px,0) translate(-50%,-100%)`;
-      element.style.opacity = String(c.opacity);
+      if (!this.visible.has(c.id)) element.hidden = false;
+      if (element.dataset.mode !== c.kind) element.dataset.mode = c.kind;
+      const width=`${c.width}px`, transform=`translate3d(${c.x.toFixed(1)}px,${c.y.toFixed(1)}px,0) translate(-50%,-100%)`, opacity=String(c.opacity);
+      if(element.style.width!==width)element.style.width=width;
+      if(element.style.transform!==transform)element.style.transform=transform;
+      if(element.style.opacity!==opacity)element.style.opacity=opacity;
     }
+    this.visible=chosen;
   }
   dispose() { for (const entry of this.entries.values()) entry.element.remove(); this.entries.clear(); }
 }

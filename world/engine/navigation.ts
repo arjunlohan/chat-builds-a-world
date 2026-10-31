@@ -19,17 +19,28 @@ const adjacent: number[][] = nodes.map((p, i) => {
 });
 const fields = new Map<number, Int16Array>();
 const queue = new Int16Array(total);
+// Conservative grid interiors need no analytic terrain evaluation. Boundary cells retain exact tests.
+const fineCell = 0.125, fineWidth = 157, fineDepth = 125;
+const fine = new Uint8Array(fineWidth * fineDepth);
+for (let z=0;z<fineDepth;z++) for (let x=0;x<fineWidth;x++) {
+  const px=minX+x*fineCell,pz=minZ+z*fineCell;
+  fine[z*fineWidth+x]=Number(isWalkable(px,pz)&&isWalkable(px+fineCell,pz)&&isWalkable(px,pz+fineCell)&&isWalkable(px+fineCell,pz+fineCell)&&isWalkable(px+fineCell/2,pz+fineCell/2));
+}
+function walkable(x:number,z:number) { const ix=Math.floor((x-minX)/fineCell),iz=Math.floor((z-minZ)/fineCell);return ix>=0&&ix<fineWidth&&iz>=0&&iz<fineDepth&&!!fine[iz*fineWidth+ix] ? true : isWalkable(x,z); }
+const nearestCache=new Map<number,number>();
+const cellId=(x:number,z:number)=>Math.max(0,Math.min(depth-1,Math.round((z-minZ)/cell)))*width+Math.max(0,Math.min(width-1,Math.round((x-minX)/cell)));
 function nearest(x: number, z: number) {
-  const ix = Math.round((x - minX) / cell), iz = Math.round((z - minZ) / cell);
+  const key=cellId(x,z),cached=nearestCache.get(key); if(cached!==undefined)return cached;
+  const ix = key%width, iz=Math.floor(key/width);
   let best = -1, distance = Infinity;
   for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
     if (ix + dx < 0 || ix + dx >= width || iz + dz < 0 || iz + dz >= depth) continue;
     const i = (iz + dz) * width + ix + dx;
     if (!dry[i]) continue;
     const node = nodes[i]!, d = (node.x - x) ** 2 + (node.z - z) ** 2;
-    if (d < distance && isWalkable((node.x + x) / 2, (node.z + z) / 2)) { distance = d; best = i; }
+    if (d < distance && walkable((node.x + x) / 2, (node.z + z) / 2)) { distance = d; best = i; }
   }
-  return best;
+  nearestCache.set(key,best);return best;
 }
 function field(goal: number) {
   const cached = fields.get(goal);
@@ -48,13 +59,14 @@ function step(p: { x: number; z: number }, x: number, z: number, maximum: number
   const dx = x - p.x, dz = z - p.z, length = Math.hypot(dx, dz);
   if (length < 0.001) return true;
   const scale = Math.min(length, maximum) / length, nx = p.x + dx * scale, nz = p.z + dz * scale;
-  if (!isWalkable(nx, nz)) return false;
+  if (!walkable(nx, nz)) return false;
   p.x = nx; p.z = nz; return true;
 }
 
 /** Route to a dry waypoint, and recenter before a corner if cutting it would hit water. */
 export function stepOnLand(p: { x: number; z: number }, targetX: number, targetZ: number, maximumStep: number) {
   if (maximumStep <= 0) return;
+  if (Math.hypot(targetX-p.x,targetZ-p.z)<0.75 && walkable(targetX,targetZ) && step(p,targetX,targetZ,maximumStep)) return;
   const current = nearest(p.x, p.z), goal = nearest(targetX, targetZ);
   if (current < 0 || goal < 0) return;
   if (current === goal) { step(p, targetX, targetZ, maximumStep); return; }
