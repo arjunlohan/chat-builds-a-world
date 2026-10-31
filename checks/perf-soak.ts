@@ -1,6 +1,6 @@
 import {spawn} from "node:child_process";
 import {parseArgs} from "node:util";
-import {mkdtemp,symlink,appendFile,mkdir,writeFile,rm} from "node:fs/promises";
+import {mkdtemp,symlink,appendFile,mkdir,writeFile,rm,cp} from "node:fs/promises";
 import {createServer} from "node:net";
 import {tmpdir} from "node:os";
 import {join,resolve,dirname} from "node:path";
@@ -32,8 +32,13 @@ try{
  const command=<T,>(method:string,params:object={})=>new Promise<T>((r,j)=>{const id=++serial;pending.set(id,{resolve:value=>r(value as T),reject:j});inspector!.send(JSON.stringify({id,method,params}));});
  const memory=async()=> (await command<{result:{value:Heap}}>("Runtime.evaluate",{expression:"process.memoryUsage()",returnByValue:true})).result.value;
  world=await launchWorldPage(base,"overlay=1",{onPage(page){page.on("pageerror",e=>report.errors.push(e.message));page.on("console",e=>{if(e.type()==="error")report.errors.push(e.text());});}});const {page,gpu}=world;report.renderer=gpu;if(/swiftshader|llvmpipe|software|unknown/i.test(gpu))throw new Error("Soak needs a physical GPU");
- async function sim(crowdOnly=false){const result=await runBounded({bin:"pnpm",args:["sim",...(crowdOnly?["--crowd-only"]:[])],cwd:root,env,timeoutMs:180000,maxBytes:65536});report.sim.push({code:result.code,output:result.output});if(result.code!==0||result.error)throw new Error("pnpm sim failed: "+(result.error??result.output.slice(-300)));}
- await sim();let sequence=0;
+ async function sim(crowdOnly=false){const result=await runBounded({bin:"pnpm",args:["sim",...(crowdOnly?["--crowd-only"]:[])],cwd:root,env,timeoutMs:180000,maxBytes:65536});report.sim.push({code:result.code,output:result.output});if(result.code!==0||result.error){const state=await(await fetch(base+"/api/rounds")).json();await writeFile(output.replace(/\.json$/,"-round-failure.json"),JSON.stringify(state,null,2));await cp(join(root,"state/checks"),output.replace(/\.json$/,"-checks"),{recursive:true}).catch(()=>{});throw new Error("pnpm sim failed: "+(result.error??result.output.slice(-300)));}}
+ // Suspend this client only during the independent SwiftShader gate. Resume it
+ // for the real hot-swap/receipt before the runner's eight-second deadline.
+ const lifecycle=await page.context().newCDPSession(page);await lifecycle.send("Page.setWebLifecycleState",{state:"frozen"});
+ let simFinished=false;const initial=sim().finally(()=>{simFinished=true;});void initial.catch(()=>{});
+ try{while(!simFinished){const state=await(await fetch(base+"/api/world")).json() as {version:unknown};if(state.version)break;await delay(100);}}finally{await lifecycle.send("Page.setWebLifecycleState",{state:"active"});await lifecycle.detach();}
+ await initial;let sequence=0;
  const snapshot=async()=>await(await fetch(base+"/api/world")).json() as {citizens:CitizenState[]};
  const post=async(c:Pick<CitizenState,"id"|"displayName"|"color">)=>{const response=await fetch(base+"/sim/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:`pulse-${sequence++}`,userId:c.id,displayName:c.displayName,color:c.color,text:"hello island"})});if(!response.ok)throw new Error("Soak admission failed");};
  async function replenish(){const {citizens}=await snapshot();for(let i=citizens.length;i<300;i++){await post({id:`soak-guest-${sequence}`,displayName:`Guest${sequence}`,color:"#DCA777"});if(i%80===0)await delay(1100);}}

@@ -16,7 +16,7 @@ import {join} from "node:path";
 async function start(){
  const config=readConfig(),root=process.cwd(),release=await acquireLock(root,"server");
  try{
-  void cleanupStaleCodexHomes(root);const simulation=config.fixtureMode&&config.simulationAllowed?simulationAdapters():undefined;
+  const simulation=config.fixtureMode&&config.simulationAllowed?simulationAdapters():undefined;
   let twitch:ReturnType<typeof connectTwitch>|undefined;
   const sendTwitch=async(message:string,source:"sim"|"twitch"="twitch")=>{if(source==="twitch"&&config.twitch&&twitch)await twitch.sendChat(message);};
   const pipeline=new WorldPipeline(Date.now,undefined,sendTwitch),guard=new IdeaGuard();
@@ -26,7 +26,7 @@ async function start(){
   const rounds=new Rounds({...(config.demoMode?{timers:DEMO_MS}:{}),build:request=>runner.build(request),rollback:requester=>runner.rollback(requester),canRollback:()=>!!versions.previous(),review:simulation?.reviewer??((idea,context)=>guard.review(idea,context.signal)),publish:state=>pipeline.publish({type:"rounds",state}),simulationAllowed:config.simulationAllowed});pipeline.attachRounds(rounds);
   let warned=false;const checkpoint=new Checkpoint(join(root,"state/world.json"),()=>({world:pipeline.checkpoint(),rounds:rounds.checkpoint(),summons:summons.checkpoint()}),()=>{if(!warned){warned=true;console.error("World checkpoint could not be saved; check state/ permissions.");}});
   const saved=await checkpoint.load();if(saved){pipeline.restore(saved.world);summons.restore(saved.summons);rounds.restore(saved.rounds);}
-  await runner.recover();if(versions.current)pipeline.publish({type:"version",version:versions.current});
+  await runner.recover();await cleanupStaleCodexHomes(root);if(versions.current)pipeline.publish({type:"version",version:versions.current});
   const unsubscribe=pipeline.subscribe(()=>checkpoint.changed()),durable=async()=>{checkpoint.changed();await checkpoint.flush();};await durable();
   const app=await createWorldServer(pipeline,summons,rounds,versions,{durable,broadcasterId:config.broadcasterId,simulationAllowed:config.simulationAllowed,...(simulation?{setOutcome:simulation.setOutcome}:{}),live:!!config.summon.key&&!simulation,fault:async()=>{if(versions.current)await versions.invalidate(versions.current.version);rounds.cancelForRevert();rounds.externalResult(await runner.rollback("system",true));}});
   await new Promise<void>((resolve,reject)=>{app.server.once("error",reject);app.server.listen(config.port,config.host,resolve);});

@@ -92,6 +92,6 @@ export async function runBounded(o: BoundedOptions): Promise<{ output: string; c
     child.stderr!.on("data",(chunk:Buffer)=>{bytes+=chunk.length;if(bytes>o.maxBytes)kill("output-limit");});
     child.stdin!.on("error",()=>{});child.once("error",()=>{reason??="start";});
     child.once("close",code=>{if(buffer.trim())line(buffer);void Promise.all([drained,spawned]).then(()=>finish(code));});
-    child.stdin!.end(o.input);
+    void spawned.then(()=>{if(!reason)child.stdin!.end(o.input);});
   });
 }
