@@ -10,8 +10,8 @@ import { random } from "./terrain.js";
 export function createSky(scene: Scene, fixedTime?: number) {
   const root = new Group();
   const top = new Color(), horizon = new Color(), sunColor = new Color();
-  const nightTop = new Color("#13223c"), dayTop = new Color("#658c9b");
-  const nightHorizon = new Color("#37475e"), dayHorizon = new Color("#d4d8bd"), duskHorizon = new Color("#edb997");
+  const nightTop = new Color("#13223c"), dayTop = new Color("#286b9b");
+  const nightHorizon = new Color("#37475e"), dayHorizon = new Color("#ffc48c"), duskHorizon = new Color("#f59d79");
   const warmSun = new Color("#ffc69b");
   const sunDir = new Vector3(-0.6, 0.35, -0.7).normalize();
   const uniforms = {
@@ -27,10 +27,10 @@ export function createSky(scene: Scene, fixedTime?: number) {
       float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
       void main(){
         vec3 dir=normalize(vDirection);
-        float h=pow(clamp((dir.y+0.9)/1.3,0.0,1.0),0.65);
+        float h=smoothstep(-0.78,0.42,dir.y);
         vec3 color=mix(uHorizon,uTop,h);
         float sun=dot(dir,uSun);
-        color+=uSunColor*(pow(max(sun,0.0),180.0)*0.22+smoothstep(0.9990,0.99965,sun)*2.3);
+        color+=uSunColor*(pow(max(sun,0.0),12.0)*0.12+pow(max(sun,0.0),180.0)*0.22+smoothstep(0.9990,0.99965,sun)*2.3);
         vec2 starUV=vec2(atan(dir.z,dir.x),asin(dir.y))*145.0;
         vec2 cell=floor(starUV); float seed=hash(cell);
         float star=(1.0-smoothstep(0.03,0.12,length(fract(starUV)-0.5)))*step(0.988,seed);
@@ -59,7 +59,7 @@ export function createSky(scene: Scene, fixedTime?: number) {
   const fill = new DirectionalLight("#a3d9cf", 0.6);
   fill.position.set(8, 4, -8);
   root.add(hemisphere, sunlight, sunlight.target, fill);
-  const fog = new FogExp2("#abbcb4", 0.008);
+  const fog = new FogExp2("#e6b08b", 0.005);
   scene.fog = fog;
 
   const cloudUniforms = { uColor: { value: new Color() }, uOpacity: { value: 0.22 } };

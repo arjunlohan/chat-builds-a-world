@@ -16,8 +16,14 @@ const ideaQueue = queue(), voteBars = votes(), feed = codexFeed(), history = tim
 const left = el("div", "rail left-rail"), right = el("div", "rail right-rail");
 left.append(phase, ideaQueue.root, voteBars.root); right.append(feed.root, history.root);
 root.append(left, right, moments.root);
+let phaseAnimation: Animation|undefined;
 let state: RoundState | null = null, received = 0, toastKey = "";
 function update(value: RoundState) {
+  const changed=!!state && (state.phase!==value.phase || state.paused!==value.paused);
+  if(changed&&!matchMedia("(prefers-reduced-motion: reduce)").matches){
+    const opacity=getComputedStyle(phaseCopy).opacity,transform=getComputedStyle(phaseCopy).transform;phaseAnimation?.cancel();
+    phaseAnimation=phaseCopy.animate([{opacity:Math.min(Number(opacity),.65),transform:transform==="none"?"translateY(5px)":transform},{opacity:1,transform:"translateY(0)"}],{duration:200,easing:"cubic-bezier(.05,.7,.1,1)"});
+  }
   state = value; received = performance.now();
   title.textContent = value.paused ? "Paused" : value.phase === "ideas" ? "Ideas" : value.phase === "voting" ? "Vote" : value.phase === "rollback" ? "Rollback vote" : value.phase === "guarding" ? "Guard review" : "Build";
   command.textContent = value.paused ? "Awaiting moderator" : value.phase === "ideas" ? "!idea <wish>" : value.phase === "voting" ? "!vote 1|2|3" : value.phase === "rollback" ? "!vote yes|no" : value.phase === "guarding" ? "Safety + scope check" : "Codex runner";

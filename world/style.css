@@ -46,3 +46,23 @@ body { margin: 0; min-height: 100vh; }
 .overlay-active .module-status { top: auto; right: auto; left: 40px; bottom: 28px; width: 420px; max-width: 420px; }
 
 .raid-label{position:absolute;left:0;top:0;text-align:center;color:#fbedd3;background:#173e43eb;padding:10px 18px;border-radius:12px;box-shadow:0 6px 24px #153c4340;font-family:system-ui,sans-serif}.raid-label strong{display:block;font-size:25px;line-height:30px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.raid-label span{display:block;font-size:15px;line-height:22px;letter-spacing:.04em;color:#b6e3d5}
+
+/* A persistent mint coat and a small diamond distinguish portal guests. */
+.citizen-label[data-visitor="true"] .citizen-name { color: #c4ffe9; border-bottom-color: #71e7c5; }
+.citizen-label[data-visitor="true"] .citizen-name::before { content: "◇ "; color: #8df6cd; }
+/* Keep the whole 16:9 scene on portrait screens, with readable native page chrome. */
+@media (max-width: 640px) and (orientation: portrait) {
+ .world-page { background: #142e3d; }
+ .world-stage { overflow: visible; }
+ .world-heading { top: -108px; left: 20px; right: 20px; }
+ .world-wordmark { font-size: 13px; letter-spacing: .12em; }
+ .world-caption { font-size: 16px; margin-top: 8px; }
+ .world-mark { font-size: 32px; }
+ .world-label { bottom: -132px; left: 20px; right: 20px; text-shadow: none; }
+ .world-kicker { font-size: 11px; }
+ .world-label h1 { font-size: 32px; margin: 10px 0 16px; }
+ .world-season { font-size: 11px; letter-spacing: .05em; flex-wrap: wrap; }
+ .fps { top: -42px; right: 20px; font-size: 12px; padding: 7px 9px; }
+ .connection-status { top: -42px; left: 20px; right: auto; font-size: 12px; }
+ .module-status { top: auto; bottom: -210px; left: 20px; right: 20px; font-size: 14px; }
+}

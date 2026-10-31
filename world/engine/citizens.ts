@@ -112,7 +112,7 @@ export class Citizens {
       });
     }
     this.frozenList = undefined;
-    if (spawned || c.state.color !== state.color) this.dirtyColors.add(state.id);
+    if (spawned || c.state.color !== state.color || !!c.state.entry !== !!state.entry) this.dirtyColors.add(state.id);
     c.snapshot = undefined; c.state = state; c.commandSpeech = isChatCommand(state.speech);
     this.speakers.delete(state.id); this.speakers.add(state.id);
     if (this.speakers.size > 16) this.speakers.delete(this.speakers.keys().next().value!);
@@ -124,6 +124,7 @@ export class Citizens {
     if(c.bubble.textContent!==state.speech)c.bubble.textContent=state.speech;
     c.label.dataset.command = state.command?.kind ?? "idle";
     c.label.dataset.color = state.color;
+    c.label.dataset.visitor = state.entry ? "true" : "false";
     if(c.label.style.getPropertyValue("--citizen-color")!==state.color)c.label.style.setProperty("--citizen-color", state.color);
     return spawned ? this.snapshot(c) : undefined;
   }
@@ -192,7 +193,7 @@ export class Citizens {
       const bounce = dancing && !reducedMotion ? Math.sin(age * 12) * 0.025 : 0;
       this.place(i,c,arrival,fade);
       if(this.body.bounce.getX(i)!==Math.fround(bounce)){this.body.bounce.setX(i,bounce);this.body.bounceChanged=true;}
-      if(this.dirtyColors.has(s.id)){this.tint.set(s.color);this.body.mesh.setColorAt(i,this.tint);this.body.mesh.instanceColor?.addUpdateRange(i*3,3);}
+      if(this.dirtyColors.has(s.id)){this.tint.set(s.entry ? "#53e5c6" : s.color);this.body.mesh.setColorAt(i,this.tint);this.body.mesh.instanceColor?.addUpdateRange(i*3,3);}
 
     }
     const part=this.body;part.mesh.count=this.count;

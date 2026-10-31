@@ -35,7 +35,7 @@ try {
     onFrame(instant, average, time, citizens) {
       if (count) count.textContent = `${citizens} ${citizens === 1 ? "NEIGHBOR" : "NEIGHBORS"}`;
       if (fps && !fps.hidden) fps.textContent = `${instant.toFixed(0)} FPS · ${average.toFixed(1)} AVG`;
-      if (clock) clock.textContent = time < 0.24 || time > 0.8 ? "AFTER THE STARS" : time < 0.3 ? "FIRST LIGHT" : time < 0.65 ? "THE GOLDEN HOURS" : "EVENING GLOW";
+      if (clock) clock.textContent = time < 0.24 || time > 0.8 ? "AFTER THE STARS" : time < 0.3 ? "FIRST LIGHT" : time < 0.4 ? "THE GOLDEN HOURS" : time < 0.65 ? "DAYLIGHT" : "EVENING GLOW";
     },
     onStatus(event) {
       if (!fault) return;

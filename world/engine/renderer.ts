@@ -119,7 +119,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   };
   const host = new ModuleHost(hostOptions);
   let staging=false;
-  let pendingAck: { version: WorldVersion; frames: number } | null = null;
+  let pendingAck: { version: WorldVersion; frames: number; celebrate: boolean } | null = null;
   let activeVersion: WorldVersion | null = null;
   const moduleReceipt = (version: WorldVersion, ok: boolean) => post("/modules/ack", { version: version.version, receipt: version.receipt, ok });
   const probe = profile.probe ? {
@@ -133,7 +133,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     },
   } : undefined;
   let activation = 0;
-  async function activate(version: WorldVersion | null) {
+  async function activate(version: WorldVersion | null, celebrate=false) {
     const generation = ++activation; shadowDirty = true;
     try {
       const oldHashes=new Map(activeVersion?.modules.map(m=>[m.id,m.hash])??[]);
@@ -152,7 +152,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         host.adopt(candidate,version?.modules.map(m=>m.id)??[]);
       }finally{candidate.dispose();staging=false;}
       stats.value.moduleVersion = version?.version ?? 0; stats.value.moduleCount = host.activeCount; stats.value.moduleSwaps++;
-      activeVersion = version; pendingAck = version ? { version, frames: 0 } : null;
+      const isNew=celebrate && !!version && version.version>(activeVersion?.version??0);
+      activeVersion = version; pendingAck = version ? { version, frames: 0, celebrate: isNew && !version.restoredFrom } : null;
     } catch {
       if (version) moduleReceipt(version, false);
     }
@@ -171,7 +172,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       if(event.arrival)raidPortal.open(event.arrival.raid.broadcasterName,event.arrival.admitted,event.arrival.raid.viewerCount,elapsed-(event.now-event.arrival.at)/1000);
       for (const failure of materializer.sync(event.summons)) ack(failure.state, failure.code);
       break; }
-    case "version": void activate(event.version); break;
+    case "version": void activate(event.version,true); break;
     case "chat": {
       const spawned = citizens.upsert(event.citizen, event.now);
       if (spawned) {
@@ -230,7 +231,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       host.update(dt);
       if (pendingAck) {
         if (stats.value.moduleError) { moduleReceipt(pendingAck.version, false); pendingAck = null; }
-        else if (++pendingAck.frames >= 8) { moduleReceipt(pendingAck.version, true); pendingAck = null; }
+        else if (++pendingAck.frames >= 8) { moduleReceipt(pendingAck.version, true); if(pendingAck.celebrate&&!reducedMotion.matches)effects.celebrate(); pendingAck = null; }
       }
       if (shadowDirty) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; }
       materializer.beforeRender(camera);
