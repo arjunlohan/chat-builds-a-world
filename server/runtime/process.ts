@@ -10,7 +10,7 @@ export function minimalEnvironment(env: NodeJS.ProcessEnv, root?: string): NodeJ
 }
 interface HomeOptions { remove?: typeof rm; warn?: (message: string) => void }
 const startup = new Map<string, Promise<void>>();
-const exists = (pid: number) => { try { process.kill(pid,0); return true; } catch(error) { return (error as NodeJS.ErrnoException).code !== "ESRCH"; } };
+export const exists = (pid: number) => { try { process.kill(pid,0); return true; } catch(error) { return (error as NodeJS.ErrnoException).code !== "ESRCH"; } };
 function warning(error: unknown, env: NodeJS.ProcessEnv, warn = console.warn) { warn(`Runtime home cleanup deferred: ${redact(error instanceof Error ? error.message : "filesystem error",protectedValues(env))}`); }
 async function removeHome(owned: string, env: NodeJS.ProcessEnv, options: HomeOptions) {
   try { await (options.remove??rm)(owned,{recursive:true,force:true}); }

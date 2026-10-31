@@ -1,4 +1,3 @@
-import {withLock} from "../runtime/lock.js";
 import {stopOrphan} from "./recovery.js";
 import { ACTIVE_MODULE_CAP } from "../../world/shared/limits.js";
 import { reverted } from "../runtime/results.js";
@@ -32,24 +31,20 @@ export class Runner {
   constructor(private options: Options) { this.root = resolve(options.root); this.record = options.record ?? metricWriter(join(this.root, "state"), "runner-metrics.jsonl"); }
   async close(){await this.queue.close();}
   async recover() {
-    await withLock(this.root,async()=>{
+
       const pending=this.options.versions.pending,current=this.options.versions.current;
       if(pending&&pending.path!==join(this.root,"worktrees",`v${pending.version}`))throw new Error("Invalid pending worktree recovery path.");
       if(pending?.process&&pending.owner)await stopOrphan(pending.process,pending.owner,pending.path);
       const head=await git(this.root,"rev-parse","master"),advanced=!!pending&&head!==pending.base;
       if(advanced||current?.healthy===false){
-        if(advanced&&pending!.candidate&&head!==pending!.candidate)throw new Error("Master advanced outside the interrupted run; recovery left it unchanged.");
         const tag=`v${advanced?pending!.version:current!.version}`,tagHead=await git(this.root,"rev-parse",`refs/tags/${tag}`).catch(()=>"");
-        if(advanced&&!tagHead&&pending!.candidate===head){await cleanMaster(this.root);await git(this.root,"tag",tag,head);}
-        else if(head!==tagHead)throw new Error("Master advanced outside the interrupted run; recovery left it unchanged.");
+        if(head!==tagHead)throw new Error("Master advanced outside the interrupted run; recovery left it unchanged.");
         await cleanMaster(this.root);
         const target=(current?.healthy===true?current:this.options.versions.previous())??(this.options.versions.baseline?{commit:this.options.versions.baseline,tag:"v0",modules:[]}:null);if(!target)throw new Error("No known-good version is available for recovery.");
         if(pending)await removeTree(this.root,pending.path);
-        const version=await this.reserve(),tree=await createTree(this.root,version,head);await this.options.versions.setPending({path:tree,base:head,version});
-        try{await git(tree,"restore","--source",target.commit,"--staged","--worktree","--","world/modules");const commit=await commitTree(tree,`v${version}: recover interrupted activation`);await this.options.versions.setPending({path:tree,base:head,version,candidate:commit});await promote(this.root,head,commit,`v${version}`);await this.options.versions.activate({version,tag:`v${version}`,commit,title:"Recovered previous world",requester:"system",modules:target.modules,restoredFrom:target.tag},false);}finally{await removeTree(this.root,tree);}
+        await this.restoreForward(head,target,"Recovered previous world","system",false);
       }else if(pending)await removeTree(this.root,pending.path);
       await this.options.versions.setPending();
-    });
   }
   private async reserve() {
     const tags = (await git(this.root, "tag", "--list", "v*")).split("\n").filter(tag => /^v[1-9][0-9]*$/.test(tag)).map(tag => Number(tag.slice(1)));
@@ -59,7 +54,7 @@ export class Runner {
     try { await this.record({ at: Date.now(), mode, ...result }); } catch { /* Metrics are never part of promotion or recovery. */ }
   }
   async build(request: BuildRequest): Promise<RunResult> {
-    return this.queue.enqueue(signal => withLock(this.root,()=>this.buildNow({ ...request, signal: AbortSignal.any([signal, request.signal]) })).catch(error=>reverted(redact(error instanceof Error?error.message:"Build lock unavailable.",protectedValues(this.options.env??process.env)))));
+    return this.queue.enqueue(signal => this.buildNow({ ...request, signal: AbortSignal.any([signal, request.signal]) }));
   }
   private async buildNow(request: BuildRequest): Promise<RunResult> {
     const start = performance.now(), controller = new AbortController();
@@ -102,7 +97,6 @@ export class Runner {
       const commit = await commitTree(tree, message);
       if (signal.aborted) throw new Error("Build timed out or was cancelled.");
       const artifacts = await Promise.all(modules.map(m => this.options.versions.artifact(m.id, m.file, m.code)));
-      await this.options.versions.setPending({path:tree,base,version,candidate:commit});
       await promote(this.root, base, commit, `v${version}`); merged = true;
       if (signal.aborted) throw new Error("Build timed out or was cancelled.");
       feed("ship", `v${version} checked; activating without a page reload.`);
@@ -116,11 +110,7 @@ export class Runner {
       tokens = (error as { tokens?: Usage })?.tokens ?? tokens;
       const reason = signal.aborted ? "Build timed out or was cancelled." : redact(detail, protectedValues(this.options.env ?? process.env));
       if (merged && tree) {
-        // Recovery is another forward commit, never a reset of the session checkout.
-        await git(tree, "restore", "--source", base, "--staged", "--worktree", "--", "world/modules");
-        const restored = await commitTree(tree, `Revert v${version}: activation failed`), next = version + 1;
-        await promote(this.root, await git(this.root, "rev-parse", "master"), restored, `v${next}`);
-        await this.options.versions.activate({ version: next, tag: `v${next}`, commit: restored, title: "Automatic revert", requester, modules: previous?.modules ?? [], restoredFrom: previous?.tag ?? "v0" }, false);
+        await this.restoreForward(await git(this.root,"rev-parse","master"),previous??{commit:base,tag:"v0",modules:[]},"Automatic revert",requester,false);
       }
       feed("error", `REVERTED · ${reason}`);
       const result: RunResult = { ...reverted(reason,Math.round(performance.now()-start),tokens), builderMs, ...(check?{check}:{}) };
@@ -131,25 +121,31 @@ export class Runner {
     }
   }
   async rollback(requester: string, automatic = false): Promise<RunResult> {
-    return this.queue.enqueue(() => withLock(this.root,()=>this.rollbackNow(requester, automatic)).catch(error=>reverted(error instanceof Error?error.message:"Rollback lock unavailable.")), automatic);
+    return this.queue.enqueue(() => this.rollbackNow(requester, automatic), automatic);
   }
   private async rollbackNow(requester: string, automatic: boolean): Promise<RunResult> {
     const baseline = this.options.versions.baseline;
     const start = performance.now(), target = this.options.versions.previous() ?? (automatic && baseline ? { version: 0, tag: "v0", commit: baseline, title: "Original world", requester: "system", modules: [], receipt: "" } : null), tokens = { input: 0, output: 0, total: 0 };
     if (!target) return reverted("No previous tag to restore.",0,tokens);
-    let tree = "";
     try {
-      const base = await cleanMaster(this.root), version = await this.reserve();
-      tree = await createTree(this.root, version, base); await this.options.versions.setPending({ path: tree, base, version });
-      await git(tree, "restore", "--source", target.commit, "--staged", "--worktree", "--", "world/modules");
-      const commit = await commitTree(tree, `v${version}: restore ${target.tag} (requested by @${requester})`);
-      await this.options.versions.setPending({path:tree,base,version,candidate:commit});
-      await promote(this.root, base, commit, `v${version}`);
-      const ok = await this.options.versions.activate({ version, tag: `v${version}`, commit, title: `Restore ${target.tag}`, requester, modules: target.modules, restoredFrom: target.tag });
-      if (!ok) throw new Error("Rollback activation did not acknowledge.");
+      const base = await cleanMaster(this.root);
+      const version = await this.restoreForward(base,target,`Restore ${target.tag}`,requester);
       const result: RunResult = { ok: true, outcome: "ROLLED BACK", reason: `Restored ${target.tag} without resetting master.`, version, tag: `v${version}`, durationMs: Math.round(performance.now() - start), tokens };
       this.options.feed("ship", `Restored ${target.tag}.`); await this.log(result, "rollback"); try { await this.options.announce(`Rolled back to ${target.tag}.`); } catch { this.options.feed("check", "Restored; Twitch announcement unavailable."); } return result;
     } catch (error) { const result: RunResult = reverted(redact(error instanceof Error ? error.message : "Rollback failed.",protectedValues(this.options.env??process.env)),Math.round(performance.now()-start),tokens); await this.log(result, "rollback"); return result; }
-    finally { if (tree) await removeTree(this.root, tree); await this.options.versions.setPending(); }
+
   }
+  private async restoreForward(base:string,target:Pick<WorldVersion,"commit"|"tag"|"modules">,title:string,requester:string,wait=true){
+    const version=await this.reserve(),tree=await createTree(this.root,version,base);
+    await this.options.versions.setPending({path:tree,base,version});
+    try{
+      await git(tree,"restore","--source",target.commit,"--staged","--worktree","--","world/modules");
+      const commit=await commitTree(tree,`v${version}: ${title} (requested by @${requester})`);
+      await promote(this.root,base,commit,`v${version}`);
+      const ok=await this.options.versions.activate({version,tag:`v${version}`,commit,title,requester,modules:target.modules,restoredFrom:target.tag},wait);
+      if(!ok)throw new Error("Restoration activation did not acknowledge.");
+      return version;
+    }finally{await removeTree(this.root,tree);await this.options.versions.setPending();}
+  }
+
 }

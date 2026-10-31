@@ -29,8 +29,9 @@ export async function commitTree(path: string, message: string) {
 export async function promote(root: string, base: string, commit: string, tag: string) {
   await cleanMaster(root, base);
   if (await git(root, "tag", "--list", tag)) throw new Error("Version tag already exists.");
-  await git(root, "merge", "--ff-only", "--no-edit", commit);
   await git(root, "tag", tag, commit);
+  await cleanMaster(root, base);
+  await git(root, "merge", "--ff-only", "--no-edit", commit);
 }
 /** Snapshot includes ignored files, so hiding an engine edit behind .gitignore cannot pass. */
 export async function inventory(root: string) {
