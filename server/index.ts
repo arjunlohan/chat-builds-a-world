@@ -1,3 +1,4 @@
+import { cleanupStaleCodexHomes } from "./runtime/process.js";
 import { simulationAdapters } from "./sim/adapters.js";
 import { bedrockProvider } from "./summon/provider.js";
 import { Runner } from "./runner/index.js";
@@ -11,6 +12,7 @@ import { SummonService } from "./summon/index.js";
 import { connectTwitch } from "./twitch/index.js";
 
 const config = readConfig();
+await cleanupStaleCodexHomes(process.cwd());
 const simulation = config.fixtureMode && config.simulationAllowed ? simulationAdapters() : undefined;
 const adapters = { reviewer: simulation?.reviewer ?? ((idea: string, context: { signal: AbortSignal }) => guard.review(idea, context.signal)), builder: simulation?.builder, summonProvider: simulation?.summonProvider ?? bedrockProvider(config.summon) };
 const pipeline = new WorldPipeline(Date.now, undefined, async (message,source) => { if(source==="twitch"&&config.twitch)await twitch.sendChat(message); });

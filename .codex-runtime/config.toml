@@ -2,5 +2,16 @@ model = "openai.gpt-6.1-sol"
 model_provider = "amazon-bedrock"
 model_reasoning_effort = "medium"
 
+suppress_unstable_features_warning = true
+
+[features]
+plugins = false
+remote_plugin = false
+plugin_discovery_prefetch = false
+apps = false
+skill_mcp_dependency_install = false
+skip_host_skill_discovery = true
+hooks = false
+
 [model_providers.amazon-bedrock.aws]
 region = "us-east-1"
