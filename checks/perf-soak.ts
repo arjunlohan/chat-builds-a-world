@@ -29,7 +29,7 @@ try{
  if(sim.code!==0||sim.reason)throw new Error("pnpm sim did not complete: "+sim.output.slice(-500));
  const renderer=await page.evaluate(()=>{const gl=document.querySelector("canvas")!.getContext("webgl2")!,info=gl.getExtension("WEBGL_debug_renderer_info");return info?String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)):"";});
  if(/swiftshader|llvmpipe|software/i.test(renderer)||!renderer)throw new Error("Soak needs a physical GPU");
- await page.evaluate(()=>{const state={times:[] as number[],last:0,start:performance.now(),frame:window.__worldStats.frame};(window as unknown as {__soak:typeof state}).__soak=state;const sample=(now:number)=>{if(state.last)state.times.push(now-state.last);state.last=now;requestAnimationFrame(sample);};requestAnimationFrame(sample);});
+ await page.evaluate(`(() => { const state={times:[],last:0,start:performance.now(),frame:window.__worldStats.frame};window.__soak=state;function sample(now){if(state.last)state.times.push(now-state.last);state.last=now;requestAnimationFrame(sample);}requestAnimationFrame(sample);})()`);
  const start=performance.now();while(performance.now()-start<seconds*1000)await new Promise(r=>setTimeout(r,Math.min(5000,seconds*1000-(performance.now()-start))));
  const measured=await page.evaluate(()=>{const s=(window as unknown as {__soak:{times:number[];start:number;frame:number}}).__soak,total=s.times.reduce((a,b)=>a+b,0),sorted=s.times.sort((a,b)=>a-b);return {seconds:(performance.now()-s.start)/1000,avgFps:1000*s.times.length/total,p95FrameMs:sorted[Math.floor(sorted.length*.95)],frames:window.__worldStats.frame-s.frame,stats:window.__worldStats};});
  await mkdir("test-results",{recursive:true});await page.screenshot({path:"test-results/soak-world.png"});

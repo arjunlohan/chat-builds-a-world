@@ -187,3 +187,18 @@ test("every recipe's server usage matches the independent client ledger", () => 
   const handle=materializer.spawn(normalizeSceneSpec(JSON.stringify(spec)).spec);assert.deepEqual(handle.usage,specUsage(spec),kind);handle.dispose();
  }
 });
+test("service evicts FIFO before a paid provider call and releases failed reservations", async () => {
+ let now=0,calls=0,fail=false;const events:string[]=[];
+ const spec=normalizeSceneSpec(JSON.stringify(fixtureFor("crystals"))).spec;spec.nodes=spec.nodes.slice(0,1);spec.lights=[];spec.emitters=[];spec.behaviors=[];
+ const service=new SummonService({config,now:()=>now,mode:"live",provider:{async generate(){events.push(`provider:${++calls}`);if(fail)throw new SummonError("provider-unavailable");return{json:JSON.stringify(spec),usage:zeroUsage()};}},publish(e){if(e.type==="summon-remove")events.push(`evicted:${e.ids[0]}`);},reply(){},record(){}});
+ const submit=(i:number)=>{now+=60000;return service.submit({id:`fifo-${i}`,userId:`fifo-${i}`,displayName:`Fifo${i}`,color:"#ffffff",text:"!summon crystal",timestamp:now});};
+ for(let i=0;i<24;i++)assert.equal((await submit(i)).status,"awaiting-render");
+ events.length=0;await submit(24);assert.deepEqual(events,["evicted:fifo-0","provider:25"]);assert.equal(service.active().length,24);assert.equal(service.active()[0]?.id,"fifo-1");
+ fail=true;assert.equal((await submit(25)).status,"failed");assert.equal(service.active().length,23);
+ fail=false;assert.equal((await submit(26)).status,"awaiting-render");assert.equal(service.active().length,24);
+});
+test("typed primary render failures produce the final failed metric without a misleading clear record", async () => {
+ const records:SummonJob[]=[];const service=new SummonService({config,provider:fixtureProvider,mode:"fixture",publish(){},reply(){},record(job){records.push(job)}});
+ await service.submit({id:"primary-error",userId:"primary-error",displayName:"Primary",color:"#ffffff",text:"!summon jellyfish",timestamp:0});const scene=service.active()[0]!;
+ assert.equal(await service.acknowledge(scene.id,scene.receipt,"allocation",true),true);assert.equal(service.active().length,0);assert.equal(records.length,1);assert.equal(records[0]!.status,"failed");assert.equal(records[0]!.reason,"allocation");
+});

@@ -1,3 +1,4 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "@playwright/test";
 import { setTimeout as delay } from "node:timers/promises";
 import { readConfig } from "../config.js";
@@ -15,6 +16,7 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
     await page.goto(`${base}/world?debug=1`); await page.waitForSelector("canvas[data-ready='true']", { timeout: 60_000 });
     console.log("# | mode | valid | status | provider ms | request-to-screen ms | input/output/total/reasoning tokens");
+    const rows: SummonJob[] = [];
     const run = Date.now().toString(36); let previous = -Infinity;
     for (let i = 0; i < prompts.length; i++) {
       await delay(Math.max(0, previous + 5100 - Date.now())); previous = Date.now();
@@ -30,10 +32,16 @@ async function main() {
         await delay(200);
       }
       if (!job) throw new Error("No benchmark result");
+      if(job.mode!=="live")throw new Error("Benchmark requires the live provider");
+      rows.push(job);
       const tokens = job.usage;
       console.log(`${i + 1} | ${job.mode} | ${job.valid} | ${job.status}${job.reason ? `:${job.reason}` : ""} | ${job.providerMs ?? "n/a"} | ${job.latencyMs ?? "not rendered"} | ${tokens?.input ?? "?"}/${tokens?.output ?? "?"}/${tokens?.total ?? "?"}/${tokens?.reasoning ?? "?"}`);
       if (job.reason === "missing-key") throw new Error("Restart dev with the Bedrock key configured");
     }
+    const rendered=rows.filter(job=>job.valid&&job.status==="rendered").length;
+    console.log(`Live Summon: ${rows.filter(job=>job.valid).length}/20 valid, ${rendered}/20 rendered.`);
+    await mkdir("state",{recursive:true});await writeFile("state/summon-bench-results.json",JSON.stringify(rows,null,2),{mode:0o600});
+    if(rendered!==20)process.exitCode=1;
   } finally { await browser.close(); }
 }
 void main().catch(() => { console.error("Live benchmark could not complete. Start a fresh pnpm dev with the Bedrock key, then install Chromium if needed. No credentials were printed."); process.exitCode = 1; });

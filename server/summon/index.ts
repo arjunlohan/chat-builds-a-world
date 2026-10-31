@@ -101,7 +101,7 @@ export class SummonService {
     if (failure) {
       if (!["capacity", "invalid-spec", "allocation", "render-error"].includes(failure)) return false;
       job.public.renderError = failure;
-      this.remove(id, "primary-render-failure");
+      this.remove(id, "primary-render-failure", false); job.logged = false;
       await this.fail(job, failure);
     } else {
       job.public.status = "rendered"; job.public.reason = null; job.logged = false; job.public.latencyMs = Math.max(0, this.now() - job.public.requestedAt);
@@ -109,9 +109,9 @@ export class SummonService {
     }
     return true;
   }
-  private remove(id: string, reason: string) {
+  private remove(id: string, reason: string, record = true) {
     this.reservations.release(id); this.scenes.delete(id); this.options.publish({ type: "summon-remove", ids: [id] });
-    const job = this.jobs.get(id); if (job && job.public.status !== "failed") { job.public.status = "cleared"; job.public.reason = reason; void this.log(job); }
+    const job = this.jobs.get(id); if (job && job.public.status !== "failed") { job.public.status = "cleared"; job.public.reason = reason; if(record)void this.log(job); }
   }
   async clearLatest() {
     const scene = this.active().at(-1);
