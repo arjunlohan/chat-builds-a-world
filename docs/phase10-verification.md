@@ -1,5 +1,8 @@
 # Phase 10 verification
 
+The latest sandbox, terminal-verdict, particle-budget and retry-classification
+verification is recorded in [gatec3-followups.md](gatec3-followups.md).
+
 The latest shared-rule, self-check and single-repair verification is recorded in
 [gatec2-followups.md](gatec2-followups.md).
 
