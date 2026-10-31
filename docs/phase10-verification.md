@@ -1,5 +1,8 @@
 # Phase 10 verification
 
+The latest shared-rule, self-check and single-repair verification is recorded in
+[gatec2-followups.md](gatec2-followups.md).
+
 The subsequent Gate C import, builder-diagnostic and temporary-worktree checks are
 recorded in [gatec-followups.md](gatec-followups.md). Results below retain their
 original source revisions.
