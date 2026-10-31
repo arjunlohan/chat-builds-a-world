@@ -19,6 +19,21 @@ export class CameraDirector {
   private readonly destination = new Vector3();
   private readonly drift = new Vector3();
   private readonly offset = new Vector3();
+  private readonly pendingTarget = new Vector3();
+  private pendingPriority = -1;
+  private pendingCount = 0;
+  private lastAutomatic = -Infinity;
+  private lastFocus = -Infinity;
+  private automaticCount = 0;
+  get automaticFocuses() { return this.automaticCount; }
+
+  /** Coalesce a burst to one weighted target; automatic shots are >=8 seconds apart. */
+  notice(target: Readonly<Vector3>, priority = 0) {
+    if (![target.x, target.y, target.z].every(Number.isFinite) || priority < this.pendingPriority) return;
+    if (priority > this.pendingPriority) { this.pendingPriority = priority; this.pendingCount = 0; }
+    const weight = 1 / Math.min(80, ++this.pendingCount);
+    this.pendingTarget.lerp(target, weight);
+  }
 
   constructor(private readonly camera: PerspectiveCamera, private readonly reducedMotion = false) {
     this.driftPosition();
@@ -34,7 +49,8 @@ export class CameraDirector {
   readonly focus: WorldServices["camera"]["focus"] = (position, options = {}) => {
     if (![position.x, position.y, position.z].every(Number.isFinite)) return;
     const priority = MathUtils.clamp(Math.round(options.priority ?? 1), 0, 3);
-    if (this.hold > 0 && priority < this.priority) return;
+    if (this.hold > 0 && (priority < this.priority || (priority < 3 && priority === this.priority && this.time - this.lastFocus < 6))) return;
+    this.lastFocus = this.time;
     this.priority = priority;
     this.duration = this.reducedMotion ? 0.25 : MathUtils.clamp(options.duration ?? 2.5, 0.25, 5);
     this.target.set(MathUtils.clamp(position.x, -64, 64), MathUtils.clamp(position.y, -8, 48), MathUtils.clamp(position.z, -64, 64));
@@ -50,6 +66,11 @@ export class CameraDirector {
 
   update(dt: number) {
     this.time += dt;
+    if (this.pendingPriority >= 0 && this.time - this.lastAutomatic >= 8 && this.time - this.lastFocus >= 7 && (this.hold === 0 || this.pendingPriority > this.priority)) {
+      this.focus(this.pendingTarget, { duration: 2.8, priority: this.pendingPriority });
+      this.lastAutomatic = this.time; this.automaticCount++;
+      this.pendingPriority = -1; this.pendingCount = 0;
+    }
     this.driftPosition();
     if (this.hold > 0 || this.returning) {
       this.flight = Math.min(this.duration, this.flight + dt);

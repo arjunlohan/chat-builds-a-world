@@ -15,15 +15,18 @@ import { createEffects } from "./effects.js";
 import { FrameStats } from "./stats.js";
 import { ModuleHost, type ModuleStatus } from "./module-host.js";
 import { ResourceLedger, ResourceOwner } from "./resources.js";
-import { citizens } from "./citizens.js";
+import { Citizens } from "./citizens.js";
+import { connectWorld } from "./transport.js";
 import { spawnSpec } from "./spec-materializer.js";
 import { log } from "./log.js";
 
 export interface RendererOptions {
   fixedTime?: number;
+  labels?: HTMLElement;
+  onConnection?: (connected: boolean) => void;
   onStatus?: (status: ModuleStatus) => void;
   onReady?: () => void;
-  onFrame?: (fps: number, average: number, phase: number) => void;
+  onFrame?: (fps: number, average: number, phase: number, citizens: number) => void;
   onError?: (message: string) => void;
 }
 
@@ -51,7 +54,13 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const motes = createMotes();
   const sky = createSky(scene, options.fixedTime);
   const effects = createEffects();
-  environment.add(terrain, garden, water.root, motes.root, sky.root, effects.root);
+  const labelLayer = options.labels ?? document.createElement("div");
+  const citizens = new Citizens(labelLayer);
+  const resizeLabels = new ResizeObserver(entries => {
+    labelLayer.style.transform = `scale(${entries[0]!.contentRect.width / 1920})`;
+  });
+  resizeLabels.observe(canvas);
+  environment.add(terrain, garden, water.root, motes.root, sky.root, effects.root, citizens.root);
 
   const composer = new EffectComposer(renderer);
   const renderPass = new RenderPass(scene, camera);
@@ -72,12 +81,34 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   scene.add(moduleRoot);
   const host = new ModuleHost({
     root: moduleRoot, ledger, protectedResources: engineResources,
-    services: { citizens, spawnSpec, camera: { focus: director.focus }, effects: { play: effects.play }, log },
+    services: { citizens: citizens.services, spawnSpec, camera: { focus: director.focus }, effects: { play: effects.play }, log },
     ...(options.onStatus ? { onStatus: options.onStatus } : {}),
   });
   const stats = new FrameStats();
   window.__worldStats = stats.value;
   let elapsed = 0, disposed = false, ready = false, frameId = 0, uiTime = 0;
+  let serverOffset = 0;
+  const disconnect = connectWorld(event => {
+    serverOffset = event.now - Date.now();
+    if (event.type === "snapshot") {
+      citizens.sync(event.citizens, event.now); stats.value.raidCount = event.raids;
+    } else if (event.type === "chat") {
+      const spawned = citizens.upsert(event.citizen, event.now);
+      if (spawned) {
+        host.onCitizenSpawn(spawned);
+        effects.play("spawn", spawned.position);
+        director.notice(spawned.position, 0);
+      }
+      host.onChat(event.chat);
+      if (/^!(jump|dance)$/i.test(event.chat.text.trim())) {
+        const citizen = citizens.services.get(event.citizen.id);
+        if (citizen) director.notice(citizen.position, 1);
+      }
+    } else if (event.type === "remove") citizens.remove(event.ids);
+    else if (event.type === "raid") { stats.value.raidCount++; host.onRaid(event.raid); }
+    // Pause/skip/clear controls are broadcast for later lanes, not arbitrary module code.
+    stats.value.citizenCount = citizens.count;
+  }, connected => options.onConnection?.(connected));
 
   function frame(now: number) {
     if (disposed || document.hidden) return;
@@ -92,13 +123,15 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       motes.update(visualTime, 1 - sky.day);
       effects.update(elapsed);
       director.update(dt);
+      citizens.update(dt, elapsed, Date.now() + serverOffset, camera, reducedMotion.matches);
+      stats.value.cameraFocuses = director.automaticFocuses;
       host.update(dt);
-      if (host.activeCount) renderer.shadowMap.needsUpdate = true;
+      if (host.activeCount || (citizens.count > 0 && stats.value.frame % 2 === 0)) renderer.shadowMap.needsUpdate = true;
       composer.render(dt);
       if (!ready) { ready = true; options.onReady?.(); }
       if (now - uiTime >= 250) {
         uiTime = now;
-        options.onFrame?.(stats.value.fps, stats.value.avgFps, sky.phase);
+        options.onFrame?.(stats.value.fps, stats.value.avgFps, sky.phase, citizens.count);
       }
     } catch {
       options.onError?.("The world paused after a rendering error. Reload to try again.");
@@ -120,7 +153,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster.intersectObjects(terrain.children)[0];
     if (!hit || hit.point.y < 0) return;
-    director.focus(hit.point, { duration: 2.8, priority: 1 });
+    director.focus(hit.point, { duration: 2.8, priority: 3 });
     effects.play("sparkle", hit.point);
   }
   function contextLost(event: Event) {
@@ -135,7 +168,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   if (!document.hidden) frameId = requestAnimationFrame(frame);
 
   return {
-    renderer, scene, camera, director, host, stats: stats.value, baseUsage: base,
+    renderer, scene, camera, director, host, citizens, stats: stats.value, baseUsage: base,
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -143,6 +176,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       document.removeEventListener("visibilitychange", visibility);
       canvas.removeEventListener("pointerup", explore);
       canvas.removeEventListener("webglcontextlost", contextLost);
+      disconnect(); resizeLabels.disconnect(); citizens.dispose();
       host.dispose();
       engineResources.dispose(environment);
       bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose(); renderer.dispose();

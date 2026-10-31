@@ -18,3 +18,23 @@ export interface RaidEvent {
 export function pending(feature: string): never {
   throw new Error(`${feature} is not implemented in Phase 1`);
 }
+
+export type CitizenCommand =
+  { kind: "jump" | "dance" | "home" } | { kind: "follow"; targetId: string };
+export interface CitizenState {
+  readonly id: string;
+  readonly displayName: string;
+  readonly color: string;
+  readonly home: readonly [number, number, number];
+  readonly lastActive: number;
+  readonly speech: string;
+  readonly speechAt: number;
+  readonly command: CitizenCommand | null;
+  readonly commandAt: number;
+}
+export type WorldEvent =
+  { type: "snapshot"; revision: number; now: number; citizens: CitizenState[]; paused: boolean; raids: number } |
+  { type: "chat"; revision: number; now: number; chat: ChatEvent; citizen: CitizenState; spawned: boolean } |
+  { type: "remove"; revision: number; now: number; ids: string[] } |
+  { type: "raid"; revision: number; now: number; raid: RaidEvent } |
+  { type: "control"; revision: number; now: number; action: "pause" | "skip" | "clear"; paused: boolean };

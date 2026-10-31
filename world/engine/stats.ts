@@ -1,8 +1,8 @@
-export interface WorldStats { fps: number; avgFps: number; frame: number }
+export interface WorldStats { fps: number; avgFps: number; frame: number; citizenCount: number; raidCount: number; cameraFocuses: number }
 
 /** Real presentation timing, not simulation dt. Pauses never count as slow frames. */
 export class FrameStats {
-  readonly value: WorldStats = { fps: 0, avgFps: 0, frame: 0 };
+  readonly value: WorldStats = { fps: 0, avgFps: 0, frame: 0, citizenCount: 0, raidCount: 0, cameraFocuses: 0 };
   private last: number | undefined;
   private readonly samples = new Float64Array(120);
   private cursor = 0;

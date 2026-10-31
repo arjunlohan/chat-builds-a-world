@@ -11,6 +11,7 @@
   <body class="world-page">
     <div class="world-stage">
       <canvas id="world" width="1920" height="1080" aria-label="A floating lantern garden with coral trees, a spring and a waterfall. Click the island to fly closer."></canvas>
+      <div id="citizen-labels" class="citizen-labels" aria-label="Citizens and chat"></div>
       <div class="vignette" aria-hidden="true"></div>
       <header class="world-heading">
         <span class="world-mark" aria-hidden="true">✳</span>
@@ -19,10 +20,11 @@
       <footer class="world-label">
         <p class="world-kicker">A PLACE TO BEGIN</p>
         <h1>The Lantern Garden</h1>
-        <p class="world-season"><span class="sun-dot" aria-hidden="true"></span><span id="time-of-day">THE GOLDEN HOURS</span><span class="world-number">WORLD 001</span></p>
+        <p class="world-season"><span class="sun-dot" aria-hidden="true"></span><span id="time-of-day">THE GOLDEN HOURS</span><span class="world-number" id="citizen-count">0 NEIGHBORS</span></p>
       </footer>
       <p class="world-hint">Click somewhere. Stay a while.</p>
       <p id="status" class="world-loading" role="status">Finding a quiet corner of the sky…</p>
+      <p id="connection-status" class="connection-status" role="status" hidden>Reconnecting to the world…</p>
       <p id="module-status" class="module-status" role="status" hidden></p>
       <output id="fps" class="fps" aria-label="Frame rate" hidden></output>
     </div>

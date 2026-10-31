@@ -26,3 +26,8 @@ body { margin: 0; min-height: 100vh; }
 .placeholder h1 { font-size: clamp(2rem, 5vw, 4.5rem); letter-spacing: -0.04em; line-height: 1.05; }
 .placeholder p { line-height: 1.6; color: #b6c4d5; }
 @media (max-width: 640px) { .world-hint { display: none; } .world-heading { gap: 8px; } .world-label h1 { margin-bottom: 10px; } .world-kicker { margin-bottom: 7px; } }
+.citizen-labels { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: top left; pointer-events: none; }
+.citizen-label { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; width: max-content; max-width: 210px; font-family: system-ui, sans-serif; text-align: center; contain: layout style; }
+.citizen-name { color: #f7f1dc; font-size: 10px; line-height: 1.4; padding: 2px 6px; max-width: 110px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; background: #1b353dc7; border-radius: 4px; box-shadow: 0 1px 3px #193a4120; border-bottom: 1px solid var(--citizen-color, #a9d4bb); }
+.citizen-bubble { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-width: 195px; padding: 6px 9px; border-radius: 9px 9px 9px 2px; background: #fbf3dfee; color: #294342; box-shadow: 0 3px 12px #2c535328; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.connection-status { position: absolute; right: 3%; top: 10%; margin: 0; padding: 10px 13px; background: #233f4ddb; color: #f6e8c9; border-radius: 5px; font-size: 12px; }

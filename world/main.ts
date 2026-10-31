@@ -9,6 +9,9 @@ const status = document.querySelector<HTMLElement>("#status");
 const fps = document.querySelector<HTMLOutputElement>("#fps");
 const clock = document.querySelector<HTMLElement>("#time-of-day");
 const fault = document.querySelector<HTMLElement>("#module-status");
+const labels = document.querySelector<HTMLElement>("#citizen-labels");
+const count = document.querySelector<HTMLElement>("#citizen-count");
+const connection = document.querySelector<HTMLElement>("#connection-status");
 const query = new URLSearchParams(location.search);
 if (fps) fps.hidden = query.get("debug") !== "1";
 const phases: Record<string, number> = { dawn: 0.25, day: 0.5, dusk: 0.75, night: 0 };
@@ -19,10 +22,13 @@ function fail(message: string) {
 try {
   if (!canvas) throw new Error("World canvas is missing");
   const world = createRenderer(canvas, {
+    ...(labels ? { labels } : {}),
+    onConnection(connected) { if (connection) connection.hidden = connected; },
     ...(phase !== undefined ? { fixedTime: phase } : {}),
     onReady() { if (status) status.hidden = true; canvas.dataset.ready = "true"; },
     onError: fail,
-    onFrame(instant, average, time) {
+    onFrame(instant, average, time, citizens) {
+      if (count) count.textContent = `${citizens} ${citizens === 1 ? "NEIGHBOR" : "NEIGHBORS"}`;
       if (fps && !fps.hidden) fps.textContent = `${instant.toFixed(0)} FPS · ${average.toFixed(1)} AVG`;
       if (clock) clock.textContent = time < 0.24 || time > 0.8 ? "AFTER THE STARS" : time < 0.3 ? "FIRST LIGHT" : time < 0.65 ? "THE GOLDEN HOURS" : "EVENING GLOW";
     },

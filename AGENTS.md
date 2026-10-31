@@ -28,10 +28,12 @@ Build in this order; cut scope from the bottom:
    scaled to viewer count within the citizen cap. `/history` replays v1…vN as a
    time-lapse. Cross-channel module gifts are stretch scope.
 
-Phase 2 provides the procedural world, cinematic camera, bounded module host,
-frame diagnostics and offline fixtures. Citizens, Twitch, Bedrock, spec
-materialization and runtime Codex calls remain disabled. No API keys are needed.
-Do not present stub success as a completed integration.
+Phase 3 provides the procedural world, instanced citizens, shared Twitch/simulator
+pipeline, cinematic camera, bounded module host and frame diagnostics. Twitch is
+optional; missing configuration produces one warning and keeps sim-only mode
+running. Bedrock, spec materialization and runtime Codex calls remain disabled.
+No credentials are required for the simulator. Never print or log tokens. Do not
+present stub success as a completed integration.
 
 ## Architecture and ownership
 
@@ -46,10 +48,11 @@ Version playback → /history
 ```
 
 Use pnpm, ES modules, strict TypeScript, Node >=20 and the committed lockfile.
-`pnpm dev` serves local pages, `pnpm sim` emits deterministic offline chat/raid
-fixtures, and `pnpm check` type-checks all stubs, tests the data contract and
-bundles browser entrypoints. Restart dev after browser-source changes.
-No external CDN, fonts, logos, audio or browser network calls.
+`pnpm dev` serves local pages, `pnpm sim` posts a scripted crowd of 80 chatters
+and one raid to the running server, and `pnpm check` type-checks all sources,
+tests contracts/integrations and bundles browser entrypoints. Restart dev after browser-source changes.
+No external CDN, fonts, logos or audio. Browser networking is same-origin only;
+Twitch networking and credentials stay on the Node server.
 
 - `server/twitch/`: EventSub, reconnect/dedup, tokens, moderation commands.
 - `server/citizens/`: authoritative roster, activity/expiry and command routing.
@@ -75,6 +78,53 @@ Read `AWS_BEARER_TOKEN_BEDROCK` only from the environment. Summon settings are
 is `medium`; use `codex exec` and `CODEX_HOME=.codex-runtime`. Availability,
 configuration and latency will be verified when the integration is built.
 `.env.example` contains names only; do not add example values or credentials.
+
+## Phase 3 event and citizen contract
+
+- `server/pipeline.ts` is the only chat/raid ingestion path. Both EventSub and
+  `POST /sim/chat`, `POST /sim/raid` call it. It validates inputs, deduplicates a
+  bounded history, enforces a 250 ms per-user chat cooldown and 200 chats/second,
+  applies the basic blocklist and updates the authoritative capped roster.
+- `/events` sends same-origin SSE, a snapshot on every connection, then revisioned
+  deltas; heartbeats keep connections open. `/api/world` returns a roster snapshot
+  for inspection and tests. Limit local streams to 16 and terminate slow readers.
+  Mutating endpoints require JSON <=8 KiB and reject cross-origin requests. Bind
+  only to loopback and accept localhost/127.0.0.1 Host headers.
+- Reserve resources for 300 creatures in six InstancedMesh draws. Each citizen has
+  a dry, unique home, current command, last activity, name/color and latest speech.
+  Bodies/ears/tails use the Twitch color (stable palette fallback for empty color).
+  Name tags and at most 16 current speech bubbles use textContent, never HTML.
+  Bubbles expire after 5.5 seconds. Idle citizens dither-fade for five seconds
+  starting at 20 minutes, then the server removes them and releases their home.
+- `!jump`, `!dance`, `!follow <name>` (case-insensitive display name/ID), `!home`
+  share the same command parser for Twitch and sim. Follow uses indexed lookups
+  and cached paths over a fixed dry-land grid. Home cancels follow. Missing follow targets do not crash.
+- Camera notices coalesce into a weighted target and automatic shots are at least
+  eight seconds apart. New arrivals and jump/dance moments get shots; direct clicks
+  have higher priority. No generated module controls this notification scheduler.
+- `window.__worldStats` adds `citizenCount`, `raidCount` and `cameraFocuses` to
+  `fps`, `avgFps`, `frame`. `checks/crowd.performance.ts` invokes pnpm sim, compares
+  server IDs with browser tags, checks every command, and measures 15 seconds on
+  a physical GPU with both average FPS values >=50. No live credentials in tests.
+- Twitch WebSockets begin at `wss://eventsub.wss.twitch.tv/ws`. Initial welcomes
+  create v1 channel.chat.message (broadcaster_user_id and user_id both this channel)
+  and channel.raid (to_broadcaster_user_id this channel) subscriptions via Helix.
+  Respect keepalive timeouts, use a new socket for Twitch's reconnect URL while
+  holding the old socket until welcome, and retain migrated subscriptions. Fresh
+  sessions resubscribe. Network failures back off with jitter, capped at 60s.
+  Only official Twitch wss reconnect destinations are accepted. ws handles pong;
+  never send EventSub data frames.
+- Load optional .env server-side, validate the broadcaster user token at startup
+  and hourly (user:read:chat + user:write:chat). A 401 triggers one shared refresh
+  through TWITCH_REFRESH_TOKEN; retain rotated tokens in ignored
+  state/twitch-auth.json (0600, atomic write, tied to this env/account). Raw API
+  bodies, errors, headers and credentials are never logged. `sendChat` is a
+  server-only POST /helix/chat/messages; no test sends a real Twitch message.
+- Only authenticated EventSub broadcaster/moderator roles can invoke !pause,
+  !skip, !clear. Sim JSON cannot grant roles. !pause gates new chat actions;
+  skip/clear emit controls for future summon/build lanes, which are still stubs.
+  Twitch AutoMod is upstream; enable it on the channel. The current blocklist is
+  deliberately basic, not a claim of comprehensive moderation.
 
 ## World Module API v1
 
@@ -156,7 +206,8 @@ failed activation disposes the candidate and keeps the previous version active.
   or black frames. Use an external process timeout to catch page freezes. The
   Phase 2 smoke verifies day/night rendering and animation only; it is not the
   candidate gate. `checks/world.performance.ts` separately measures the empty
-  world for 15 seconds on an identified physical GPU.
+  world for 15 seconds on an identified physical GPU. The Phase 3 crowd
+  performance check separately measures 80 scripted citizens.
 
 ## Scene Spec v1: data only
 
@@ -625,14 +676,15 @@ Full JSON schema (keep identical to the canonical file):
   uses read-only sandbox, low effort and JSON schema output. Construct an explicit
   minimal environment: only the Bedrock credential, dedicated CODEX_HOME and
   necessary allowlisted execution variables. Never inherit Twitch credentials.
-  Do not log credentials. No provider calls or runtime Codex subprocesses exist yet.
+  Do not log credentials. Twitch is the only active external integration; no
+  Bedrock calls or runtime Codex subprocesses exist yet.
 - Module host wraps each hook, budgets scheduling and auto-disables on failures.
   Require isolated headless checks before merge/tag, and retain the previous known
   good version for reversion. Serialize activation and persist recovery state.
 - `/world` CSP starts with `default-src 'self'`; scripts/styles/assets are bundled
-  locally, `connect-src 'none'`, no eval/inline scripts or network APIs. A future
-  transport change needs a narrow reviewed same-origin exception, never blanket
-  external access. CSP does not grant module trust.
+  locally, `connect-src 'self'` only for the Phase 3 event stream and same-origin
+  APIs. No eval/inline scripts, external browser connections or module networking.
+  Twitch and token handling remain server-only. CSP does not grant module trust.
 - `state/`, `.env`, `worktrees/` and node_modules are ignored. Only config.toml
   under `.codex-runtime/` is tracked. Never commit secrets or runtime credentials.
 - Chat commands only; no Twitch Extensions, Affiliate Polls/Predictions or channel

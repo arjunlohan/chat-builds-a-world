@@ -1,0 +1,84 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { readFile } from "node:fs/promises";
+import { buildClient } from "./assets.js";
+import { WorldPipeline } from "./pipeline.js";
+
+function json(response: ServerResponse, status: number, value: unknown) {
+  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" }).end(JSON.stringify(value));
+}
+async function body(request: IncomingMessage): Promise<unknown> {
+  if (request.headers["content-type"]?.split(";")[0]?.trim() !== "application/json") throw new Error("Use application/json");
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let length = 0, exceeded = false;
+    request.on("data", (chunk: Buffer) => {
+      length += chunk.length;
+      if (length > 8192) { exceeded = true; chunks.length = 0; reject(new Error("Request body exceeds 8 KiB")); }
+      else if (!exceeded) chunks.push(chunk);
+    });
+    request.once("end", () => {
+      if (exceeded) return;
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
+      catch { reject(new Error("Invalid JSON")); }
+    });
+    request.once("error", () => reject(new Error("Request interrupted")));
+    request.once("aborted", () => reject(new Error("Request interrupted")));
+  });
+}
+
+export async function createWorldServer(pipeline: WorldPipeline) {
+  const assets = await buildClient();
+  const pages = new Map([
+    ["/world", await readFile(new URL("../world/index.html", import.meta.url))],
+    ["/overlay", await readFile(new URL("../overlay/index.html", import.meta.url))],
+    ["/history", await readFile(new URL("../world/history.html", import.meta.url))],
+  ]);
+  const clients = new Set<ServerResponse>();
+  const server = createServer((request, response) => { void (async () => {
+    response.on("error", () => response.destroy());
+    response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'");
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    response.setHeader("Cache-Control", "no-store");
+    const host = request.headers.host ?? "";
+    if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host)) { json(response, 421, { error: "Local host required" }); return; }
+    const path = new URL(request.url ?? "/", "http://localhost").pathname;
+    if (request.headers.origin && request.headers.origin !== `http://${host}`) { json(response, 403, { error: "Same origin required" }); return; }
+    if (path === "/sim/chat" || path === "/sim/raid") {
+      if (request.method !== "POST") { response.setHeader("Allow", "POST"); json(response, 405, { error: "Use POST" }); return; }
+      try {
+        const input = await body(request);
+        // Simulator never grants moderator authority from request fields.
+        const result = path === "/sim/chat" ? pipeline.chat(input) : pipeline.raid(input);
+        json(response, 200, result);
+      } catch { request.resume(); json(response, 400, { error: "Invalid JSON event or body; maximum 8 KiB, application/json required" }); }
+      return;
+    }
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      response.writeHead(405, { Allow: "GET, HEAD" }).end(); return;
+    }
+    if (path === "/api/world") { json(response, 200, pipeline.snapshot()); return; }
+    if (path === "/events") {
+      if (request.method === "HEAD") { response.writeHead(200).end(); return; }
+      if (clients.size >= 16) { json(response, 503, { error: "Too many viewers on the local stream" }); return; }
+      response.writeHead(200, { "Content-Type": "text/event-stream", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+      response.flushHeaders();
+      response.write(`retry: 1500\ndata: ${JSON.stringify(pipeline.snapshot())}\n\n`);
+      clients.add(response);
+      const unsubscribe = pipeline.subscribe(event => {
+        if (!response.writableEnded && !response.destroyed && !response.write(`id: ${event.revision}\ndata: ${JSON.stringify(event)}\n\n`)) response.end();
+      });
+      const heartbeat = setInterval(() => { if (!response.writableEnded && !response.destroyed && !response.write(": heartbeat\n\n")) response.end(); }, 15_000);
+      response.once("close", () => { clearInterval(heartbeat); unsubscribe(); clients.delete(response); });
+      return;
+    }
+    if (path === "/") { response.writeHead(302, { Location: "/world" }).end(); return; }
+    const page = pages.get(path);
+    const asset = path.startsWith("/assets/") ? assets.get(path.slice(8)) : undefined;
+    const output = page ?? asset;
+    if (!output) { response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("Not found"); return; }
+    response.writeHead(200, { "Content-Type": page ? "text/html; charset=utf-8" : path.endsWith(".css") ? "text/css; charset=utf-8" : "text/javascript; charset=utf-8" });
+    response.end(request.method === "HEAD" ? undefined : output);
+  })().catch(() => { if (!response.headersSent) json(response, 500, { error: "Local server request failed" }); else response.end(); }); });
+  server.requestTimeout = 10_000;
+  return { server, closeStreams() { for (const client of clients) client.end(); } };
+}
