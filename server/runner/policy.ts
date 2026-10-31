@@ -2,7 +2,8 @@ import ts from "typescript-api";
 import { readFile } from "node:fs/promises";
 import { resolve, dirname, relative, posix } from "node:path";
 import { build } from "esbuild";
-const vetted = new Set("Mesh Group Object3D Vector2 Vector3 Euler Quaternion Matrix4 Color BoxGeometry SphereGeometry IcosahedronGeometry CylinderGeometry ConeGeometry TorusGeometry PlaneGeometry MeshStandardMaterial MeshBasicMaterial".split(" "));
+import { THREE_IMPORTS } from "./imports.js";
+const vetted = new Set(THREE_IMPORTS);
 const denied = new Set("window document globalThis self global process require fetch XMLHttpRequest WebSocket Worker navigator location eval Function setTimeout setInterval requestAnimationFrame queueMicrotask Promise performance Date console importScripts Reflect Proxy".split(" "));
 export function inspectModule(source: string, file: string) {
   if (Buffer.byteLength(source) > 65536) throw new Error("Module source exceeds 64 KiB.");
@@ -12,7 +13,7 @@ export function inspectModule(source: string, file: string) {
       const from = (statement.moduleSpecifier as ts.StringLiteral).text;
       if (from === "three") {
         const bindings = statement.importClause?.namedBindings;
-        if (!bindings || !ts.isNamedImports(bindings) || bindings.elements.some(e => !vetted.has((e.propertyName ?? e.name).text))) throw new Error("Only vetted named Three.js imports are allowed.");
+        if (statement.importClause?.name || !bindings || !ts.isNamedImports(bindings) || bindings.elements.some(e => !vetted.has((e.propertyName ?? e.name).text))) throw new Error(`Only vetted named Three.js imports are allowed: ${THREE_IMPORTS.join(", ")}.`);
       } else if (!statement.importClause?.isTypeOnly || !["world/engine/api.js", "world/engine/api.ts"].includes(posix.normalize(posix.join(posix.dirname(file), from)))) throw new Error("Only API type imports and vetted Three.js imports are allowed.");
     } else if (ts.isVariableStatement(statement)) {
       for (const item of statement.declarationList.declarations) if (item.initializer && !ts.isArrowFunction(item.initializer) && !ts.isFunctionExpression(item.initializer) && !ts.isLiteralExpression(item.initializer)) throw new Error("Top-level side effects are forbidden.");
@@ -20,9 +21,9 @@ export function inspectModule(source: string, file: string) {
     if (ts.isExportAssignment(statement) && !ts.isIdentifier(statement.expression) && !ts.isArrowFunction(statement.expression) && !ts.isFunctionExpression(statement.expression)) throw new Error("Default export must be a factory.");
   }
   function visit(node: ts.Node) {
-    if (ts.isNewExpression(node) && /Geometry$|Material$/.test(node.expression.getText(ast))) {
+    if (ts.isNewExpression(node) && /Geometry$|Material$|BufferAttribute$|^(Float32|Float64|Uint8|Uint16|Uint32|Int8|Int16|Int32)Array$/.test(node.expression.getText(ast))) {
       for (let parent = node.parent; parent; parent = parent.parent) {
-        if ((ts.isMethodDeclaration(parent) || ts.isPropertyAssignment(parent)) && parent.name?.getText(ast) === "update") throw new Error("Per-frame geometry/material creation is forbidden.");
+        if ((ts.isMethodDeclaration(parent) || ts.isPropertyAssignment(parent)) && parent.name?.getText(ast) === "update") throw new Error("Per-frame geometry/material/buffer creation is forbidden.");
       }
     }
     if (ts.isIdentifier(node) && (denied.has(node.text) || ["constructor", "__proto__", "prototype", "parent", "onBeforeRender", "onAfterRender", "onBeforeCompile", "addEventListener", "removeEventListener"].includes(node.text))) throw new Error(`Forbidden module capability: ${node.text}`);

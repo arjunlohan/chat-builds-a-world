@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BoxGeometry, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Vector3 } from "three";
+import { BoxGeometry, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Vector3, Points, PointsMaterial, BufferGeometry, Float32BufferAttribute, InstancedMesh } from "three";
 import type { WorldModule, WorldServices } from "../world/engine/api.js";
 import { ModuleHost, type ModuleStatus } from "../world/engine/module-host.js";
 import { ResourceLedger, ResourceOwner } from "../world/engine/resources.js";
@@ -23,6 +23,18 @@ function fixture() {
   });
   return { root, host, module, events, status, advance(ms: number) { clock += ms; } };
 }
+
+test("raw points and instances reserve allocated capacity under module and global caps", () => {
+  const f=fixture();
+  const cloud=(count:number)=>{const geometry=new BufferGeometry();geometry.setAttribute("position",new Float32BufferAttribute(new Float32Array(count*3),3));geometry.setIndex([0]);geometry.setDrawRange(0,1);return new Points(geometry,new PointsMaterial());};
+  assert.equal(f.host.load(()=>f.module("tooManyPoints",{init(s){s.scene.add(cloud(513));}})),false);
+  assert.equal(f.host.load(()=>f.module("points",{init(s){s.scene.add(cloud(512));}})),true);
+  const owner=new ResourceOwner(),root=new Group();root.add(cloud(512));assert.deepEqual(owner.audit(root),{nodes:1,triangles:0,draws:1,lights:0,particles:512});owner.dispose(root);
+  assert.equal(f.host.load(()=>f.module("tooManyInstances",{init(s){const mesh=new InstancedMesh(new BoxGeometry(),new MeshBasicMaterial(),513);mesh.count=1;s.scene.add(mesh);}})),false);
+  const ledger=new ResourceLedger({nodes:0,triangles:0,draws:0,lights:0,particles:2040}),global=new ModuleHost({root:new Group(),services:{citizens:{get:()=>undefined,list:()=>[]},spawnSpec:()=>({id:"unused",dispose(){}}),camera:{focus(){}},effects:{play(){}},log(){}},ledger,now:()=>0});
+  assert.equal(global.load(()=>f.module("globalPoints",{init(s){s.scene.add(cloud(9));}})),false);
+  f.host.dispose();global.dispose();
+});
 
 test("host routes FIFO events before update, freezes data, clamps dt and pauses", () => {
   const f = fixture(), seen: string[] = [];

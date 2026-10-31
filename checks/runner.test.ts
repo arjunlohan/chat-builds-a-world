@@ -12,6 +12,15 @@ import { readableEvent } from "../server/runner/events.js";
 import { runnerPrompt, runCodex } from "../server/runner/codex.js";
 import { Versions } from "../server/versions/index.js";
 import { Rounds } from "../server/rounds/index.js";
+import {THREE_IMPORTS,threeImportRule} from "../server/runner/imports.js";
+import {buildGuardPrompt} from "../server/guard/index.js";
+test("the checked import manifest drives policy, both prompts and the engineering contract",async()=>{
+ const rule=threeImportRule(),contract=await readFile("AGENTS.md","utf8");assert.ok(contract.includes(rule));assert.ok(buildGuardPrompt("a small firefly cloud").includes(rule));
+ for(const name of THREE_IMPORTS)assert.doesNotThrow(()=>inspectModule(`import {${name}} from "three";`,"world/modules/test.ts"));
+ assert.throws(()=>inspectModule('import Three, {Mesh} from "three";',"world/modules/test.ts"),/Only vetted/);
+ const source=(await readFile("checks/fixtures/modules/particles.ts","utf8")).replace("../../../world/engine/api.js","../engine/api.js");assert.doesNotThrow(()=>inspectModule(source,"world/modules/test.ts"));
+ assert.throws(()=>inspectModule(source.replace("Points, PointsMaterial","WebGLRenderer, Points, PointsMaterial"),"world/modules/test.ts"),/Only vetted/);
+});
 async function repository() {
   const root = await mkdtemp(join(tmpdir(), "runner-unit-")); await mkdir(join(root, "world/modules"), { recursive: true });
   await writeFile(join(root, "README.md"), "session file\n"); await writeFile(join(root, ".gitignore"), "state/\nworktrees/\n.env\n.codex-runtime/\n");

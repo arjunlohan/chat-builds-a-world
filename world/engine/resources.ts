@@ -1,4 +1,4 @@
-import { BufferGeometry, Group, Light, Material, Mesh, Points, Texture, type Object3D } from "three";
+import { BufferGeometry, Group, Light, Material, Mesh, Points, Texture, InstancedMesh, type Object3D } from "three";
 
 import { emptyUsage, type Usage } from "../shared/limits.js";
 export { GLOBAL_CAP, MODULE_CAP, emptyUsage, ResourceLedger, type Usage } from "../shared/limits.js";
@@ -37,12 +37,21 @@ export class ResourceOwner {
           }
           this.scannedMaterials.add(material);
         }
-        const count = "isInstancedMesh" in object ? (object as Mesh & { count: number }).count : 1;
+        // Charge allocated capacity, not just today's draw count/range. A module may
+        // animate those without adding/removing a scene node or reallocating.
+        let count = 1;
+        if (object instanceof InstancedMesh) {
+          const instance = object;
+          count = instance.instanceMatrix.count;
+          if (!Number.isSafeInteger(count) || count < 0 || !Number.isSafeInteger(instance.count) || instance.count < 0 || instance.count > count) throw new Error("invalid instance capacity");
+          usage.particles += count;
+        }
         const vertices = object.geometry.index?.count ?? object.geometry.getAttribute("position")?.count ?? 0;
         const drawMaterials = Array.isArray(object.material) ? object.material : undefined;
         usage.draws += drawMaterials ? object.geometry.groups.reduce((count: number, group: {materialIndex?:number}) => count + Number(!!drawMaterials[group.materialIndex ?? 0]), 0) : 1;
-        if (object instanceof Points) usage.particles += vertices;
-        else { usage.nodes++; usage.triangles += vertices / 3 * count; }
+        usage.nodes++;
+        if (object instanceof Points) usage.particles += Math.max(vertices, object.geometry.getAttribute("position")?.count ?? 0);
+        else usage.triangles += vertices / 3 * count;
       }
       if (object instanceof Light && object.type !== "HemisphereLight" && object.type !== "AmbientLight" && object.type !== "DirectionalLight") usage.lights++;
     }

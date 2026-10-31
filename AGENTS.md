@@ -340,6 +340,10 @@ never add credentials or populated values.
 
 ## World Module API v1
 
+<!-- runtime-imports:start -->
+Only these named imports from "three" are allowed: Mesh, Group, Object3D, Vector2, Vector3, Euler, Quaternion, Matrix4, Color, BoxGeometry, SphereGeometry, IcosahedronGeometry, CylinderGeometry, ConeGeometry, TorusGeometry, PlaneGeometry, MeshStandardMaterial, MeshBasicMaterial, Points, PointsMaterial, BufferGeometry, BufferAttribute, Float32BufferAttribute, InstancedMesh. All other Three.js imports are rejected. Points buffers and instance capacity count toward the 512 particles/module cap; allocate bounded buffers once in init, reuse in update, and dispose them.
+<!-- runtime-imports:end -->
+
 The authoritative TypeScript interfaces are `world/engine/api.ts`. A module's
 only imports are type imports from that API and optional vetted math/Three.js
 imports; no top-level side effects. Default export: `() => WorldModule`. The host
