@@ -1,3 +1,4 @@
+import { isChatCommand } from "../../server/commands.js";
 import {
   Color, ConeGeometry, DynamicDrawUsage, Group, IcosahedronGeometry,
   InstancedBufferAttribute, InstancedMesh, MeshStandardMaterial, Object3D, Sphere, Vector3,
@@ -96,7 +97,7 @@ export class Citizens {
         const s = creature.state, spokeAge = time - s.speechAt;
         const focused = !!focus && creature.position.distanceToSquared(focus) < 3.2;
         const distance = creature.position.distanceTo(camera.position);
-        const speaking = spokeAge < 5500 && this.speakers.has(s.id);
+        const speaking = !!s.speech && !isChatCommand(s.speech) && spokeAge < 5500 && this.speakers.has(s.id);
         const mode = speaking ? "speech" : citizenLabelMode(distance, spokeAge, time - creature.born, focused);
         creature.bubble.hidden = !speaking;
         const nameWidth = mode === "quiet" ? creature.quietWidth : creature.fullWidth;

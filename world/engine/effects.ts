@@ -28,7 +28,7 @@ export function createEffects() {
   root.name = "effect pool • 96 reserved particles";
   const rng = random(301);
   const play: WorldServices["effects"]["play"] = (name, target) => {
-    let remaining = name === "portal" ? 32 : 16;
+    let remaining = name === "portal" ? 32 : name === "sparkle" ? 4 : 16;
     for (let i = 0; i < capacity && remaining > 0; i++) {
       if (uniforms.uTime.value - births[i]! < 1.8) continue;
       births[i] = uniforms.uTime.value;

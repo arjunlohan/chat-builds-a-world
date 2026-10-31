@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { GuardResult } from "../server/guard/index.js";
 import { Rounds, ROUND_MS, normalizeIdea, similarIdeas } from "../server/rounds/index.js";
 import { WorldPipeline } from "../server/pipeline.js";
 import { createWorldServer } from "../server/http.js";
@@ -9,7 +10,8 @@ let serial = 0;
 const chat = (userId: string, text: string): ChatEvent => ({ id: `round-event-${++serial}`, userId, displayName: userId, text, color: "#ABCDEF", timestamp: 0 });
 function harness(allow = false) {
   let time = 0; const states: RoundState[] = [];
-  const rounds = new Rounds({ now: () => time, publish: state => states.push(state), simulationAllowed: allow });
+  const review = (): GuardResult => ({ verdict: "accept", reason: "Unit fixture", title: "Small module", spec: { moduleId: "unit", description: "Small local visual", steps: ["One module"], checks: ["Cleanup"], estimatedSeconds: 90 }, files: ["world/modules/unit.ts"], latencyMs: 0, mode: "fixture" });
+  const rounds = new Rounds({ review, now: () => time, publish: state => states.push(state), simulationAllowed: allow });
   return { rounds, states, advance(ms: number) { time += ms; rounds.tick(); }, time: () => time };
 }
 function choices(rounds: Rounds) {
@@ -78,7 +80,7 @@ test("sim-only accelerated rehearsal uses the same windows and state machine; fa
   assert.equal(r.startSimulation("fail").reason, "round-busy");
   h.advance(8000); assert.equal(r.snapshot().phase, "voting"); h.advance(3000); assert.equal(r.snapshot().phase, "building");
   h.advance(6000); assert.equal(r.snapshot().timeline[0]?.version, 1); assert.equal(r.snapshot().clockRate, 1);
-  r.startSimulation("fail"); choices(r); h.advance(17_000);
+  r.startSimulation("fail"); choices(r); h.advance(8000); h.advance(3000); h.advance(6000);
   const s = r.snapshot(); assert.equal(s.timeline.at(-1)?.kind, "revert"); assert.equal(s.timeline.at(-1)?.version, 1); assert.equal(s.build.status, "failed");
   assert.equal(harness().rounds.startSimulation("ship").reason, "simulation-disabled");
 });

@@ -22,10 +22,15 @@ try {
     frame.src = "/overlay"; document.body.append(frame);
   });
   const frameElement = await page.waitForSelector("#obs-overlay"), overlay = (await frameElement.contentFrame())!;
-  await overlay.waitForSelector(".connection.connected");
+  await overlay.waitForSelector(".connection.connected", { state: "attached" });
   const transparent = await overlay.evaluate(() => [document.documentElement, document.body].every(node => getComputedStyle(node).backgroundColor === "rgba(0, 0, 0, 0)"));
   assert.equal(transparent, true);
   assert.equal(await overlay.evaluate(() => getComputedStyle(document.documentElement).colorScheme), "normal");
+  assert.equal(await overlay.locator(".feed-panel").isVisible(), false);
+  assert.equal(await overlay.locator(".timeline-panel").isVisible(), false);
+  assert.equal(await overlay.locator(".idea-panel").isVisible(), false);
+  assert.ok(await overlay.locator(".phase-panel").evaluate(node => node.getBoundingClientRect().height <= 128));
+  await page.screenshot({ path: "test-results/phase6-overlay-idle.png" });
   const start = await page.evaluate(() => ({ frame: window.__worldStats.frame, now: performance.now() }));
   let simError: unknown;
   const sim = promisify(execFile)("pnpm", ["sim"], { cwd: process.cwd(), timeout: 75_000 }).catch(error => { simError = error; return { stdout: "", stderr: "Simulator failed" }; });
@@ -38,22 +43,32 @@ try {
   await page.screenshot({ path: "test-results/overlay-ideas.png" });
   await overlay.waitForFunction(() => [...document.querySelectorAll(".vote-count")].map(n => n.textContent).join() === "1,9,2", undefined, { timeout: 15_000 });
   assert.ok((await overlay.locator(".vote-total").textContent())?.includes("12 voters"));
-  await page.screenshot({ path: "test-results/overlay-voting.png" });
+  assert.equal(await overlay.locator(".feed-panel").isVisible(), false);
+  assert.equal(await overlay.locator(".timeline-panel").isVisible(), false);
+  const votingCoverage = await overlay.locator(".panel:not([hidden]), .toast").evaluateAll(nodes => nodes.reduce((sum, node) => { const r = node.getBoundingClientRect(); return sum + r.width * r.height; }, 0) / (1920 * 1080) * 100);
+  assert.ok(votingCoverage < 15, "Mid-round panels cover too much of the frame");
+  const commandBubbles = await page.locator(".citizen-bubble").allTextContents();
+  assert.ok(commandBubbles.every(text => !text.trim().startsWith("!")));
+  await page.waitForFunction(() => window.__worldStats.commandReactions >= 20);
+  await page.screenshot({ path: "test-results/phase6-overlay-voting.png" });
   await overlay.waitForFunction(() => document.querySelector(".feed-panel")?.getAttribute("data-status") === "running" && Number.parseInt(document.querySelector(".progress-number")?.textContent ?? "0") >= 50);
   assert.equal(await overlay.locator(".feed-panel h2").textContent(), "Codex is building");
   assert.ok((await overlay.locator(".build-idea").textContent())?.includes("lantern orchard"));
   assert.ok((await overlay.locator(".feed-panel .credit").textContent())?.includes("Comet04"));
   assert.ok((await overlay.locator(".feed-lines").textContent())?.includes("Simulating"));
   const layout = await overlay.evaluate(() => {
-    const center = { x: 500, y: 150, right: 1420, bottom: 910 };
+    const center = { x: 400, y: 150, right: 1520, bottom: 910 };
     const boxes = [...document.querySelectorAll<HTMLElement>(".panel:not([hidden]), .toast")].map(node => {
-      const r = node.getBoundingClientRect(); return { name: node.className, x: r.x, y: r.y, right: r.right, bottom: r.bottom, clipped: node.scrollHeight > node.clientHeight + 1 };
+      const r = node.getBoundingClientRect(); return { name: node.className, width: r.width, height: r.height, x: r.x, y: r.y, right: r.right, bottom: r.bottom, clipped: node.scrollHeight > node.clientHeight + 1 };
     });
     return { boxes, centerCovered: boxes.some(r => r.x < center.right && r.right > center.x && r.y < center.bottom && r.bottom > center.y) };
   });
+  assert.ok(layout.boxes.every(b => b.width <= 380));
+  assert.ok(layout.boxes.filter(b => b.name.includes("feed-panel")).every(b => b.height < 450));
+  assert.equal(await overlay.locator(".vote-panel").isVisible(), false);
   assert.equal(layout.centerCovered, false); assert.ok(layout.boxes.every(b => b.right <= 1920 && b.bottom <= 1080));
   assert.deepEqual(layout.boxes.filter(b => b.clipped), [], "Overlay panel content is clipped");
-  await page.screenshot({ path: "test-results/overlay-building.png" });
+  await page.screenshot({ path: "test-results/phase6-overlay-building.png" });
   const first = await sim; if (simError) throw simError; console.log(first.stdout.trim());
   await overlay.waitForSelector('.version[data-kind="ship"]');
   await overlay.waitForSelector(".toast.ship"); await page.waitForTimeout(350); await page.screenshot({ path: "test-results/overlay-shipped.png" });
@@ -70,10 +85,10 @@ try {
   await page.waitForTimeout(350);
   assert.equal(await overlay.locator(".phase-panel").getAttribute("data-phase"), "ideas");
   assert.equal(await overlay.locator(".mode").textContent(), "LIVE ROUNDS");
-  await page.screenshot({ path: "test-results/overlay-reverted.png" });
+  await page.screenshot({ path: "test-results/phase6-overlay-reverted.png" });
   // A late/reconnecting OBS source receives the complete current state.
-  await overlay.goto("http://127.0.0.1:3000/overlay"); await overlay.waitForSelector(".connection.connected");
+  await overlay.goto("http://127.0.0.1:3000/overlay"); await overlay.waitForSelector(".connection.connected", { state: "attached" });
   await overlay.waitForSelector('.version[data-kind="revert"]'); assert.equal(await overlay.locator(".version").count(), 2);
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ composite: "1920x1080", transparent, centerCovered: layout.centerCovered, ideas: 4, candidates: 3, ballots: 13, voters: 12, voteCounts: [1, 9, 2], winner: "Comet04", stubShips: 1, stubReverts: 1, retainedVersion: 1, citizens: end.citizenCount, summons: end.summonCount, measuredFps, avgFps: end.avgFps, consoleErrors: errors.length, screenshots: "test-results/overlay-{ideas,voting,building,shipped,reverted}.png" }, null, 2));
+  console.log(JSON.stringify({ composite: "1920x1080", transparent, centerCovered: layout.centerCovered, ideas: 4, candidates: 3, ballots: 13, voters: 12, voteCounts: [1, 9, 2], winner: "Comet04", stubShips: 1, stubReverts: 1, retainedVersion: 1, citizens: end.citizenCount, summons: end.summonCount, measuredFps, avgFps: end.avgFps, commandSparkleRequests: end.commandReactions, columnWidth: 360, votingFrameCoveragePercent: votingCoverage, consoleErrors: errors.length, screenshots: "test-results/phase6-overlay-{idle,voting,building,reverted}.png" }, null, 2));
 } finally { await browser.close(); }

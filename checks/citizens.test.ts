@@ -100,3 +100,12 @@ test("follow steering routes around the spring and stays on dry ground", () => {
     assert.ok(Math.hypot(position.x - target.x, position.z - target.z) < 0.1);
   }
 });
+
+test("chat commands never become speech, while normal lines still do", () => {
+  const roster = new CitizenRoster();
+  for (const text of ["!idea A small lantern", "!vote 2", "!summon crystal", "!jump", "!dance", "!follow Moss", "!home", "!unknown command"]) {
+    const result = roster.accept(chat(`cmd${text}`, "Moss", text), 1000)!;
+    assert.equal(result.citizen.speech, ""); assert.equal(result.citizen.speechAt, 0);
+  }
+  assert.equal(roster.accept(chat("plain", "Moss", "A beautiful garden!"), 2000)!.citizen.speech, "A beautiful garden!");
+});

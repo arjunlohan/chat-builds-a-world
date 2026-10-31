@@ -2,10 +2,11 @@ import type { RoundState } from "../server/rounds/types.js";
 import { el, heading, panel } from "./dom.js";
 export function votes() {
   const root = panel("Live votes", "vote-panel"), list = el("ol", "vote-options"), total = el("p", "vote-total");
-  root.append(heading("THREE WISHES. ONE NEXT CHAPTER.", "Chat, choose the next build."), list, total);
+  root.append(heading("", "Votes"), list, total);
+  root.hidden = true;
   const cards = new Map<string, { row: HTMLElement; count: HTMLElement; fill: HTMLElement; title: HTMLElement; credit: HTMLElement }>();
   return { root, update(state: RoundState) {
-    root.hidden = state.phase === "ideas";
+    root.hidden = state.phase !== "voting";
     const present = new Set(state.candidates.map(c => c.id));
     for (const [id, card] of cards) if (!present.has(id)) { card.row.remove(); cards.delete(id); }
     for (const option of state.candidates) {
@@ -22,6 +23,6 @@ export function votes() {
       card.row.setAttribute("aria-label", `Option ${option.slot}: ${option.text}, ${option.votes} votes`);
       card.row.classList.toggle("winner", state.winner?.id === option.id);
     }
-    total.textContent = `${state.totalVotes} ${state.totalVotes === 1 ? "voter" : "voters"} · ${state.phase === "building" ? "VOTING CLOSED" : "Your latest vote counts"}`;
+    total.textContent = `${state.totalVotes} ${state.totalVotes === 1 ? "voter" : "voters"} · ${state.phase === "building" ? "VOTING CLOSED" : "Latest vote counts"}`;
   } };
 }

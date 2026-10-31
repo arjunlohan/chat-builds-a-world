@@ -32,7 +32,7 @@ export class WorldPipeline {
   publish(event: LaneEvent) {
     this.emit({ ...event, revision: ++this.revision, now: this.now() });
     if (event.type === "summon") this.rounds?.toast("summon", event.summon.spec.name, `Summoned by ${event.summon.requester}`);
-    if (event.type === "summon-remove") this.rounds?.toast("notice", "Summon cleared", "The garden has a little more room.");
+    if (event.type === "summon-remove") this.rounds?.toast("notice", "Summon cleared", "Summon removed.");
   }
   private revision = 0;
   private paused = false;
@@ -82,7 +82,7 @@ export class WorldPipeline {
     if (!result) return roundResult ?? { accepted: false, reason: "capacity" };
     this.emit({ type: "chat", revision: ++this.revision, now, chat: { ...event, timestamp: now }, ...result });
     if (result.spawned && [1, 10, 25, 50, 80, 100, 150, 200, 250, 300].includes(this.roster.size))
-      this.rounds?.toast("citizens", `${this.roster.size} neighbors, one little world`, `Welcome, ${event.displayName}.`);
+      this.rounds?.toast("citizens", `${this.roster.size} citizens`, `Welcome, ${event.displayName}.`);
     if (/^!summon(?:\s|$)/i.test(event.text.trim())) void this.summonLane?.submit({ ...event, timestamp: now }, authority);
     return { accepted: true, count: this.roster.size };
   }

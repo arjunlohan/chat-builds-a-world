@@ -12,7 +12,8 @@
     "dev": "tsx watch server/index.ts",
     "sim": "tsx server/sim/index.ts",
     "check": "tsx checks/generate-validator.ts --check && tsc --noEmit && tsx --test checks/*.test.ts && tsx checks/build.ts",
-    "summon:bench": "tsx server/summon/bench.ts"
+    "summon:bench": "tsx server/summon/bench.ts",
+    "guard:eval": "tsx server/guard/eval.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0",

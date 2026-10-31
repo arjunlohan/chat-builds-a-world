@@ -4,7 +4,7 @@ Twitch chat builds a living 3D world on stream. Every chatter becomes a creature
 small wishes become objects, bigger ideas become live-coded systems, and raids
 arrive through a portal. A Codex x TwitchCon Hackathon entry by Arjun.
 
-This is **Phase 5 of 10: overlay and rounds**. `/world` renders the Lantern Garden: an
+This is **Phase 6 of 10: overlay fixes and guard**. `/world` renders the Lantern Garden: an
 original procedural island with jade terrain, layered basalt cliffs, coral trees,
 a spring and waterfall, a moon gate and glowing lanterns. The painted sky follows
 a ten-minute day/night cycle. Soft shadows, shader ripples, GPU fireflies and bloom
@@ -75,10 +75,11 @@ Never commit `.env` or put secrets into browser bundles.
 
 ## Checks and local simulation
 
-- `pnpm check`: generated-validator consistency, strict TypeScript checks and 88
+- `pnpm check`: generated-validator consistency, strict TypeScript checks and 119
   contract/engine/integration tests covering lifecycle,
   budgets, queues, cleanup, roster/cap/expiry, HTTP/SSE, Twitch reconnect/refresh,
   camera and FPS, round deadlines/dedup/vote replacement/ties/pause/failure/timeout,
+  guard prompt/schema/path/env/argv/timeout tests and 20 fixture ideas,
   and compilation of both browser bundles. No external API calls.
 - `pnpm sim`: sends the scripted crowd to the running server, verifies the roster
   and prints counts. It exits with an error if dev is not running or events fail.
@@ -127,6 +128,66 @@ The previous M1 Pro/Metal development run held about 60 FPS at 1920×1080 with 8
 citizens; the Phase 4 check also verifies fixture effects, credits, camera focus,
 render receipts and zero label overlaps. Performance depends on hardware and load.
 
+## Read-only idea guard
+
+After voting, the winning idea enters a **guard review**, then reaches the stub
+builder only on acceptance. Rejections, malformed output, missing configuration
+and timeout start a new idea round with a clear reason toast; they never ship.
+Guard results include a short title, reason, small module plan and allowed files.
+Plans have **at most two TypeScript files**, four implementation steps/checks,
+and an estimated **1..119 seconds** of builder work. File paths stay under
+`world/modules/`, with canonical-path and symlink checks. The closed schema is
+`server/guard/guard.schema.json`; this plan is separate from the Summon Scene Spec.
+An estimate is not a guarantee of actual future runner duration.
+
+The server invokes the CLI without a shell, passing the idea as JSON-quoted data
+on stdin. The fixed policy rejects injection, networking, private data, real
+people, brands/games, offensive content, locked-file changes and oversized asks.
+The command uses `exec --sandbox read-only --ephemeral --json --output-schema`,
+low reasoning effort, approval_policy=never and the configured Bedrock provider
+with `openai.gpt-6.1-sol`. The JSONL adapter consumes the final completed agent
+message, following the [official non-interactive protocol](https://learn.chatgpt.com/docs/non-interactive-mode).
+Raw CLI output/reasoning and credentials are never logged. Tool-use records fail
+closed. A hard **45-second deadline** kills the process group (including children);
+output is bounded to 1 MiB. Moderator skip/shutdown cancel reviews and ignore late
+results. Pause holds a completed result until resume; it does not extend the
+subprocess's real-time deadline.
+
+The subprocess receives only **PATH, HOME, AWS_BEARER_TOKEN_BEDROCK**, plus the
+required absolute **CODEX_HOME** pointing at `.codex-runtime`. No Twitch tokens,
+OpenAI keys or ambient Codex configuration variables are inherited. Read-only
+restricts model filesystem writes; it is not a general secret/code sandbox.
+The guard emits data only, and the real builder is still disabled.
+
+`CODEX_BIN` defaults to `codex`. On this machine, the installed CLI is
+`/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`
+(version `0.166.0-alpha.5.1`, with required flags verified using `exec --help`).
+Set `CODEX_BIN` in your private `.env` if it is not on PATH. `.env.example` contains
+names only. The existing `.codex-runtime/config.toml` selects Bedrock in us-east-1;
+guard invocation overrides the reasoning effort to low.
+
+No key is needed for checks or sim. Rehearsals use a **hand-written fixture guard
+decision** for the scripted lantern orchard, passed through the same validator
+and visibly labelled FIXTURE. Missing credentials on normal rounds reject rather
+than silently substituting fixtures. The fixture suite contains **20 ideas**:
+14 injection/networking/people/brands/privacy/unsafe/scope rejections and six
+harmless requests. Tests use an executable fake Codex CLI to check the complete
+subprocess path and expected fixture verdicts; they do not measure live model
+moderation quality.
+
+Once the Bedrock key exists, restart dev and evaluate all 20 through real Codex:
+
+```sh
+pnpm guard:eval
+```
+
+It prints each verdict, expected verdict, latency and public reason, then match,
+unsafe-acceptance and infrastructure-error counts. Infrastructure failures never
+count as successful policy rejections. It runs sequentially, can take up to 15
+minutes at the timeout ceiling and uses the configured Bedrock account. With no
+key it exits before any subprocess/provider call. **Live guard behavior remains
+unverified until the key is supplied.**
+
 ## Stream overlay and rounds
 
 In OBS, add two **1920×1080 browser sources**, in this order:
@@ -136,11 +197,13 @@ In OBS, add two **1920×1080 browser sources**, in this order:
    build feed, credited version timeline and moment toasts.
 
 Keep the overlay browser background transparent. The side rails leave the island's
-center clear (X=500..1420, Y=150..910). Text, vote fills and toast motion respect
+center clear (X=400..1520, Y=150..910). Columns are 360 px wide, the phase card
+is 120 px tall, and other panels fit their content. Empty idea queues/timelines,
+idle build feeds and closed votes are hidden. Labels show phase, commands and counts. Text, vote fills and toast motion respect
 reduced-motion preferences. `/world` without the flag retains its standalone title.
 
 Rounds start automatically: **120 seconds** to `!idea <wish>` (up to 180 characters),
-then **45 seconds** to `!vote 1|2|3`. Similar ideas share one proposal and unique
+then **45 seconds** to `!vote 1|2|3`, followed by a safety/scope guard review. Similar ideas share one proposal and unique
 backers; a later idea replaces your earlier support. The top three rank by backers
 then arrival order. Each viewer has one vote; voting again replaces it. Ties go to
 the earliest original idea. Empty rounds restart collection. Verified Twitch mods
@@ -150,10 +213,10 @@ Commands go through the same chat pipeline even when all 300 citizen slots are f
 The build phase has a **180-second timeout**. The current runner is a **stub**:
 progress lines simulate a plan, module edits and checks, with a result at 90 seconds.
 The feed always says **STUB RUNNER**; ships, retained versions and requester credits
-are rehearsal state. It does not call Codex, change code/Git or activate modules.
+are rehearsal state. The stub builder does not call Codex, change code/Git or activate modules; the
+read-only guard runs separately before it.
 Failure/timeout shows a revert and keeps the previous successful stub version.
-The state, queue and timeline are in memory and reset on restart. Real guard,
-runner, persistence and rollback votes are later phases.
+The state, queue and timeline are in memory and reset on restart. The real builder, persistence and rollback votes are later phases.
 
 `pnpm sim` starts an explicit offline-only **15× rehearsal** using those same
 120/45/180-second windows. It submits seven proposals → four distinct ideas → three
@@ -185,9 +248,9 @@ three vote bars, replacement counts, requester credit, progress, retained v1,
 reconnect state, a clear island center, unclipped panels and zero console errors.
 It requires ≥50 measured and rolling-average FPS with 80 citizens and three summons.
 Screenshots of ideas, voting, building, ship and revert are saved in ignored
-`test-results/overlay-*.png`. This is a rehearsal integration check, not the future
+`test-results/phase6-overlay-*.png` (the voting screenshot shows the compact mid-round view). This is a rehearsal integration check, not the future
 runtime-module candidate gate. The M1 Pro/Metal composite verification held
-59.9 measured FPS and a 60.0 rolling average with 80 citizens and three fixture
+59.8 measured FPS and a 59.5 rolling average with 80 citizens and three fixture
 summons, with zero console errors.
 
 ## Summon and readable stream labels
@@ -310,7 +373,8 @@ requests. No simulator body can claim moderator privileges. Incoming chat is
 limited to one accepted message/user/250 ms and 200 messages/second globally.
 Only server-verified Twitch broadcaster/moderator roles may invoke `!pause`,
 `!skip`, `!clear`. Pause gates new actions, clear removes the latest active summon, and skip
-advances the round or fails a running stub build. Current blocklist filtering is basic. Speech is always textContent,
+advances the round or fails a running stub build. Current blocklist filtering is basic. Command messages never become speech bubbles: movement commands keep their
+animations, and other admitted commands get a small pooled sparkle. Normal speech is always textContent,
 never HTML; at most eight recent bubbles are visible and each expires after 5.5s.
 
 ## Layout and implementation order
@@ -333,7 +397,7 @@ state/        future persisted world/round/version data (ignored; created at run
 Build the independently demo-able tiers in order: world/citizens, Summon,
 Build, then raids/history. The live server routes Twitch EventSub events to the world over same-origin SSE;
 the overlay consumes the same revisioned stream. Summon generates validated data via Bedrock Responses (or explicit local fixtures);
-Build will guard proposals, write isolated world modules, check them and activate
+Build now guards proposals; the future runner will write isolated world modules, check them and activate
 versioned changes.
 
 Later-phase model settings from the product contract are retained in `AGENTS.md`
@@ -352,7 +416,7 @@ fixtures and a mocked Responses adapter cover the complete data path.
   reject every diff outside that path, including path escapes and symlinks.
 - Runtime Codex receives an allowlisted environment with no secrets except the
   Bedrock key and its own `CODEX_HOME=.codex-runtime`. Guard uses a read-only
-  sandbox; builder uses workspace-write in a fresh worktree. Neither runs yet.
+  sandbox; builder uses workspace-write in a fresh worktree. The read-only guard runs when configured; the builder does not run yet.
 - The module host catches each hook, rejects async hooks, clamps dt, limits each
   module to 2 ms/frame and all modules to 4 ms/frame, and disables a module after
   three overruns in 60 frames. Queues hold at most 128 events and dispatch at most
@@ -361,7 +425,7 @@ fixtures and a mocked Responses adapter cover the complete data path.
   draw, light and particle admission shares world caps with the base environment.
   Host-tracked resources are cleaned even when a hook throws; service calls are
   scoped and rate limited. JS timing is cooperative, not a sandbox: arbitrary code
-  still needs the future guard and external headless/watchdog gate before live
+  still needs the guard plus the future external headless/watchdog gate before live
   activation. It cannot preempt an infinite loop or prevent malicious global access.
 - The served world has `default-src 'self'` and `connect-src 'self'` CSP for
   the event stream/local API, locally bundled assets, no inline scripts and no

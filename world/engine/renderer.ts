@@ -1,3 +1,4 @@
+import { isChatCommand, hasPhysicalReaction } from "../../server/commands.js";
 import {
   ACESFilmicToneMapping, Group, PCFSoftShadowMap, PerspectiveCamera, Raycaster,
   Scene, SRGBColorSpace, Vector2, WebGLRenderer,
@@ -110,6 +111,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         director.notice(spawned.position, 0);
       }
       host.onChat(event.chat);
+      if (isChatCommand(event.chat.text) && !hasPhysicalReaction(event.chat.text)) {
+        const citizen = citizens.services.get(event.citizen.id);
+        if (citizen && !reducedMotion.matches) { effects.play("sparkle", citizen.position); stats.value.commandReactions++; }
+      }
       if (/^!(jump|dance)$/i.test(event.chat.text.trim())) {
         const citizen = citizens.services.get(event.citizen.id);
         if (citizen) director.notice(citizen.position, 1);

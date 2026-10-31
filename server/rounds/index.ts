@@ -1,11 +1,12 @@
+import type { GuardResult } from "../guard/index.js";
 import type { ChatEvent } from "../contracts.js";
 import { allowedWish } from "../summon/index.js";
 import type { BuildView, IdeaView, RoundState, StubOutcome, ToastView, VersionView } from "./types.js";
 export type { RoundState, StubOutcome } from "./types.js";
 
-export const ROUND_MS = Object.freeze({ ideas: 120_000, voting: 45_000, building: 180_000, stubComplete: 90_000 });
+export const ROUND_MS = Object.freeze({ ideas: 120_000, voting: 45_000, guarding: 45_000, building: 180_000, stubComplete: 90_000 });
 interface Idea { id: string; text: string; requester: string; order: number; normalized: string; supporters: Set<string> }
-interface Options { now?: () => number; publish(state: RoundState): void; simulationAllowed?: boolean }
+interface Options { now?: () => number; publish(state: RoundState): void; simulationAllowed?: boolean; review?: (idea: string, context: { fixture: boolean; signal: AbortSignal }) => GuardResult | Promise<GuardResult> }
 const stop = new Set("a an the and or to of for please add build make give put some with on in it island".split(" "));
 export function normalizeIdea(text: string) {
   return text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(w => w && !stop.has(w)).join(" ");
@@ -47,6 +48,11 @@ export class Rounds {
   private readonly votes = new Map<string, string>();
   private shortlist: Idea[] = [];
   private winner: Idea | undefined;
+  private approved: GuardResult | undefined;
+  private guard: RoundState["guard"] = { status: "idle", mode: "live", reason: "", title: "", latencyMs: null };
+  private reviewSequence = 0;
+  private reviewAbort: AbortController | undefined;
+  private pendingReview: GuardResult | undefined;
   private outcome: StubOutcome = "ship";
   private build: BuildView = { stub: true, status: "idle", progress: 0, idea: "", requester: "", lines: [] };
   private timeline: VersionView[] = [];
@@ -65,7 +71,7 @@ export class Rounds {
   snapshot(): RoundState {
     return structuredClone({ round: this.round, phase: this.phase, startedAt: this.startedAt, endsAt: this.endsAt,
       now: this.now(), realNow: this.real(), clockRate: this.rate, simulation: this.simulation, paused: this.paused,
-      totalIdeas: this.ranked().length, ideas: this.ranked().slice(0, 8).map(ideaView),
+      guard: this.guard, totalIdeas: this.ranked().length, ideas: this.ranked().slice(0, 8).map(ideaView),
       candidates: this.shortlist.map((i, index) => ({ ...ideaView(i), slot: index + 1, votes: [...this.votes.values()].filter(id => id === i.id).length })),
       totalVotes: this.votes.size, winner: this.winner ? ideaView(this.winner) : null, build: this.build,
       timeline: this.timeline, toasts: this.toasts.filter(t => t.expiresAt > this.real()),
@@ -111,24 +117,59 @@ export class Rounds {
   private collect(at: number) {
     this.round++; this.phase = "ideas"; this.startedAt = at; this.endsAt = at + ROUND_MS.ideas;
     this.ideas.clear(); this.support.clear(); this.votes.clear(); this.shortlist = []; this.winner = undefined;
-    this.order = 0;
+    this.order = 0; this.approved = undefined;
   }
   private startVote(at: number) {
     this.shortlist = this.ranked().slice(0, 3);
     if (!this.shortlist.length) { this.collect(at); return; }
     this.phase = "voting"; this.startedAt = at; this.endsAt = at + ROUND_MS.voting;
   }
-  private startBuild(at: number) {
+  private startReview(at: number) {
     const score = (i: Idea) => [...this.votes.values()].filter(id => id === i.id).length;
     this.winner = [...this.shortlist].sort((a, b) => score(b) - score(a) || a.order - b.order)[0];
     if (!this.winner) { this.collect(at); return; }
+    this.phase = "guarding"; this.startedAt = at; this.endsAt = at + ROUND_MS.guarding;
+    this.guard = { status: "reviewing", mode: this.simulation ? "fixture" : "live", reason: "", title: "", latencyMs: null };
+    this.build = { stub: true, status: "reviewing", progress: 0, idea: this.winner.text, requester: this.winner.requester,
+      lines: [{ id: ++this.serial, kind: "check", text: this.simulation ? "Fixture safety + scope review." : "Read-only safety + scope review." }] };
+    const sequence = ++this.reviewSequence, controller = new AbortController(); this.reviewAbort = controller;
+    this.emit(true);
+    const reject = (): GuardResult => ({ verdict: "reject", reason: "Guard unavailable; review rejected.", title: "Idea rejected", spec: null, files: [], latencyMs: 0, mode: this.simulation ? "fixture" : "live" });
+    const receive = (decision: GuardResult) => {
+      if (sequence !== this.reviewSequence || this.phase !== "guarding") return;
+      if (this.paused) { this.pendingReview = decision; return; }
+      this.applyReview(decision);
+    };
+    try {
+      const result = this.options.review?.(this.winner.text, { fixture: this.simulation, signal: controller.signal }) ?? reject();
+      if (result instanceof Promise) void result.then(receive, () => receive(reject()));
+      else receive(result);
+    } catch { receive(reject()); }
+  }
+  private applyReview(decision: GuardResult) {
+    this.reviewAbort = undefined; this.pendingReview = undefined;
+    this.guard = { status: decision.verdict === "accept" ? "accepted" : "rejected", mode: decision.mode, reason: decision.reason, title: decision.title, latencyMs: decision.latencyMs };
+    if (decision.verdict === "accept" && decision.spec && decision.files.length) { this.approved = structuredClone(decision); this.startBuild(this.now()); }
+    else {
+      this.build.status = "failed"; this.build.lines.push({ id: ++this.serial, kind: "error", text: decision.reason });
+      this.collect(this.now()); this.resetSimulation();
+      this.toast("notice", "Guard rejected idea", decision.reason);
+    }
+    this.emit(true);
+  }
+  private resetSimulation() {
+    if (this.simulation) { const logical = this.now(); this.anchorLogical = logical; this.anchorReal = this.real(); this.rate = 1; this.simulation = false; this.outcome = "ship"; }
+  }
+  private cancelReview() { this.reviewSequence++; this.reviewAbort?.abort(); this.reviewAbort = undefined; this.pendingReview = undefined; }
+  private startBuild(at: number) {
+    if (!this.approved?.spec || !this.winner) return;
     this.phase = "building"; this.startedAt = at; this.endsAt = at + ROUND_MS.building;
     this.build = { stub: true, status: "running", progress: 0, idea: this.winner.text, requester: this.winner.requester, lines: [] };
     this.progress(0);
   }
   private progress(elapsed: number) {
     const steps = [
-      [0, "plan", "Viewer idea selected. Preparing a World Module API plan."],
+      [0, "plan", `Guard accepted: ${this.approved?.title ?? "small module"}. Stub build started.`],
       [15_000, "plan", "Stub plan ready. Engine files stay locked."],
       [30_000, "edit", "Simulating module edits in world/modules/."],
       [45_000, "edit", "Simulating lifecycle hooks and resource cleanup."],
@@ -149,15 +190,17 @@ export class Rounds {
     this.timeline.push({ id: ++this.serial, version: this.version, kind: success ? "ship" : "revert", title, requester, reason: success ? "Rehearsal ship" : reason, stub: true });
     this.timeline = this.timeline.slice(-12);
     this.collect(at);
-    if (this.simulation) { const logical = this.now(); this.anchorLogical = logical; this.anchorReal = this.real(); this.rate = 1; this.simulation = false; this.outcome = "ship"; }
+    this.resetSimulation();
     this.toast(success ? "ship" : "revert", success ? `v${this.version} shipped · stub` : `Build reverted · kept v${this.version}`, `${requester}: ${title}`);
   }
   tick() {
     const now = this.now();
     if (!this.paused) for (let transitions = 0; transitions < 8; transitions++) {
       if (this.phase === "ideas" && now >= this.endsAt) this.startVote(this.endsAt);
-      else if (this.phase === "voting" && now >= this.endsAt) this.startBuild(this.endsAt);
-      else if (this.phase === "building") {
+      else if (this.phase === "voting" && now >= this.endsAt) this.startReview(this.endsAt);
+      else if (this.phase === "guarding" && now >= this.endsAt) {
+        this.cancelReview(); this.applyReview({ verdict: "reject", reason: "Guard timed out after 45 seconds.", title: "Review timeout", spec: null, files: [], mode: this.guard.mode, latencyMs: ROUND_MS.guarding });
+      } else if (this.phase === "building") {
         this.progress(now - this.startedAt);
         if (this.outcome !== "timeout" && now >= this.startedAt + ROUND_MS.stubComplete) this.finish(this.outcome === "ship", this.startedAt + ROUND_MS.stubComplete);
         else if (now >= this.endsAt) this.finish(false, this.endsAt, "180-second build timeout; previous version retained.");
@@ -171,15 +214,19 @@ export class Rounds {
   }
   setPaused(value: boolean) {
     if (value === this.paused) return;
-    this.anchorLogical = this.now(); this.anchorReal = this.real(); this.paused = value; this.emit(true);
+    this.anchorLogical = this.now(); this.anchorReal = this.real(); this.paused = value;
+    if (!value && this.pendingReview) this.applyReview(this.pendingReview);
+    this.emit(true);
   }
   skip() {
     this.tick(); const now = this.now();
     if (this.phase === "ideas") this.startVote(now);
-    else if (this.phase === "voting") this.startBuild(now);
+    else if (this.phase === "voting") this.startReview(now);
+    else if (this.phase === "guarding") { this.cancelReview(); this.applyReview({ verdict: "reject", reason: "Guard review skipped by a moderator.", title: "Review skipped", spec: null, files: [], mode: this.guard.mode, latencyMs: 0 }); }
     else this.finish(false, now, "Build skipped by a moderator; previous version retained.");
     this.emit(true);
   }
+  dispose() { this.cancelReview(); }
   startSimulation(outcome: StubOutcome) {
     if (!this.options.simulationAllowed) return { accepted: false, reason: "simulation-disabled" };
     if (this.phase !== "ideas" || this.ranked().length || this.paused) return { accepted: false, reason: "round-busy" };

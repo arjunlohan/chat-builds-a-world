@@ -1,3 +1,4 @@
+import { isChatCommand } from "../commands.js";
 import type { ChatEvent, CitizenCommand, CitizenState } from "../contracts.js";
 import { hash, isWalkable, terrainHeight } from "../../world/engine/land.js";
 
@@ -48,7 +49,7 @@ export class CitizenRoster {
     }
     const citizen: CitizenState = Object.freeze({
       id: event.userId, displayName: event.displayName, color: chatColor(event.color, event.userId), home,
-      lastActive: now, speech: text, speechAt: now, command: command ? Object.freeze(command) : null, commandAt,
+      lastActive: now, speech: isChatCommand(text) ? "" : text, speechAt: isChatCommand(text) ? 0 : now, command: command ? Object.freeze(command) : null, commandAt,
     });
     this.citizens.set(citizen.id, citizen);
     return { citizen, spawned: !existing };
