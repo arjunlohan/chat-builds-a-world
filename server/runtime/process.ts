@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { readFile, mkdir, mkdtemp, writeFile, rm, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 export const protectedValues = (env: NodeJS.ProcessEnv) => [...new Set(Object.entries(env).filter(([k,v]) => /TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY/i.test(k) && v && v.length >= 8).map(([,v]) => v!))];
-const redactSecrets = (text: string, values: readonly string[]) => { for (const value of values) if(text.includes(value)) text = text.split(value).join("[REDACTED]"); return text; };
+const redactSecrets = (text: string, values: readonly string[]) => { for (const value of values) text = text.split(value).join("[REDACTED]"); return text; };
 export function redact(text: string, values: readonly string[]) { return redactSecrets(text,values).replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 600); }
 export function minimalEnvironment(env: NodeJS.ProcessEnv, root?: string): NodeJS.ProcessEnv {
   return { PATH: env.PATH ?? "/usr/bin:/bin", HOME: env.HOME ?? homedir(), ...(root ? { AWS_BEARER_TOKEN_BEDROCK: env.AWS_BEARER_TOKEN_BEDROCK ?? "", CODEX_HOME: resolve(root, ".codex-runtime") } : {}) };
@@ -58,10 +58,8 @@ export function classifyCodexEvent(event: unknown) {
   return {kind:"other" as const};
 }
 export type BoundedReason = "cancelled" | "timeout" | "start" | "output-limit" | "invalid-output";
-export function boundedFailure(result: {reason?: BoundedReason;timeoutMs:number}, lane: string) {
-  if(!result.reason)return;const timeoutSeconds=result.timeoutMs/1000;
-  const messages:Record<BoundedReason,string>={timeout:`${lane} timed out after ${timeoutSeconds} seconds.`,cancelled:`${lane} cancelled.`,start:`${lane} could not start the configured process.`,"output-limit":`${lane} output exceeded its limit.`,"invalid-output":`${lane} returned malformed events.`};
-  return messages[result.reason];
+function processError(reason: BoundedReason, timeoutMs: number) {
+  const messages:Record<BoundedReason,string>={timeout:`timed out after ${timeoutMs/1000} seconds.`,cancelled:"cancelled.",start:"could not start the configured process.","output-limit":"output exceeded its limit.","invalid-output":"returned malformed events."};return messages[reason];
 }
 /** Drain descendants even when the leader exits successfully or closes its stdio early. */
 export async function drainGroup(pid: number) {
@@ -71,17 +69,17 @@ export async function drainGroup(pid: number) {
   // An unreaped zombie cannot write. SIGKILL has stopped every live group member.
 }
 export interface BoundedOptions { bin: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv; secrets?: readonly string[]; input?: string; signal?: AbortSignal | undefined; timeoutMs: number; maxBytes: number; onSpawn?(pid: number): void | Promise<void>; onLine?(line: string): void; onKill?(): void | Promise<void> }
-export async function runBounded(o: BoundedOptions): Promise<{ output: string; code: number | null; reason?: BoundedReason;timeoutMs:number }> {
-  if(o.signal?.aborted)return {output:"",code:null,reason:"cancelled",timeoutMs:o.timeoutMs};
+export async function runBounded(o: BoundedOptions): Promise<{ output: string; code: number | null; error?: string }> {
+  if(o.signal?.aborted)return {output:"",code:null,error:"cancelled."};
   const secrets=o.secrets??protectedValues(o.env);
   return new Promise(resolveRun => {
     const output:string[]=[];let buffer="",bytes=0,reason:BoundedReason|undefined,closed=false;
     let child:ReturnType<typeof spawn>,drained:Promise<unknown>|undefined,spawned=Promise.resolve();
-    const finish=(code:number|null)=>{if(closed)return;closed=true;clearTimeout(timer);o.signal?.removeEventListener("abort",abort);resolveRun({output:redactSecrets(output.join(""),secrets),code,timeoutMs:o.timeoutMs,...(reason?{reason}:{})});};
+    const finish=(code:number|null)=>{if(closed)return;closed=true;clearTimeout(timer);o.signal?.removeEventListener("abort",abort);resolveRun({output:o.onLine?output.join(""):redactSecrets(output.join(""),secrets),code,...(reason?{error:processError(reason,o.timeoutMs)}:{})});};
     const drain=()=>drained??=(child.pid?drainGroup(child.pid):Promise.resolve());
     const kill=(why:BoundedReason)=>{if(reason)return;reason=why;void Promise.resolve().then(()=>o.onKill?.()).catch(()=>{});if(process.platform==="win32")child.kill("SIGKILL");void drain();};
     const abort=()=>kill("cancelled"),timer=setTimeout(()=>kill("timeout"),o.timeoutMs);
-    const line=(raw:string)=>{try{o.onLine?.(redactSecrets(raw,secrets));}catch{kill("invalid-output");}};
+    const line=(raw:string,newline=false)=>{const safe=redactSecrets(raw,secrets);output.push(safe+(newline?"\n":""));try{o.onLine?.(safe);}catch{kill("invalid-output");}};
     try{child=spawn(o.bin,o.args,{cwd:o.cwd,env:o.env,shell:false,detached:process.platform!=="win32",stdio:["pipe","pipe","pipe"]});}
     catch{reason="start";finish(null);return;}
     if(child.pid)spawned=Promise.resolve().then(()=>o.onSpawn?.(child.pid!)).then(()=>{}).catch(()=>kill("start"));
@@ -89,7 +87,7 @@ export async function runBounded(o: BoundedOptions): Promise<{ output: string; c
     child.once("exit",()=>{void drain();});
     child.stdout!.setEncoding("utf8");child.stdout!.on("data",(chunk:string)=>{
       bytes+=Buffer.byteLength(chunk);if(bytes>o.maxBytes){buffer="";kill("output-limit");return;}
-      output.push(chunk);if(!o.onLine)return;buffer+=chunk;let i:number;while((i=buffer.indexOf("\n"))>=0){line(buffer.slice(0,i));buffer=buffer.slice(i+1);}
+      if(!o.onLine){output.push(chunk);return;}buffer+=chunk;let i:number;while((i=buffer.indexOf("\n"))>=0){line(buffer.slice(0,i),true);buffer=buffer.slice(i+1);}
     });
     child.stderr!.on("data",(chunk:Buffer)=>{bytes+=chunk.length;if(bytes>o.maxBytes)kill("output-limit");});
     child.stdin!.on("error",()=>{});child.once("error",()=>{reason??="start";});

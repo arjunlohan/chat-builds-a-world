@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { GuardDecision } from "../guard/index.js";
-import { runBounded, withCodexHome, minimalEnvironment, codexArgs, classifyCodexEvent, boundedFailure, protectedValues, redact } from "../runtime/process.js";
+import { runBounded, withCodexHome, minimalEnvironment, codexArgs, classifyCodexEvent, protectedValues, redact } from "../runtime/process.js";
 import { readableEvent, type Usage } from "./events.js";
 export const BUILD_TIMEOUT_MS = 180_000;
 export async function runnerPrompt(root: string, decision: GuardDecision) {
@@ -27,7 +27,7 @@ export async function runCodex(options: BuilderOptions): Promise<Usage> {
       const readable = readableEvent(event); if (readable) options.feed(readable.kind as "plan" | "edit" | "check", readable.text);
     },
   }));
-  const reason = raw.reason ? boundedFailure(raw, "Build") : failure ?? (raw.code !== 0 || !completed ? "Builder CLI failed or did not complete." : undefined);
+  const reason = raw.error ? `Build ${raw.error}` : failure ?? (raw.code !== 0 || !completed ? "Builder CLI failed or did not complete." : undefined);
   if (reason) { const error = new Error(redact(reason, secrets)) as Error & { tokens: Usage }; error.tokens = usage; throw error; }
   return usage;
 }

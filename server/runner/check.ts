@@ -2,7 +2,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { runBounded, minimalEnvironment, boundedFailure } from "../runtime/process.js";
+import { runBounded, minimalEnvironment } from "../runtime/process.js";
 export interface CheckResult { ok: boolean; reason?: string; fps?: number; avgFps?: number; samples?: number; durationMs?: number; evidence?: string }
 export async function candidateCheck(root: string, modules: { id: string; file: string; code: string }[], probeId: string, signal: AbortSignal): Promise<CheckResult> {
   const started = performance.now(), directory = join(root, "state/checks"); await mkdir(directory, { recursive: true });
@@ -15,7 +15,7 @@ export async function candidateCheck(root: string, modules: { id: string; file: 
       onKill(){if(browserPid)try{process.kill(process.platform==="win32"?browserPid:-browserPid,"SIGKILL");}catch{}}
     });
     let result:CheckResult={ok:false,reason:"Candidate checker failed."};
-    if(raw.reason)result.reason=boundedFailure(raw,"Candidate checker")!;
+    if(raw.error)result.reason=`Candidate checker ${raw.error}`;
     else{try{result=JSON.parse(raw.output.trim().split("\n").at(-1)!) as CheckResult;}catch{}if(raw.code!==0&&result.ok)result={ok:false,reason:"Candidate checker failed."};}
     const final={...result,evidence,durationMs:Math.round(performance.now()-started)};
     await writeFile(join(evidence,"result.json"),JSON.stringify(final,null,2),{mode:0o600});return final;

@@ -1,4 +1,4 @@
-import { runBounded, withCodexHome, minimalEnvironment, codexArgs, classifyCodexEvent, boundedFailure, protectedValues, redact } from "../runtime/process.js";
+import { runBounded, withCodexHome, minimalEnvironment, codexArgs, classifyCodexEvent, protectedValues, redact } from "../runtime/process.js";
 import { metricWriter } from "../runtime/metrics.js";
 import { lstat, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -91,7 +91,7 @@ export class IdeaGuard {
     let prompt: string; try { prompt = buildGuardPrompt(idea); } catch { return result(failed("Guard rejected an empty or oversized idea.")); }
     if (signal?.aborted) return result(failed("Guard review cancelled."));
     const raw = await withCodexHome(this.root,this.env,async (env, runtime) => runBounded({ bin: this.bin, onSpawn: runtime.onSpawn, secrets: this.secrets, args: codexArgs(runtime.config, "read-only", "low", GUARD_SCHEMA), cwd: this.root, env, input: prompt, signal, timeoutMs: this.timeout, maxBytes: 1_048_576 }));
-    if (raw.reason) return result(failed(boundedFailure(raw, "Guard")!));
+    if (raw.error) return result(failed(`Guard ${raw.error}`));
     try {
       const parsed = parseGuardStream(raw.output);
       if (raw.code !== 0) throw new Error("Guard CLI exited without completing.");
