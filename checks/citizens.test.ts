@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CitizenRoster, FADE_MS, IDLE_MS } from "../server/citizens/index.js";
+import { CitizenRoster } from "../server/citizens/index.js";
+import { IDLE_MS, FADE_MS } from "../world/shared/limits.js";
 import { WorldPipeline } from "../server/pipeline.js";
 import { CameraDirector } from "../world/engine/camera-director.js";
 import { PerspectiveCamera, Vector3 } from "three";

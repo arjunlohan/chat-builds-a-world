@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { GuardDecision } from "../guard/index.js";
-import { runBounded, withCodexHome, minimalEnvironment, codexArgs, turnFailure, boundedFailure, protectedValues, redact } from "../runtime/process.js";
+import { runBounded, withCodexHome, minimalEnvironment, codexArgs, classifyCodexEvent, boundedFailure, protectedValues, redact } from "../runtime/process.js";
 import { readableEvent, type Usage } from "./events.js";
 export const BUILD_TIMEOUT_MS = 180_000;
 export async function runnerPrompt(root: string, decision: GuardDecision) {
@@ -20,14 +20,14 @@ export async function runCodex(options: BuilderOptions): Promise<Usage> {
     onLine(text) {
       if (!text.trim()) return;
       const event = JSON.parse(text) as { type?: string; usage?: { input_tokens?: number; output_tokens?: number } };
-      failure ??= turnFailure(event);
-      if (event.type === "turn.completed") { completed = true; const u = event.usage;
+      const classification=classifyCodexEvent(event);if(classification.kind==="failure")failure??=classification.reason;
+      if (classification.kind === "completed") { completed = true; const u = event.usage;
         if (Number.isSafeInteger(u?.input_tokens) && Number.isSafeInteger(u?.output_tokens) && u!.input_tokens! >= 0 && u!.output_tokens! >= 0) usage = { input: u!.input_tokens!, output: u!.output_tokens!, total: u!.input_tokens! + u!.output_tokens! };
       }
       const readable = readableEvent(event); if (readable) options.feed(readable.kind as "plan" | "edit" | "check", readable.text);
     },
   }));
-  const reason = raw.reason ? boundedFailure(raw.reason, "Build", 180) : failure ?? (raw.code !== 0 || !completed ? "Builder CLI failed or did not complete." : undefined);
+  const reason = raw.reason ? boundedFailure(raw, "Build") : failure ?? (raw.code !== 0 || !completed ? "Builder CLI failed or did not complete." : undefined);
   if (reason) { const error = new Error(redact(reason, secrets)) as Error & { tokens: Usage }; error.tokens = usage; throw error; }
   return usage;
 }

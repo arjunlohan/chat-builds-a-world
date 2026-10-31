@@ -8,14 +8,15 @@ export const IDLE_MS = 20 * 60_000, FADE_MS = 5000;
 export const ACTIVE_MODULE_CAP = 8;
 export const WORLD_BOUNDS = Object.freeze({ minX: -64, maxX: 64, minY: -8, maxY: 48, minZ: -64, maxZ: 64 });
 export interface WorldPoint { x: number; y: number; z: number }
+const halfExtent = (extent: Readonly<WorldPoint> | number, axis: keyof WorldPoint) => typeof extent==="number"?extent:extent[axis];
 /** Mutates the caller-owned point; accepts box half-extents or a spherical radius. */
 export function clampToWorld<T extends WorldPoint>(p: T, extent: Readonly<WorldPoint> | number = 0): T {
-  const x=typeof extent==="number"?extent:extent.x,y=typeof extent==="number"?extent:extent.y,z=typeof extent==="number"?extent:extent.z;
+  const x=halfExtent(extent,"x"),y=halfExtent(extent,"y"),z=halfExtent(extent,"z");
   if(x<0||y<0||z<0||x*2>WORLD_BOUNDS.maxX-WORLD_BOUNDS.minX||y*2>WORLD_BOUNDS.maxY-WORLD_BOUNDS.minY||z*2>WORLD_BOUNDS.maxZ-WORLD_BOUNDS.minZ)throw new Error("Envelope cannot fit world bounds");
   p.x=Math.max(WORLD_BOUNDS.minX+x,Math.min(WORLD_BOUNDS.maxX-x,p.x));p.y=Math.max(WORLD_BOUNDS.minY+y,Math.min(WORLD_BOUNDS.maxY-y,p.y));p.z=Math.max(WORLD_BOUNDS.minZ+z,Math.min(WORLD_BOUNDS.maxZ-z,p.z));return p;
 }
 export function fitsBounds(p: Readonly<WorldPoint>, extent: Readonly<WorldPoint> | number = 0): boolean {
-  const x=typeof extent==="number"?extent:extent.x,y=typeof extent==="number"?extent:extent.y,z=typeof extent==="number"?extent:extent.z;
+  const x=halfExtent(extent,"x"),y=halfExtent(extent,"y"),z=halfExtent(extent,"z");
   return x>=0&&y>=0&&z>=0&&p.x-x>=WORLD_BOUNDS.minX&&p.x+x<=WORLD_BOUNDS.maxX&&p.y-y>=WORLD_BOUNDS.minY&&p.y+y<=WORLD_BOUNDS.maxY&&p.z-z>=WORLD_BOUNDS.minZ&&p.z+z<=WORLD_BOUNDS.maxZ;
 }
 export const SPEC_LIMITS = Object.freeze({ maxBytes: 32_768, maxScaledAxis: 24, minY: WORLD_BOUNDS.minY, maxY: WORLD_BOUNDS.maxY });
@@ -26,23 +27,25 @@ export function modulePool(base: Usage): Usage { return Object.fromEntries(usage
 export class RenderFailure extends Error {
   constructor(readonly code: "capacity" | "invalid-spec" | "allocation" | "render-error", detail: string = code) { super(detail); }
 }
-/** Shared atomic arithmetic for server and browser resource admission. */
+export class ItemLimitError extends RenderFailure {
+  constructor(key: keyof Usage) { super("invalid-spec",`${key} module limit exceeded`); }
+}
+/** Non-mutating admission queries share the same arithmetic as atomic reservation. */
 export class ResourceLedger {
   private readonly reservations = new Map<string, Usage>();
   constructor(readonly base: Usage = emptyUsage(), private readonly cap: Readonly<Usage> = GLOBAL_CAP) {}
-  usage() {
-    const used={...this.base};
-    for(const entry of this.reservations.values())for(const key of usageKeys)used[key]+=entry[key];
-    return used;
+  usage() { const used={...this.base};for(const entry of this.reservations.values())for(const key of usageKeys)used[key]+=entry[key];return used; }
+  itemError(usage: Usage) {const key=usageKeys.find(k=>!Number.isFinite(usage[k])||usage[k]<0||usage[k]>MODULE_CAP[k]);return key?new ItemLimitError(key):undefined;}
+  shortfall(id: string, usage: Usage, excluding?: ReadonlySet<string>) {
+    const needed={...this.base};for(const key of usageKeys)needed[key]+=usage[key];
+    for(const [owner,used] of this.reservations)if(owner!==id&&!excluding?.has(owner))for(const key of usageKeys)needed[key]+=used[key];
+    for(const key of usageKeys)needed[key]=Math.max(0,needed[key]-this.cap[key]);return needed;
   }
+  fits(id: string, usage: Usage, excluding?: ReadonlySet<string>) {const needed=this.shortfall(id,usage,excluding);return !this.itemError(usage)&&usageKeys.every(key=>needed[key]===0);}
   reserve(id: string, usage: Usage) {
-    for (const key of usageKeys) {
-      if (!Number.isFinite(usage[key]) || usage[key] < 0 || usage[key] > MODULE_CAP[key]) throw new RenderFailure("capacity", `${key} module limit exceeded`);
-      let total = this.base[key] + usage[key];
-      for (const [owner, used] of this.reservations) if (owner !== id) total += used[key];
-      if (total > this.cap[key]) throw new RenderFailure("capacity", `${key} world limit exceeded`);
-    }
-    this.reservations.set(id, {...usage});
+    const invalid=this.itemError(usage);if(invalid)throw invalid;
+    const shortfall=this.shortfall(id,usage),key=usageKeys.find(k=>shortfall[k]>0);if(key)throw new RenderFailure("capacity",`${key} world limit exceeded`);
+    this.reservations.set(id,{...usage});
   }
   release(id: string) { this.reservations.delete(id); }
 }
@@ -64,8 +67,16 @@ export class SummonReservations {
   }
   commit(id: string, usage: Usage) {
     const entry=this.entries.get(id);
-    if(!entry?.pending||usageKeys.some(k=>!Number.isFinite(usage[k])||usage[k]<0||usage[k]>MODULE_CAP[k]))throw new RenderFailure("invalid-spec","Scene exceeds its module envelope");
-    for(;;)try{this.ledger.reserve(id,usage);break;}catch(error){if(!(error instanceof RenderFailure)||!this.evictOldest())throw error;}
+    if(!entry?.pending)throw new RenderFailure("invalid-spec","No pending summon slot");
+    const invalid=this.ledger.itemError(usage);if(invalid)throw invalid;
+    const victims=new Set<string>();
+    for(const [owner,record] of this.entries){
+      if(this.ledger.fits(id,usage,victims))break;
+      if(!record.pending)victims.add(owner);
+    }
+    if(!this.ledger.fits(id,usage,victims))throw new RenderFailure("capacity");
+    for(const owner of victims){this.release(owner);this.evict(owner);}
+    this.ledger.reserve(id,usage);
     entry.pending=false;
   }
   release(id: string) { this.entries.delete(id);this.ledger.release(id); }

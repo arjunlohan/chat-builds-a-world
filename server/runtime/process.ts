@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { readFile, mkdir, mkdtemp, writeFile, rm, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 export const protectedValues = (env: NodeJS.ProcessEnv) => [...new Set(Object.entries(env).filter(([k,v]) => /TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY/i.test(k) && v && v.length >= 8).map(([,v]) => v!))];
-const redactSecrets = (text: string, values: readonly string[]) => { for (const value of values) text = text.split(value).join("[REDACTED]"); return text; };
+const redactSecrets = (text: string, values: readonly string[]) => { for (const value of values) if(text.includes(value)) text = text.split(value).join("[REDACTED]"); return text; };
 export function redact(text: string, values: readonly string[]) { return redactSecrets(text,values).replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 600); }
 export function minimalEnvironment(env: NodeJS.ProcessEnv, root?: string): NodeJS.ProcessEnv {
   return { PATH: env.PATH ?? "/usr/bin:/bin", HOME: env.HOME ?? homedir(), ...(root ? { AWS_BEARER_TOKEN_BEDROCK: env.AWS_BEARER_TOKEN_BEDROCK ?? "", CODEX_HOME: resolve(root, ".codex-runtime") } : {}) };
@@ -47,17 +47,21 @@ export async function withCodexHome<T>(root: string, env: NodeJS.ProcessEnv, run
 }
 export function codexArgs(config: string, sandbox: "read-only" | "workspace-write", effort: "low" | "medium", schema?: string) {
   const setting = (key: string, fallback: string) => new RegExp(`^${key}\\s*=\\s*"([a-zA-Z0-9_.-]+)"`, "m").exec(config)?.[1] ?? fallback;
-  // Discovery controls live in the copied config, not duplicated as argv overrides.
-  return ["--no-daemon", "exec", "--strict-config", "--sandbox", sandbox, "--ephemeral", "--json", ...(schema ? ["--output-schema", schema] : []), "-c", `model_reasoning_effort="${effort}"`, "-c", 'approval_policy="never"', "-c", `model_provider="${setting("model_provider", "amazon-bedrock")}"`, "--model", setting("model", "openai.gpt-6.1-sol"), "-"];
+  // Pin safety controls independently of optional provider preferences in config.
+  return ["--no-daemon", "exec", "--strict-config", ...["plugins","remote_plugin","plugin_discovery_prefetch","apps","skill_mcp_dependency_install","hooks"].flatMap(name=>["--disable",name]), "--enable", "skip_host_skill_discovery", "--sandbox", sandbox, "--ephemeral", "--json", ...(schema ? ["--output-schema", schema] : []), "-c", `model_reasoning_effort="${effort}"`, "-c", 'approval_policy="never"', "-c", `model_provider="${setting("model_provider", "amazon-bedrock")}"`, "--model", setting("model", "openai.gpt-6.1-sol"), "-"];
 }
-export function turnFailure(event: unknown): string | undefined {
-  const e=event as {type?:string;error?:{message?:string};message?:string};
-  if(e?.type==="turn.failed")return e.error?.message??e.message??"Codex turn failed";
+export function classifyCodexEvent(event: unknown) {
+  const e=event as {type?:string;item?:{type?:string};error?:{message?:string};message?:string};
+  if(e?.type==="turn.failed")return {kind:"failure" as const,reason:e.error?.message??e.message??"Codex turn failed"};
+  if(e?.type==="turn.completed")return {kind:"completed" as const};
+  if(e?.type==="error"||e?.type==="warning"||e?.item?.type==="error"||e?.item?.type==="warning")return {kind:"diagnostic" as const};
+  return {kind:"other" as const};
 }
 export type BoundedReason = "cancelled" | "timeout" | "start" | "output-limit" | "invalid-output";
-export function boundedFailure(reason: BoundedReason, lane: string, timeoutSeconds: number) {
+export function boundedFailure(result: {reason?: BoundedReason;timeoutMs:number}, lane: string) {
+  if(!result.reason)return;const timeoutSeconds=result.timeoutMs/1000;
   const messages:Record<BoundedReason,string>={timeout:`${lane} timed out after ${timeoutSeconds} seconds.`,cancelled:`${lane} cancelled.`,start:`${lane} could not start the configured process.`,"output-limit":`${lane} output exceeded its limit.`,"invalid-output":`${lane} returned malformed events.`};
-  return messages[reason];
+  return messages[result.reason];
 }
 /** Drain descendants even when the leader exits successfully or closes its stdio early. */
 export async function drainGroup(pid: number) {
@@ -67,17 +71,17 @@ export async function drainGroup(pid: number) {
   // An unreaped zombie cannot write. SIGKILL has stopped every live group member.
 }
 export interface BoundedOptions { bin: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv; secrets?: readonly string[]; input?: string; signal?: AbortSignal | undefined; timeoutMs: number; maxBytes: number; onSpawn?(pid: number): void | Promise<void>; onLine?(line: string): void; onKill?(): void | Promise<void> }
-export async function runBounded(o: BoundedOptions): Promise<{ output: string; code: number | null; reason?: BoundedReason }> {
-  if(o.signal?.aborted)return {output:"",code:null,reason:"cancelled"};
+export async function runBounded(o: BoundedOptions): Promise<{ output: string; code: number | null; reason?: BoundedReason;timeoutMs:number }> {
+  if(o.signal?.aborted)return {output:"",code:null,reason:"cancelled",timeoutMs:o.timeoutMs};
   const secrets=o.secrets??protectedValues(o.env);
   return new Promise(resolveRun => {
-    let output="",buffer="",bytes=0,reason:BoundedReason|undefined,closed=false;
+    const output:string[]=[];let buffer="",bytes=0,reason:BoundedReason|undefined,closed=false;
     let child:ReturnType<typeof spawn>,drained:Promise<unknown>|undefined,spawned=Promise.resolve();
-    const finish=(code:number|null)=>{if(closed)return;closed=true;clearTimeout(timer);o.signal?.removeEventListener("abort",abort);resolveRun({output,code,...(reason?{reason}:{})});};
-    const drain=()=>drained??=Promise.all([child.pid?drainGroup(child.pid):Promise.resolve(),Promise.resolve().then(()=>o.onKill?.()).catch(()=>{})]);
-    const kill=(why:BoundedReason)=>{if(reason)return;reason=why;if(process.platform==="win32")child.kill("SIGKILL");void drain();};
+    const finish=(code:number|null)=>{if(closed)return;closed=true;clearTimeout(timer);o.signal?.removeEventListener("abort",abort);resolveRun({output:redactSecrets(output.join(""),secrets),code,timeoutMs:o.timeoutMs,...(reason?{reason}:{})});};
+    const drain=()=>drained??=(child.pid?drainGroup(child.pid):Promise.resolve());
+    const kill=(why:BoundedReason)=>{if(reason)return;reason=why;void Promise.resolve().then(()=>o.onKill?.()).catch(()=>{});if(process.platform==="win32")child.kill("SIGKILL");void drain();};
     const abort=()=>kill("cancelled"),timer=setTimeout(()=>kill("timeout"),o.timeoutMs);
-    const line=(raw:string,newline:boolean)=>{const safe=redactSecrets(raw,secrets);output+=safe+(newline?"\n":"");try{o.onLine?.(safe);}catch{kill("invalid-output");}};
+    const line=(raw:string)=>{try{o.onLine?.(redactSecrets(raw,secrets));}catch{kill("invalid-output");}};
     try{child=spawn(o.bin,o.args,{cwd:o.cwd,env:o.env,shell:false,detached:process.platform!=="win32",stdio:["pipe","pipe","pipe"]});}
     catch{reason="start";finish(null);return;}
     if(child.pid)spawned=Promise.resolve().then(()=>o.onSpawn?.(child.pid!)).then(()=>{}).catch(()=>kill("start"));
@@ -85,11 +89,11 @@ export async function runBounded(o: BoundedOptions): Promise<{ output: string; c
     child.once("exit",()=>{void drain();});
     child.stdout!.setEncoding("utf8");child.stdout!.on("data",(chunk:string)=>{
       bytes+=Buffer.byteLength(chunk);if(bytes>o.maxBytes){buffer="";kill("output-limit");return;}
-      buffer+=chunk;let i:number;while((i=buffer.indexOf("\n"))>=0){line(buffer.slice(0,i),true);buffer=buffer.slice(i+1);}
+      output.push(chunk);if(!o.onLine)return;buffer+=chunk;let i:number;while((i=buffer.indexOf("\n"))>=0){line(buffer.slice(0,i));buffer=buffer.slice(i+1);}
     });
     child.stderr!.on("data",(chunk:Buffer)=>{bytes+=chunk.length;if(bytes>o.maxBytes)kill("output-limit");});
     child.stdin!.on("error",()=>{});child.once("error",()=>{reason??="start";});
-    child.once("close",code=>{if(buffer.trim())line(buffer,false);void Promise.all([drained,spawned]).then(()=>finish(code));});
+    child.once("close",code=>{if(buffer.trim())line(buffer);void Promise.all([drained,spawned]).then(()=>finish(code));});
     child.stdin!.end(o.input);
   });
 }

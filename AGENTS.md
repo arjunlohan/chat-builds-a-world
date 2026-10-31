@@ -942,8 +942,8 @@ Full JSON schema (keep identical to the canonical file):
   its complete process group even after successful exit. A late cleanup writer
   must never replace a verdict with an exception. Delete once after draining; warn
   redacted on failure. One memoized startup sweep removes homes with dead owning
-  PIDs. Never delete a live invocation's home. Discovery controls live only in
-  config, read once per invocation; generic process code has no Codex-home policy.
+  PIDs. Never delete a live invocation's home. Discovery controls are pinned in argv even without config; read config once per
+  invocation. Generic process code has no Codex-home policy.
 - The gate measures actual RAF frame intervals, not Playwright polling gaps. Its
   check-only trace records frame timestamps and CPU/render/probe work. Visibility
   probes happen outside the 15-second production-performance window. Keep the
@@ -954,7 +954,7 @@ Full JSON schema (keep identical to the canonical file):
   pixel-equivalents spanning at least 64x64px in two of three observations,
   including the last. Distinguish raw 192x108 probe pixels from HD equivalents.
   Aim builder geometry at a clear 96x96px silhouette. The runner benchmark freezes
-  its own Chromium page and observes versions through SSE outside the page, then
+  its own Chromium page and polls world/round state outside the page, then
   resumes for hot swap. Keep this orchestration out of the production renderer.
 
 ## Working agreements

@@ -148,7 +148,8 @@ and ephemeral mode. The child inherits only PATH, HOME, the Bedrock bearer token
 and a private writable CODEX_HOME under `.codex-runtime/runs/`. Each invocation
 is seeded from the tracked `.codex-runtime/config.toml` and cleaned on completion;
 CLI preference writes cannot dirty that canonical file.
-Runtime argv uses `--no-daemon` and `--strict-config`. The isolated config disables
+Runtime argv pins discovery disables even if config is missing, alongside
+`--no-daemon` and `--strict-config`. The isolated config also disables
 plugins, remote plugins, plugin prefetch, apps, skill dependency installation and
 hooks, and skips host skill discovery. These switches were checked against the installed
 0.166.0-alpha.5.1 CLI's `exec --help` and `features list`, using its supported
@@ -158,7 +159,8 @@ including descendants with ignored stdio. Home removal runs once after process-g
 redaction and preserve the verdict. One memoized background startup sweep reclaims
 homes whose owning PID is dead, while preserving live invocations. Config is read
 once per invocation. CLI lines are redacted before callbacks or collection;
-success requires exit 0, turn.completed and no turn.failed. Error events alone
+success requires exit 0, turn.completed and no turn.failed. Timeout messages
+use the enforced duration. Error events alone
 are diagnostics. No Twitch credentials
 are inherited. The approved plan and locked World Module API become the prompt;
 no runtime dependencies are installed. The overlay shows short plan/file/check
@@ -196,8 +198,8 @@ and a canvas screenshot when the page is responsive. Timeouts retain the last
 checkpoint and candidate source. `pnpm check:gate` tests a readable, an occluded
 and a tiny fixture in real Chromium. These artifacts are local and ignored.
 The live benchmark suspends its own Chromium page through the DevTools lifecycle
-API while the independent gate runs. Its Node-side SSE observer resumes the page
-on a version event for the real hot-swap acknowledgement. The production renderer
+API while the independent gate runs. One named world-state poll resumes the page
+on a new version for the real hot-swap acknowledgement. The production renderer
 has no benchmark-only standby option.
 
 On pass, commit `vN: <title> (requested by @user)` in the worktree, recheck master,

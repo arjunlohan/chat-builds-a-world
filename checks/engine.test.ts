@@ -162,3 +162,8 @@ test("shared world bounds handle box extents and light radii consistently",async
  assert.equal(fitsBounds(new Vector3(63,0,0),2),false);assert.deepEqual(clampToWorld(new Vector3(63,0,0),2).toArray(),[62,0,0]);
  assert.throws(()=>clampToWorld(new Vector3(),new Vector3(65,0,0)));assert.equal(fitsBounds(new Vector3(NaN,0,0)),false);
 });
+
+test("ledger distinguishes invalid items from capacity and queries without eviction",async()=>{
+ const {ResourceLedger,ItemLimitError,emptyUsage}=await import("../world/shared/limits.js");const ledger=new ResourceLedger(emptyUsage(),{nodes:64,triangles:60000,draws:64,lights:4,particles:512});
+ ledger.reserve("first",{...emptyUsage(),triangles:40000});assert.equal(ledger.fits("next",{...emptyUsage(),triangles:30000}),false);assert.equal(ledger.shortfall("next",{...emptyUsage(),triangles:30000}).triangles,10000);assert.equal(ledger.fits("next",{...emptyUsage(),triangles:30000},new Set(["first"])),true);assert.equal(ledger.usage().triangles,40000);assert.throws(()=>ledger.reserve("bad",{...emptyUsage(),triangles:50001}),ItemLimitError);assert.equal(ledger.usage().triangles,40000);
+});

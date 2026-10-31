@@ -1,4 +1,4 @@
-import { runBounded, withCodexHome, minimalEnvironment, codexArgs, turnFailure, boundedFailure, protectedValues, redact } from "../runtime/process.js";
+import { runBounded, withCodexHome, minimalEnvironment, codexArgs, classifyCodexEvent, boundedFailure, protectedValues, redact } from "../runtime/process.js";
 import { metricWriter } from "../runtime/metrics.js";
 import { lstat, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -59,11 +59,12 @@ export function parseGuardStream(stdout: string): unknown {
   for (const line of stdout.trim().split(/\r?\n/)) {
     const event = JSON.parse(line) as { type?: string; item?: { type?: string; text?: string } };
     if (!event || typeof event.type !== "string") throw new Error("Invalid Codex event");
-    failure ??= turnFailure(event);
-    if (event.type === "error" || event.item?.type === "error") continue;
+    const classification=classifyCodexEvent(event);
+    if(classification.kind==="failure")failure??=classification.reason;
+    if(classification.kind==="diagnostic")continue;
     if (event.item && !["agent_message", "reasoning"].includes(event.item.type ?? "")) throw new Error("Guard used a tool");
     if (event.type === "item.completed" && event.item?.type === "agent_message") { final = event.item.text; completed = false; }
-    if (event.type === "turn.completed") completed = true;
+    if (classification.kind === "completed") completed = true;
   }
   if (failure) throw new Error(failure);
   if (!completed || !final || Buffer.byteLength(final) > 8192) throw new Error("Missing structured guard result");
@@ -90,7 +91,7 @@ export class IdeaGuard {
     let prompt: string; try { prompt = buildGuardPrompt(idea); } catch { return result(failed("Guard rejected an empty or oversized idea.")); }
     if (signal?.aborted) return result(failed("Guard review cancelled."));
     const raw = await withCodexHome(this.root,this.env,async (env, runtime) => runBounded({ bin: this.bin, onSpawn: runtime.onSpawn, secrets: this.secrets, args: codexArgs(runtime.config, "read-only", "low", GUARD_SCHEMA), cwd: this.root, env, input: prompt, signal, timeoutMs: this.timeout, maxBytes: 1_048_576 }));
-    if (raw.reason) return result(failed(boundedFailure(raw.reason, "Guard", 45)));
+    if (raw.reason) return result(failed(boundedFailure(raw, "Guard")!));
     try {
       const parsed = parseGuardStream(raw.output);
       if (raw.code !== 0) throw new Error("Guard CLI exited without completing.");

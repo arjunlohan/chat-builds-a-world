@@ -78,7 +78,7 @@ test("45-second ceiling uses a hard kill, kills descendants and supports cancell
   const home = await mkdtemp(join(tmpdir(), "world-guard-timeout-"));
   try {
     const start = performance.now(); const result = await new IdeaGuard({ bin: fake, env: { ...env, HOME: home }, timeoutMs: 400 }).review("__FAKE_TREE__");
-    assert.equal(result.verdict, "reject"); assert.match(result.reason, /timed out after 45 seconds/); assert.ok(performance.now() - start < 2000);
+    assert.equal(result.verdict, "reject"); assert.match(result.reason, /timed out after 0.4 seconds/); assert.ok(performance.now() - start < 2000);
     const pid = Number(await readFile(join(home, "child.pid"), "utf8"));
     await new Promise(resolve => setTimeout(resolve, 80));
     assert.throws(() => process.kill(pid, 0), /ESRCH/);

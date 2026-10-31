@@ -9,7 +9,7 @@ const env={PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROC
 test("runtime argv uses discovery policy from its single copied config", async()=>{
  const config=await readFile(".codex-runtime/config.toml","utf8");
  for(const sandbox of ["read-only","workspace-write"] as const){const args=codexArgs(config,sandbox,sandbox==="read-only"?"low":"medium");
-  assert.deepEqual(args.slice(0,3),["--no-daemon","exec","--strict-config"]);assert.ok(!args.includes("--disable"));
+  assert.deepEqual(args.slice(0,3),["--no-daemon","exec","--strict-config"]);assert.ok(args.includes("--disable"));
   for(const feature of ["plugins","remote_plugin","plugin_discovery_prefetch","apps","skill_mcp_dependency_install","hooks"])assert.ok(config.includes(`${feature} = false`));
   assert.ok(config.includes("skip_host_skill_discovery = true"));
  }
@@ -44,4 +44,8 @@ test("startup removes stale and legacy homes, preserves live invocations and unr
  await writeFile(join(runs,"invocation-stale/.owner.json"),JSON.stringify({owner:99999999}));await writeFile(join(runs,"invocation-live/.owner.json"),JSON.stringify({owner:process.pid}));const old=new Date(Date.now()-300000);await utimes(join(runs,"invocation-legacy"),old,old);
  assert.equal(cleanupStaleCodexHomes(root,env),cleanupStaleCodexHomes(root,env));await cleanupStaleCodexHomes(root,env);assert.deepEqual((await readdir(runs)).sort(),["invocation-live","unrelated"]);
  }finally{await rm(root,{recursive:true,force:true})}
+});
+
+test("missing config cannot remove runtime plugin, hooks or discovery controls",()=>{
+ const args=codexArgs("","read-only","low");for(const name of ["plugins","remote_plugin","plugin_discovery_prefetch","apps","skill_mcp_dependency_install","hooks"])assert.ok(args.some((arg,i)=>arg==="--disable"&&args[i+1]===name));assert.ok(args.includes("skip_host_skill_discovery"));
 });

@@ -1,11 +1,9 @@
-import { CITIZEN_CAP } from "../../world/shared/limits.js";
+import { CITIZEN_CAP, IDLE_MS, FADE_MS } from "../../world/shared/limits.js";
 import { isChatCommand } from "../commands.js";
 import type { ChatEvent, CitizenCommand, CitizenState } from "../contracts.js";
 import { hash, isWalkable, terrainHeight } from "../../world/engine/land.js";
 
 export const CITIZEN_LIMIT = CITIZEN_CAP;
-export { IDLE_MS, FADE_MS } from "../../world/shared/limits.js";
-import { IDLE_MS, FADE_MS } from "../../world/shared/limits.js";
 const homes: [number, number, number][] = [];
 for (let z = -6.3; z <= 6.3; z += 0.63) {
   for (let x = -8.8; x <= 8.8; x += 0.63) {

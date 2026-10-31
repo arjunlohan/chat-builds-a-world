@@ -19,8 +19,6 @@ interface Creature {
   snapshot: Citizen | undefined; state: CitizenState; position: Vector3; phase: number; yaw: number; born: number;
   cos: number; sin: number; commandSpeech: boolean; label: HTMLDivElement; name: HTMLSpanElement; bubble: HTMLSpanElement; removeLabel: () => void; fullWidth: number; quietWidth: number;
 }
-interface Part { mesh: InstancedMesh; fade: InstancedBufferAttribute; bounce: InstancedBufferAttribute; fadeChanged: boolean; bounceChanged: boolean }
-
 /** One instanced geometry retains all six creature parts and their authored palette. */
 export class Citizens {
   readonly root = new Group();
@@ -32,7 +30,7 @@ export class Citizens {
   private readonly dirtyColors = new Set<string>();
   private frozenList: readonly Citizen[] | undefined;
   private readonly speakers = new Set<string>();
-  private readonly body: Part;
+  private readonly body: {mesh:InstancedMesh;fade:InstancedBufferAttribute;bounce:InstancedBufferAttribute;fadeChanged:boolean;bounceChanged:boolean};
 
   constructor(private readonly labels: HTMLElement, private readonly layout: LabelManager ) {
     this.root.name = "citizens • 300 reserved creature slots";
@@ -56,7 +54,7 @@ export class Citizens {
     const combined=mergeGeometries(pieces)!;for(const g of pieces)g.dispose();
     // Flat shading reconstructs face normals in the fragment shader. Shared vertices cut
     // repeated instance/lighting transforms without changing triangles or silhouettes.
-    combined.deleteAttribute("uv"); const normals=combined.getAttribute("normal");for(let i=0;i<normals.count;i++)normals.setXYZ(i,0,1,0);
+    const normals=combined.getAttribute("normal");for(let i=0;i<normals.count;i++)normals.setXYZ(i,0,1,0);
     const geometry=indexGeometry(combined);
     const fade=new InstancedBufferAttribute(new Float32Array(LIMIT).fill(1),1),bounce=new InstancedBufferAttribute(new Float32Array(LIMIT),1);
     fade.setUsage(DynamicDrawUsage);bounce.setUsage(DynamicDrawUsage);geometry.setAttribute("aFade",fade);geometry.setAttribute("aBounce",bounce);
@@ -144,8 +142,8 @@ export class Citizens {
   }
   private place(index: number, c: Creature, scale: number, opacity: number) {
     const part=this.body,a=part.mesh.instanceMatrix.array as Float32Array,o=index*16,cos=c.cos*scale,sin=c.sin*scale;
-    a[o]=cos;a[o+2]=-sin;a[o+5]=scale;a[o+8]=sin;a[o+10]=cos;
-    a[o+12]=c.position.x;a[o+13]=c.position.y;a[o+14]=c.position.z;
+    const moved=a[o]!==Math.fround(cos)||a[o+2]!==Math.fround(-sin)||a[o+5]!==Math.fround(scale)||a[o+8]!==Math.fround(sin)||a[o+10]!==Math.fround(cos)||a[o+12]!==Math.fround(c.position.x)||a[o+13]!==Math.fround(c.position.y)||a[o+14]!==Math.fround(c.position.z);
+    if(moved){a[o]=cos;a[o+2]=-sin;a[o+5]=scale;a[o+8]=sin;a[o+10]=cos;a[o+12]=c.position.x;a[o+13]=c.position.y;a[o+14]=c.position.z;part.mesh.instanceMatrix.addUpdateRange(o,16);part.mesh.instanceMatrix.needsUpdate=true;}
     if (part.fade.getX(index) !== Math.fround(opacity)) { part.fade.setX(index,opacity); part.fadeChanged = true; }
   }
   update(dt: number, time: number, now: number, camera: PerspectiveCamera, reducedMotion: boolean) {
@@ -190,7 +188,6 @@ export class Citizens {
 
     }
     const part=this.body;part.mesh.count=this.count;
-    if(this.count)part.mesh.instanceMatrix.needsUpdate=true;
     if(part.fadeChanged)part.fade.needsUpdate=true;
     if(part.bounceChanged)part.bounce.needsUpdate=true;
     if(this.dirtyColors.size&&part.mesh.instanceColor)part.mesh.instanceColor.needsUpdate=true;

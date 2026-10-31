@@ -1,4 +1,5 @@
 import { MathUtils, Vector3, type PerspectiveCamera } from "three";
+import { clampToWorld } from "../shared/limits.js";
 import type { WorldServices } from "./api.js";
 
 const home = new Vector3(0, -0.25, 0);
@@ -54,7 +55,7 @@ export class CameraDirector {
     this.lastFocus = this.time;
     this.priority = priority;
     this.duration = this.reducedMotion ? 0.25 : MathUtils.clamp(options.duration ?? 2.5, 0.25, 5);
-    this.target.set(MathUtils.clamp(position.x, -64, 64), MathUtils.clamp(position.y, -8, 48), MathUtils.clamp(position.z, -64, 64));
+    clampToWorld(this.target.copy(position));
     this.from.copy(this.camera.position);
     this.fromLook.copy(this.look);
     this.offset.copy(this.camera.position).sub(this.look).normalize();
