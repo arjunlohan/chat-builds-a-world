@@ -9,7 +9,7 @@ export function simulationAdapters() {
     setOutcome(outcome: string) { kind = outcome === "fail" ? "throws" : outcome === "timeout" ? "timeout" : "good"; },
     reviewer: (idea: string) => fixtureReview(idea),
     summonProvider: fixtureProvider,
-    builder: async (options: BuilderOptions) => runCodex({ ...options, prompt: (await runnerPrompt(options.root, options.decision)) + `\nSIMULATION_FIXTURE_KIND: ${kind}`, bin: fileURLToPath(new URL("../../checks/fixtures/fake-builder.cjs", import.meta.url)),
+    builder: async (options: BuilderOptions) => runCodex({ ...options, prompt: (options.prompt??await runnerPrompt(options.root, options.decision)) + `\nSIMULATION_FIXTURE_KIND: ${kind}`, bin: fileURLToPath(new URL("../../checks/fixtures/fake-builder.cjs", import.meta.url)),
       env: { ...options.env, AWS_BEARER_TOKEN_BEDROCK: "offline-fixture-not-a-key" } }),
   };
 }

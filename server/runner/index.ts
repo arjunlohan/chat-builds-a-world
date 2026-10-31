@@ -6,16 +6,18 @@ import { protectedValues, redact } from "../runtime/process.js";
 import { metricWriter } from "../runtime/metrics.js";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { validateDecision, type GuardResult } from "../guard/index.js";
 import { Versions, type WorldVersion } from "../versions/index.js";
 import { auditDiff, discardUnshippedTag, cleanMaster, commitTree, createTree, git, inventory, promote, removeTree, validateTree } from "./git.js";
-import { compileModule } from "./policy.js";
-import { runCodex, BUILD_TIMEOUT_MS } from "./codex.js";
-import { candidateCheck, type CheckResult } from "./check.js";
+import { runCodex, runnerPrompt, BUILD_TIMEOUT_MS } from "./codex.js";
+import { candidateCheck, CHECK_TIMEOUT_MS, type CheckResult } from "./check.js";
+import {selfCheck,selfCheckCommand,selfCheckManifest,resourceCheck,SELF_CHECK_TIMEOUT_MS,type ResourceContext} from "./self-check.js";
+import {CANDIDATE_THRESHOLDS} from "../../checks/candidate-policy.js";
 import type { Usage } from "./events.js";
 export interface BuildRequest { decision: GuardResult; requester: string; signal: AbortSignal }
-export interface RunResult { ok: boolean; outcome: "SHIPPED" | "REVERTED" | "ROLLED BACK"; reason: string; durationMs: number; builderMs?: number; tokens: Usage; version?: number; tag?: string; check?: CheckResult }
+export interface RunResult { ok: boolean; outcome: "SHIPPED" | "REVERTED" | "ROLLED BACK"; reason: string; durationMs: number; builderMs?: number; attempts?:number;firstReason?:string;tokens: Usage; version?: number; tag?: string; check?: CheckResult }
+class RepairableRejection extends Error {}
+export const BUILD_ATTEMPTS=2;
 interface Options {
   root: string; versions: Versions; bin?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number;
   feed(kind: "plan" | "edit" | "check" | "ship" | "error", text: string): void;
@@ -61,8 +63,9 @@ export class Runner {
     const start = performance.now(), controller = new AbortController();
     const cancel = () => controller.abort(); request.signal.addEventListener("abort", cancel, { once: true });
     if (request.signal.aborted) controller.abort(); const signal = controller.signal;
-    const timer = setTimeout(() => controller.abort(), Math.min(this.options.timeoutMs ?? BUILD_TIMEOUT_MS, BUILD_TIMEOUT_MS));
-    let builderMs = 0;
+    const budget=Math.min(this.options.timeoutMs??BUILD_TIMEOUT_MS,BUILD_TIMEOUT_MS),deadline=start+budget;
+    const timer = setTimeout(() => controller.abort(),budget);
+    let builderMs = 0,attempts=0,firstReason:string|undefined;
     let tree = "", version = 0, merged = false, base = "", check: CheckResult | undefined;
     let tokens: Usage = { input: null, output: null, total: null };
     const requester = request.requester.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 64) || "viewer";
@@ -75,25 +78,46 @@ export class Runner {
       tree = await createTree(this.root, version, base); await this.options.versions.setPending({ path: tree, base, version });
       const before = await inventory(tree); feed("plan", `Created isolated worktree v${version}.`);
       const sourceEnv = this.options.env ?? process.env;
-      const builderStart = performance.now();
-      let diagnostic:string|undefined;
-      try { const built = await (this.options.builder ?? runCodex)({ root: this.root, tree, bin: this.options.bin ?? sourceEnv.CODEX_BIN ?? "codex", env: sourceEnv, decision: approved, signal, feed, onSpawn:async pid=>{await this.options.versions.setPending({path:tree,base,version,process:pid,owner:process.pid});}, ...(this.options.timeoutMs ? { timeoutMs: this.options.timeoutMs } : {}) });tokens={input:built.input,output:built.output,total:built.total};diagnostic=built.diagnostic; } finally { builderMs = Math.round(performance.now()-builderStart); }
-      try{await auditDiff(tree, base, before, approved.files);}catch(error){if(error instanceof Error&&error.message==="Builder produced no module changes.")throw new Error(`${error.message} ${diagnostic??"Builder returned no explanation."}`);throw error;}
-      feed("check", "Approved paths verified; compiling the candidate.");
-      const secrets = protectedValues(sourceEnv);
-      for (const file of approved.files) {
-        const source = await readFile(join(tree, file), "utf8");
-        if (secrets.some(value => source.includes(value))) throw new Error("Candidate contained protected data.");
+      const context:ResourceContext={...(this.options.versions.baseUsage?{base:this.options.versions.baseUsage}:{}),retained:(this.options.versions.current?.modules??[]).filter(m=>m.id!==approved.spec!.moduleId).map(m=>({...m,code:this.options.versions.bundle(m.hash)!}))};
+      const input={...context,file:approved.files[0]!,id:approved.spec.moduleId,files:approved.files};
+      const manifest=await selfCheckManifest(this.root,input),command=selfCheckCommand(manifest);
+      // Probe retained allocations through the same resource ledger, without renderer work.
+      const existing=await resourceCheck(context,context.retained,signal);
+      if(!existing.ok)throw new Error(existing.reason??"Retained world resource check failed.");
+      let modules:ResourceContext["retained"]=[];
+      const addTokens=(next:Usage)=>{for(const key of ["input","output","total"] as const)tokens[key]=attempts===1?next[key]:tokens[key]===null||next[key]===null?null:tokens[key]!+next[key]!;};
+      for(let attempt=1;attempt<=BUILD_ATTEMPTS;attempt++){
+        if(signal.aborted||performance.now()>=deadline)throw new Error("Build timed out or was cancelled.");
+        check=undefined;
+        const prompt=await runnerPrompt(this.root,approved,{command,resources:{base:context.base??"not yet reported; browser gate remains authoritative",...existing},...(firstReason?{rejection:firstReason}:{})});
+        const builderStart=performance.now();let diagnostic:string|undefined;attempts=attempt;
+        try{const built=await (this.options.builder??runCodex)({root:this.root,tree,bin:this.options.bin??sourceEnv.CODEX_BIN??"codex",env:sourceEnv,decision:approved,signal,feed,prompt,attempt,timeoutMs:Math.max(1,deadline-performance.now()),onSpawn:async pid=>{await this.options.versions.setPending({path:tree,base,version,process:pid,owner:process.pid});}});addTokens(built);diagnostic=built.diagnostic;}
+        catch(error){const used=(error as {tokens?:Usage})?.tokens;addTokens(used??{input:null,output:null,total:null});throw error;}
+        finally{builderMs+=Math.round(performance.now()-builderStart);}
+        // Path and protected-data violations are never repairable. Always compare to the original inventory.
+        try{await auditDiff(tree,base,before,approved.files);}catch(error){if(error instanceof Error&&error.message==="Builder produced no module changes.")throw new Error(`${error.message} ${diagnostic??"Builder returned no explanation."}`);throw error;}
+        const secrets=protectedValues(sourceEnv);
+        for(const file of approved.files){const source=await readFile(join(tree,file),"utf8");if(secrets.some(value=>source.includes(value)))throw new Error("Candidate contained protected data.");}
+        try{
+          feed("check",`Attempt ${attempt}: approved paths verified; policy, types and resources.`);
+          let checked:Awaited<ReturnType<typeof selfCheck>>;
+          try{checked=await selfCheck(tree,input,signal);}catch(error){throw new RepairableRejection(error instanceof Error?error.message:"Static/type check failed.");}
+          if(!checked.resources.ok){if(checked.resources.retryable===false)throw new Error(checked.resources.reason);throw new RepairableRejection(checked.resources.reason??"Resource admission failed.");}
+          modules=checked.modules;
+          if(modules.length>ACTIVE_MODULE_CAP)throw new RepairableRejection("Eight active modules maximum.");
+          feed("check",`SwiftShader · ${CANDIDATE_THRESHOLDS.sampleSeconds}-second candidate gate · attempt ${attempt}.`);
+          check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal);
+          // A background conflict copy or hostile edit stays fatal even when another gate fails.
+          await auditDiff(tree,base,before,approved.files);
+          if(!check.ok){if(check.retryable===false)throw new Error(check.reason);throw new RepairableRejection(check.reason??"Candidate gate failed.");}
+          break;
+        }catch(error){
+          if(!(error instanceof RepairableRejection)||attempt===BUILD_ATTEMPTS||signal.aborted||deadline-performance.now()<=SELF_CHECK_TIMEOUT_MS+CHECK_TIMEOUT_MS)throw error;
+          await auditDiff(tree,base,before,approved.files);
+          firstReason=redact(error.message,protectedValues(sourceEnv));
+          feed("plan",`Retry ${attempt+1}/${BUILD_ATTEMPTS} · ${firstReason}`);
+        }
       }
-      const nodeModules = fileURLToPath(new URL("../../node_modules", import.meta.url));
-      const compiled = await compileModule(tree, approved.files[0]!, approved.spec.moduleId, nodeModules, approved.files);
-      const retained = (this.options.versions.current?.modules ?? []).filter(m => m.id !== compiled.id);
-      const modules = [...retained.map(m => ({ ...m, code: this.options.versions.bundle(m.hash)! })), { ...compiled, file: approved.files[0]! }];
-      if (modules.length > ACTIVE_MODULE_CAP) throw new Error("Eight active modules maximum.");
-      feed("check", "SwiftShader · 300 citizens · 15-second candidate gate.");
-      check = await (this.options.check ?? candidateCheck)(this.root, modules, compiled.id, signal);
-      if (!check.ok) throw new Error(check.reason ?? "Candidate gate failed.");
-      await auditDiff(tree, base, before, approved.files);
       if (signal.aborted) throw new Error("Build timed out or was cancelled.");
       const message = `v${version}: ${approved.title} (requested by @${requester})`;
       const commit = await commitTree(tree, message);
@@ -104,19 +128,18 @@ export class Runner {
       feed("ship", `v${version} checked; activating without a page reload.`);
       const active = await this.options.versions.activate({ version, tag: `v${version}`, commit, title: approved.title, requester, modules: artifacts });
       if (!active) throw new Error("Live activation did not acknowledge; restoring the previous world.");
-      const result: RunResult = { ok: true, outcome: "SHIPPED", reason: "Checks passed and live module swap acknowledged.", builderMs, durationMs: Math.round(performance.now() - start), tokens, version, tag: `v${version}`, check };
+      const result: RunResult = { ok: true, outcome: "SHIPPED", reason: "Checks passed and live module swap acknowledged.", attempts,...(firstReason?{firstReason}:{}),builderMs, durationMs: Math.round(performance.now() - start), tokens, version, tag: `v${version}`, ...(check?{check}:{}) };
       await this.log(result, request.decision.mode);
       try { await this.options.announce(`Shipped v${version}: ${approved.title} — requested by @${requester}`); } catch { feed("check", "Shipped; Twitch announcement unavailable."); } return result;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Build failed.";
-      tokens = (error as { tokens?: Usage })?.tokens ?? tokens;
       const reason = signal.aborted ? "Build timed out or was cancelled." : redact(detail, protectedValues(this.options.env ?? process.env));
       if (merged && tree) {
         const head=await git(this.root,"rev-parse","master"),target=this.options.versions.fallbackTarget({excludingCommit:head,allowBaseline:true});if(!target)throw new Error("No healthy world is available for restoration.");
         await this.restoreForward(head,target,"Automatic revert",requester,false);
       }
       feed("error", `REVERTED · ${reason}`);
-      const result: RunResult = { ...reverted(reason,Math.round(performance.now()-start),tokens), builderMs, ...(check?{check}:{}) };
+      const result: RunResult = { ...reverted(reason,Math.round(performance.now()-start),tokens), builderMs,attempts,...(firstReason?{firstReason}:{}), ...(check?{check}:{}) };
       await this.log(result, request.decision.mode); return result;
     } finally {
       clearTimeout(timer); request.signal.removeEventListener("abort", cancel); controller.abort();

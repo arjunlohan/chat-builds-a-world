@@ -40,6 +40,16 @@ capacity. If the base has not been reported, the prompt explicitly says so and t
 independent browser gate remains authoritative; no admission cap is relaxed there.
 Base reports are bounded, restricted to the primary stream and never checkpointed.
 
+Each accepted build gets at most two builder attempts in the same worktree, under
+one original 180-second deadline. A policy/type/resource or candidate-gate rejection
+may trigger the second attempt if enough time remains for independent checks. The
+repair prompt carries the exact redacted rejection, the locked self-check command
+and the same resource context. The overlay shows Retry 2/2; runner metrics record
+attempts and firstReason, with summed duration and token usage across attempts.
+Guard rejections, path/protected-data violations, no-edit completions, CLI failures,
+timeouts and cancellations do not retry. Every attempt is audited against the
+original file inventory and repeats the independent checks; promotion happens once.
+
 Checked versions require a master-reachable tag and a healthy activation. A failed merge removes its unshipped tag; recovery covers a crash between tag
 creation and merge. restoreForward creates
 a worktree and forward commit for rollback, failed activation and startup recovery.

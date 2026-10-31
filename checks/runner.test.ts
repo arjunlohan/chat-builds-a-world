@@ -24,6 +24,7 @@ test("the checked import manifest drives policy, both prompts and the engineerin
 async function repository() {
   const root = await mkdtemp(join(tmpdir(), "runner-unit-")); await mkdir(join(root, "world/modules"), { recursive: true });
   await writeFile(join(root, "README.md"), "session file\n"); await writeFile(join(root, ".gitignore"), "state/\nworktrees/\n.env\n.codex-runtime/\n");
+  await writeFile(join(root,"AGENTS.md"),"## World Module API v1\nDefault fixture contract.\n## Scene Spec v1\n");
   await writeFile(join(root, "world/modules/a.ts"), "export default () => ({});\n");
   await git(root, "init", "-b", "master"); await git(root, "add", "."); await git(root, "-c", "user.name=Test", "-c", "user.email=test@localhost", "commit", "--no-gpg-sign", "-m", "Base"); return root;
 }
@@ -164,8 +165,9 @@ test("automatic rollback preempts a real queued build and waits for its worktree
  try{
   const first=await git(root,"rev-parse","HEAD"),firstSource=await readFile(join(root,"world/modules/a.ts"),"utf8");let versions!:Versions;
   versions=new Versions(root,v=>{if(v)versions.acknowledge(v.version,v.receipt,true)});await versions.baselineAt(first);
-  const one=await versions.artifact("visual","world/modules/a.ts","export default 1;");await versions.activate({version:1,tag:"v1",commit:first,title:"One",requester:"viewer",modules:[one]},false);
-  await writeFile(join(root,"world/modules/a.ts"),"export default () => ({id:'failed'});\n");const second=await commitTree(root,"v2 fixture");const two=await versions.artifact("visual","world/modules/a.ts","export default 2;");
+  const bundle='export default () => ({id:"visual",init(){},update(){},onChat(){},onCitizenSpawn(){},onRaid(){},dispose(){}});';
+  const one=await versions.artifact("visual","world/modules/a.ts",bundle);await versions.activate({version:1,tag:"v1",commit:first,title:"One",requester:"viewer",modules:[one]},false);
+  await writeFile(join(root,"world/modules/a.ts"),"export default () => ({id:'failed'});\n");const second=await commitTree(root,"v2 fixture");const two=await versions.artifact("visual","world/modules/a.ts",bundle+'\n// second version');
   await versions.activate({version:2,tag:"v2",commit:second,title:"Two",requester:"viewer",modules:[two]},false);await versions.invalidate(2);
   let started!:()=>void;const ready=new Promise<void>(r=>started=r);
   const runner=new Runner({root,versions,feed(){},announce:async()=>{events.push("restored")},record(){},builder:async({signal})=>{started();await new Promise<void>(r=>signal.addEventListener("abort",()=>r(),{once:true}));await new Promise(r=>setTimeout(r,20));events.push("child-cleaned");throw new Error("cancelled");}});
@@ -204,4 +206,34 @@ test("fallback policy explicitly selects previous, healthy current or baseline",
   const two=await versions.artifact("two","world/modules/two.ts","export default 2;");await versions.activate({version:2,tag:"v2",commit:"two",title:"Two",requester:"viewer",modules:[two]},false);
   assert.equal(versions.fallbackTarget({allowBaseline:false})!.tag,"v1");assert.equal(versions.fallbackTarget({excludingCommit:"two",allowBaseline:true})!.tag,"v1");assert.equal(versions.fallbackTarget({excludingCommit:"interrupted",allowBaseline:true})!.tag,"v2");await versions.invalidate(2);assert.equal(versions.fallbackTarget({excludingCommit:"interrupted",allowBaseline:true})!.tag,"v1");
  }finally{versions.close();await rm(root,{recursive:true,force:true});}
+});
+
+async function retryRepository(){
+ const root=await repository();await mkdir(join(root,"world/engine"));await writeFile(join(root,"world/engine/api.ts"),'import type {Group} from "three"; export interface WorldModule {id:string;init(s:{scene:Group}):void;update(dt:number):void;onChat():void;onCitizenSpawn():void;onRaid():void;dispose():void;}');await git(root,"add",".");await git(root,"-c","user.name=Test","-c","user.email=test@localhost","commit","--no-gpg-sign","-m","Locked API");return root;
+}
+const repairDecision=(description="repair")=>({verdict:"accept" as const,title:"Repair visual",reason:"Safe",spec:{moduleId:"repair",description,steps:["Create visual"],checks:["Dispose"],estimatedSeconds:60},files:["world/modules/repair.ts"],mode:"fixture" as const,latencyMs:0});
+test("fake builder repairs a candidate rejection in the same worktree, gates again and ships once",async()=>{
+ const root=await retryRepository(),feed:string[]=[],records:unknown[]=[],trees:string[]=[],timeouts:number[]=[];let checks=0,calls=0,versions!:Versions;
+ const firstReason="Candidate is not stream-readable: needs 4096 contrasted 1080p pixel-equivalents and 64x64px in two of three probes (best 3600px).";
+ try{
+  versions=new Versions(root,v=>{if(v)void versions.acknowledge(v.version,v.receipt,true);});
+  const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed:(_kind,text)=>feed.push(text),record:r=>{records.push(r);},announce:async()=>{},builder:async options=>{calls++;trees.push(options.tree);timeouts.push(options.timeoutMs!);assert.match(options.prompt!,/LOCKED_SELF_CHECK_COMMAND/);if(calls===2){assert.ok(options.prompt!.includes(JSON.stringify(firstReason)));assert.ok((await readFile(join(options.tree,options.decision.files[0]!),"utf8")).includes("0.03"));}return runCodex(options);},check:async(_root,modules)=>{checks++;assert.ok(modules.at(-1)!.code.includes(checks===1?"0.03":"2.2"));return checks===1?{ok:false,reason:firstReason}:{ok:true,fps:60,avgFps:60};}});
+  const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.equal(result.outcome,"SHIPPED",result.reason);assert.equal(result.attempts,2);assert.equal(result.firstReason,firstReason);assert.equal(calls,2);assert.equal(checks,2);assert.equal(trees[0],trees[1]);assert.ok(timeouts[1]!<timeouts[0]!);assert.deepEqual(result.tokens,{input:200,output:400,total:600});assert.ok(feed.some(s=>s.startsWith("Retry 2/2")));assert.equal((records[0] as {attempts:number}).attempts,2);assert.equal(await git(root,"tag","--list"),"v1");assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);await runner.close();versions.close();
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+test("guard rejections and outside-module diffs never invoke a repair",async()=>{
+ const root=await retryRepository();let calls=0;try{
+  const versions=new Versions(root,()=>{}),runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{},builder:options=>{calls++;return runCodex(options);}});
+  const guard=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"reject",title:"No",reason:"Unsafe",spec:null,files:[],mode:"fixture",latencyMs:0}});assert.equal(guard.outcome,"REVERTED");assert.equal(calls,0);assert.equal(guard.attempts,0);
+  const outside=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision("outside")});assert.match(outside.reason,/outside approved/);assert.equal(calls,1);assert.equal(outside.attempts,1);assert.equal(outside.firstReason,undefined);assert.equal(await git(root,"tag","--list"),"");await runner.close();versions.close();
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+test("resource rejections get one repair then retain the final reason; checker timeouts never retry",async()=>{
+ for(const timeout of [false,true]){
+  const root=await retryRepository();let calls=0;try{
+   const versions=new Versions(root,()=>{});if(!timeout)versions.reportBaseUsage({nodes:0,triangles:129999,draws:0,lights:0,particles:0});
+   const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{},builder:options=>{calls++;return runCodex(options);},check:async()=>({ok:false,reason:"Candidate checker timed out after 24 seconds.",retryable:false})});
+   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.equal(result.outcome,"REVERTED");assert.equal(calls,timeout?1:2);assert.match(result.reason,timeout?/timed out/:/triangles world limit/);assert.equal(result.attempts,calls);assert.equal(await git(root,"tag","--list"),"");await runner.close();versions.close();
+  }finally{await rm(root,{recursive:true,force:true});}
+ }
 });
