@@ -1,3 +1,4 @@
+import type {Reactions,ReactionCheckpoint} from "./reactions/index.js";
 import { inParade } from "../world/shared/limits.js";
 import { contentPolicy, DEFAULT_BLOCKLIST } from "./content-policy.js";
 import type { WorldVersion } from "./versions/index.js";
@@ -34,6 +35,9 @@ export class WorldPipeline {
   private summonLane: SummonService | undefined;
   private version: WorldVersion | null = null;
   private rounds: Rounds | undefined;
+  private reactions: Reactions | undefined;
+  attachReactions(reactions:Reactions){this.reactions=reactions;}
+  openReactionVote(){return this.reactions?.openVote()??false;}
   attachRounds(rounds: Rounds) { this.rounds = rounds; }
   attachSummon(lane: SummonService) { this.summonLane = lane; }
   publish(event: LaneEvent) {
@@ -60,15 +64,16 @@ export class WorldPipeline {
     const serialized = JSON.stringify(event);
     for (const listener of this.listeners) { try { listener(event, serialized); } catch { this.listeners.delete(listener); } }
   }
-  checkpoint(){return {citizens:this.roster.list(),revision:this.revision,paused:this.paused,raids:this.raids,arrival:this.arrival,seen:[...this.seen].filter(([,at])=>this.now()-at<DEDUP_PERSIST_MS),replies:[...this.replyAt],lastReply:Number.isFinite(this.lastReply)?this.lastReply:null};}
-  restore(saved: ReturnType<WorldPipeline["checkpoint"]>){
+  checkpoint(){return {citizens:this.roster.list(),revision:this.revision,paused:this.paused,raids:this.raids,arrival:this.arrival,seen:[...this.seen].filter(([,at])=>this.now()-at<DEDUP_PERSIST_MS),replies:[...this.replyAt],lastReply:Number.isFinite(this.lastReply)?this.lastReply:null,...(this.reactions?{reactions:this.reactions.checkpoint() as ReactionCheckpoint}:{})};}
+  restore(saved: ReturnType<WorldPipeline["checkpoint"]>,savedAt=this.now()){
     this.roster.restore(saved.citizens);this.revision=saved.revision;this.paused=saved.paused;this.raids=saved.raids;this.arrival=saved.arrival;
     this.seen.clear();for(const [id,at] of saved.seen)if(this.now()-at<DEDUP_PERSIST_MS)this.seen.set(id,at);
     this.cooldowns.clear();this.replyAt.clear();for(const [id,at] of saved.replies)this.replyAt.set(id,at);
     this.lastReply=saved.lastReply??-Infinity;
+    if(saved.reactions)this.reactions?.restore(saved.reactions,savedAt);else this.reactions?.setPaused(this.paused);
   }
   snapshot(): Extract<WorldEvent, { type: "snapshot" }> {
-    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, arrival:this.arrival&&inParade(this.arrival.at,this.now())?this.arrival:null, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null, version: this.version };
+    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, arrival:this.arrival&&inParade(this.arrival.at,this.now())?this.arrival:null, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null, version: this.version, reactions:this.reactions?.snapshot()??null };
   }
   private duplicate(key: string, now: number) {
     if (this.seen.has(key)) return true;
@@ -87,7 +92,7 @@ export class WorldPipeline {
     if (mod) {
       if (!authority.moderator) return { accepted: false, reason: "moderator-only" };
       const action = (mod[1]!.toLowerCase()==="veto"?"skip":mod[1]!.toLowerCase()) as "pause" | "skip" | "clear";
-      if (action === "pause") { this.paused = !this.paused; this.rounds?.setPaused(this.paused); }
+      if (action === "pause") { this.paused = !this.paused; this.rounds?.setPaused(this.paused); this.reactions?.setPaused(this.paused); }
       if (action === "skip") this.rounds?.skip();
       if (action === "clear") void this.summonLane?.clearLatest();
       this.emit({ type: "control", revision: ++this.revision, now, action, paused: this.paused });
@@ -102,10 +107,12 @@ export class WorldPipeline {
     const roundCommand = /^!(idea|vote|rollback)(?:\s|$)/i.test(event.text.trim());
     const roundResult = roundCommand ? this.rounds?.command(event) : undefined;
     if (roundResult && !roundResult.accepted) return roundResult;
+    const reactionResult=this.reactions?.chat(event.userId,event.text);
+    if(reactionResult&&!reactionResult.accepted)return reactionResult;
     const summonCommand = /^!summon(?:\s|$)/i.test(event.text.trim());
     if (summonCommand) void this.summonLane?.submit({ ...event, timestamp: now }, { source: authority.source ?? "sim" });
     const result = this.roster.accept({ ...event, timestamp: now }, now);
-    if (!result) return roundResult ?? (summonCommand ? { accepted: true, count: this.roster.size } : { accepted: false, reason: "capacity" });
+    if (!result) return roundResult ?? (reactionResult?.accepted ? {accepted:true,count:this.roster.size}:undefined) ?? (summonCommand ? { accepted: true, count: this.roster.size } : { accepted: false, reason: "capacity" });
     if(result.removed.length)this.emit({type:"remove",revision:++this.revision,now,ids:result.removed});
     this.emit({ type: "chat", revision: ++this.revision, now, chat: { ...event, timestamp: now }, citizen:result.citizen,spawned:result.spawned });
     if (result.spawned && [1, 10, 25, 50, 80, 100, 150, 200, 250, 300].includes(this.roster.size))

@@ -47,3 +47,14 @@ test("live lifecycle checkpoints cover every optional persisted field",async()=>
  const restoredWorld=new WorldPipeline(()=>now),restoredRounds=new Rounds({now:()=>now,publish(){}});restoredWorld.restore(completed.value.world);restoredRounds.restore(completed.value.rounds,now);assert.deepEqual(restoredWorld.checkpoint(),completed.value.world);assert.deepEqual(restoredRounds.checkpoint(),completed.value.rounds);restoredRounds.dispose();
  }finally{rounds.dispose();}
 });
+
+test("reaction state is validated once, survives round trip and accepts older format-2 checkpoints",async()=>{
+ const f=await fixture();try{
+  const {Reactions}=await import('../server/reactions/index.js');let now=Date.now();const r=new Reactions(state=>f.world.publish({type:'reactions',state}),()=>false,()=>now,()=>.5);f.world.attachReactions(r);
+  for(let i=0;i<3;i++)r.chat(`laugh${i}`,'LUL');for(let i=0;i<10;i++)r.chat(`love${i}`,'<3');r.openVote();r.chat('voter','!react 2');
+  const saved={...f.saved,value:{...f.saved.value,world:f.world.checkpoint()}};assert.equal(validateWorldCheckpoint(JSON.parse(JSON.stringify(saved))),true,checkpointFailure(saved));
+  const restored=new WorldPipeline(),other=new Reactions(()=>{},()=>false,()=>now);restored.attachReactions(other);restored.restore(saved.value.world,now);assert.deepEqual(other.checkpoint(),r.checkpoint());
+  const damaged=structuredClone(saved);damaged.value.world.reactions!.charges[1]=damaged.value.world.reactions!.charges[0]!;assert.match(checkpointFailure(damaged)!,/duplicate reaction charge/);
+  assert.equal(validateWorldCheckpoint(f.saved),true);
+ }finally{f.rounds.dispose();}
+});

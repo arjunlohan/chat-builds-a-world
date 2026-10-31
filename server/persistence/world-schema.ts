@@ -1,3 +1,5 @@
+import {CLIPS,REACTIONS} from "../reactions/catalog.js";
+import {REACTION_VIEWER_CAP,type ReactionCheckpoint} from "../reactions/index.js";
 import {Ajv2020} from "ajv/dist/2020.js";
 import {parseSceneSpec,specUsage} from "../summon/scene-spec.js";
 import {ResourceLedger,SUMMON_POOL,emptyUsage,RAID_CAP,CITIZEN_CAP,SUMMON_COUNT,WORLD_BOUNDS} from "../../world/shared/limits.js";
@@ -21,7 +23,11 @@ const pairs=(value:S,max=10000)=>array(tuple(id,value),max);
 const command={anyOf:[object({kind:one("jump","dance","home")}),object({kind:one("follow"),targetId:id}),{type:"null"}]};
 const citizen=object<WorldSource["citizens"][number]>({id,displayName:string(64),color,home:position,lastActive:number,speech:string(500),speechAt:number,command,commandAt:number,entry:object<NonNullable<WorldSource["citizens"][number]["entry"]>>({from:position,at:number,delay:{type:"number",minimum:0,maximum:30000}})},["entry"]);
 const raid=object<NonNullable<WorldSource["arrival"]>["raid"]>({id,broadcasterId:id,broadcasterName:string(64),viewerCount:{type:"integer",minimum:1,maximum:1000000}});
-const world=object<WorldSource>({citizens:array(citizen,CITIZEN_CAP),revision:integer,paused:boolean,raids:integer,arrival:nullable(object<NonNullable<WorldSource["arrival"]>>({raid,admitted:{type:"integer",minimum:0,maximum:RAID_CAP},at:number})),seen:array(tuple(string(160),number),10000),replies:pairs(number),lastReply:nullable(number)});
+const clipId=one(...CLIPS.map(c=>c.id)),reactionId=one(...REACTIONS.map(c=>c.id));
+const takeover=object<NonNullable<ReactionCheckpoint["current"]>>({id:integer,clip:clipId,source:one("chat","vote"),startedAt:number,endsAt:number});
+const reactionVote=object<NonNullable<ReactionCheckpoint["vote"]>>({options:{...array(clipId,3),minItems:3,uniqueItems:true},endsAt:number,ballots:pairs({type:"integer",minimum:0,maximum:2},REACTION_VIEWER_CAP)});
+const reactions=object<ReactionCheckpoint>({now:number,paused:boolean,serial:integer,nextVoteAt:number,active:pairs(number,REACTION_VIEWER_CAP),charges:{...array(tuple(reactionId,pairs(number,REACTION_VIEWER_CAP)),REACTIONS.length),minItems:REACTIONS.length},cooldowns:array(tuple(clipId,number),CLIPS.length),current:nullable(takeover),queued:nullable(object<NonNullable<ReactionCheckpoint["queued"]>>({clip:clipId,source:one("chat","vote")})),vote:nullable(reactionVote)});
+const world=object<WorldSource>({citizens:array(citizen,CITIZEN_CAP),revision:integer,paused:boolean,raids:integer,arrival:nullable(object<NonNullable<WorldSource["arrival"]>>({raid,admitted:{type:"integer",minimum:0,maximum:RAID_CAP},at:number})),seen:array(tuple(string(160),number),10000),replies:pairs(number),lastReply:nullable(number),reactions},["reactions"]);
 const feed=object<RoundSource["build"]["lines"][number]>({id:integer,text:string(180),kind:one("plan","edit","check","ship","error")});
 const build=object<RoundSource["build"]>({status:one("idle","reviewing","running","shipped","failed"),progress:{type:"number",minimum:0,maximum:100},completedAt:number,idea:string(180),requester:string(64),lines:array(feed,ROUND_CAPS.feed)},["completedAt"]);
 const guard=object<RoundSource["guard"]>({status:one("idle","reviewing","accepted","rejected"),mode:one("live","fixture"),reason:string(),title:string(40),latencyMs:nullable(number)});
@@ -40,6 +46,13 @@ export function references(saved:WorldCheckpoint):string|undefined {
  if(!unique(citizens.map(c=>c.id)))return "duplicate citizen ID";
  if(!unique(citizens.map(c=>JSON.stringify(c.home))))return "duplicate citizen home";
  if(citizens.some(c=>homeSeat(c.home)<0))return "unknown citizen home";
+ if(world.reactions){const r=world.reactions;
+  if(r.paused!==world.paused)return "world and reaction pause state disagree";
+  for(const entries of [r.active,r.cooldowns,...r.charges.map(([,entries])=>entries),r.vote?.ballots??[]])if(!unique(entries.map(([id])=>id)))return "duplicate reaction viewer or cooldown";
+  if(!unique(r.charges.map(([id])=>id)))return "duplicate reaction charge meter";
+  if(r.current&&(r.current.id>r.serial||r.current.endsAt<=r.current.startedAt))return "invalid reaction takeover";
+  if(r.current?.clip===r.queued?.clip&&r.current)return "duplicate reaction takeover";
+ }
  if(world.paused!==rounds.paused)return "world and round pause state disagree";
  for(const [name,entries] of [["seen",world.seen],["replies",world.replies],["votes",rounds.votes],["rollback votes",rounds.rollbackVotes],["summon cooldowns",summons.users]] as const)if(!unique(entries.map(([id])=>id)))return `duplicate ${name} owner`;
  const ideas=new Set(rounds.ideas.map(i=>i.id)),supporters=rounds.ideas.flatMap(i=>i.supporters);
