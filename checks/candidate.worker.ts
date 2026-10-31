@@ -18,7 +18,7 @@ const save=()=>writeFile(join(directory,"evidence.json"),JSON.stringify(evidence
 await save();
 async function probe(page: Page) {
  const request=await page.evaluate(()=>++window.__worldStats.probeRequest);
- await page.waitForFunction(request=>window.__worldStats.probeCompleted>=request,request,{timeout:2000});
+ await page.waitForFunction(request=>window.__worldStats.probeCompleted>=request,request,{timeout:4000});
  const footprint=await page.evaluate(()=>({probePixels:window.__worldStats.moduleProbePixels,hdPixels:window.__worldStats.modulePixels,hdWidth:window.__worldStats.moduleWidth,hdHeight:window.__worldStats.moduleHeight}));
  const full:Footprint={...footprint,probeWidth:VISIBILITY_PROBE.width,probeHeight:VISIBILITY_PROBE.height,qualifies:footprint.hdPixels>=VISIBILITY_PROBE.minPixels&&footprint.hdWidth>=VISIBILITY_PROBE.minWidth&&footprint.hdHeight>=VISIBILITY_PROBE.minHeight};
  footprints.push(full);await save();return await page.evaluate(()=>window.__worldStats.frame);
@@ -42,13 +42,15 @@ try{
  const sampleStart=performance.now(),hashes=new Set<number>();let lastPoll=start.time,maxPollGap=0;
  for(let sample=0;sample<15;sample++){
   await page.waitForTimeout(Math.max(0,sampleStart+(sample+1)*1000-performance.now()));
-  const value=await page.evaluate(()=>new Promise<{frame:number;time:number;error:string;hash:number;lit:number;avg:number;renderer:string;visibility:string}>(resolve=>requestAnimationFrame(()=>{
+  const value=await page.evaluate(()=>new Promise<{frame:number;time:number;error:string;hash:number;lit:number;avg:number;renderer:string;visibility:string;trace:FrameEvidence[]}>(resolve=>requestAnimationFrame(()=>{
    const stats=window.__worldStats,gl=document.querySelector("canvas")!.getContext("webgl2")!,info=gl.getExtension("WEBGL_debug_renderer_info"),width=gl.drawingBufferWidth,height=gl.drawingBufferHeight,pixels=new Uint8Array(width*height*4);let hash=2166136261,lit=0;
    gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
    for(let y=2;y<height;y+=5)for(let x=2;x<width;x+=5){const i=(y*width+x)*4;if(pixels[i]!+pixels[i+1]!+pixels[i+2]!>24)lit++;for(let k=0;k<4;k++)hash=Math.imul(hash^pixels[i+k]!,16777619);}
-   resolve({frame:stats.frame,time:stats.lastFrameAt,error:stats.moduleError,hash,lit,avg:stats.avgFps,renderer:info?String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)):"",visibility:document.visibilityState});
+   const t=window.__worldFrameTrace!,trace=[];for(let n=0;n<t.size;n++){const i=(t.cursor-t.size+n+t.frames.length)%t.frames.length;trace.push({frame:t.frames[i]!,time:t.times[i]!,dt:t.intervals[i]!,cpu:t.cpu[i]!,render:t.render[i]!,probe:t.probe[i]!});}
+   resolve({frame:stats.frame,time:stats.lastFrameAt,error:stats.moduleError,hash,lit,avg:stats.avgFps,renderer:info?String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)):"",visibility:document.visibilityState,trace});
   })));
-  maxPollGap=Math.max(maxPollGap,value.time-lastPoll);lastPoll=value.time;samples.push(value);hashes.add(value.hash);evidence.maxPollGap=maxPollGap;await save();
+  const {trace:checkpoint,...sampleValue}=value;evidence.frames=checkpoint;
+  maxPollGap=Math.max(maxPollGap,value.time-lastPoll);lastPoll=value.time;samples.push(sampleValue);hashes.add(value.hash);evidence.maxPollGap=maxPollGap;await save();
   if(!/swiftshader/i.test(value.renderer))throw new Error("Candidate did not use SwiftShader.");
   if(errors.length||value.error)throw new Error(value.error||"Candidate console error.");if(!value.lit)throw new Error("Black canvas.");
 
