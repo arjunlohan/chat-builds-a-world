@@ -6,6 +6,7 @@ import type { SummonService } from "./summon/index.js";
 import type { Rounds } from "./rounds/index.js";
 import { CitizenRoster } from "./citizens/index.js";
 
+const DEDUP_PERSIST_MS=60_000, DEDUP_PRUNE_MS=30*60_000;
 const id = (v: unknown): v is string => typeof v === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(v);
 const text = (v: unknown, max: number): v is string => typeof v === "string" && v.trim().length > 0 && [...v].length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v);
 export function parseChat(value: unknown): ChatEvent {
@@ -59,10 +60,10 @@ export class WorldPipeline {
     const serialized = JSON.stringify(event);
     for (const listener of this.listeners) { try { listener(event, serialized); } catch { this.listeners.delete(listener); } }
   }
-  checkpoint(){return {citizens:this.roster.list(),revision:this.revision,paused:this.paused,raids:this.raids,arrival:this.arrival,seen:[...this.seen].filter(([,at])=>this.now()-at<60000),replies:[...this.replyAt],lastReply:Number.isFinite(this.lastReply)?this.lastReply:null};}
+  checkpoint(){return {citizens:this.roster.list(),revision:this.revision,paused:this.paused,raids:this.raids,arrival:this.arrival,seen:[...this.seen].filter(([,at])=>this.now()-at<DEDUP_PERSIST_MS),replies:[...this.replyAt],lastReply:Number.isFinite(this.lastReply)?this.lastReply:null};}
   restore(saved: ReturnType<WorldPipeline["checkpoint"]>){
     this.roster.restore(saved.citizens);this.revision=saved.revision;this.paused=saved.paused;this.raids=saved.raids;this.arrival=saved.arrival;
-    this.seen.clear();for(const [id,at] of saved.seen)if(this.now()-at<60000)this.seen.set(id,at);
+    this.seen.clear();for(const [id,at] of saved.seen)if(this.now()-at<DEDUP_PERSIST_MS)this.seen.set(id,at);
     this.cooldowns.clear();this.replyAt.clear();for(const [id,at] of saved.replies)this.replyAt.set(id,at);
     this.lastReply=saved.lastReply??-Infinity;
   }
@@ -127,6 +128,6 @@ export class WorldPipeline {
     if (ids.length) this.emit({ type: "remove", revision: ++this.revision, now, ids });
     for (const [id, timestamp] of this.replyAt) if (now - timestamp > 60_000) this.replyAt.delete(id);
     for (const [id, timestamp] of this.cooldowns) if (now - timestamp > 60_000) this.cooldowns.delete(id);
-    for (const [id, timestamp] of this.seen) if (now - timestamp > 30 * 60_000) this.seen.delete(id);
+    for (const [id, timestamp] of this.seen) if (now - timestamp > DEDUP_PRUNE_MS) this.seen.delete(id);
   }
 }

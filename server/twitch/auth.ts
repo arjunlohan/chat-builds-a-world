@@ -1,6 +1,5 @@
-import {atomicJson} from "../persistence/atomic.js";
+import {atomicJson,readJson} from "../persistence/atomic.js";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 
 export interface TwitchConfig {
   clientId: string; clientSecret: string; accessToken: string; refreshToken: string; broadcasterId: string;
@@ -18,8 +17,8 @@ export function tokenStore(config: TwitchConfig, directory = "state"): TokenStor
   return {
     async load() {
       try {
-        const saved = JSON.parse(await readFile(path, "utf8"));
-        if (saved.clientId === config.clientId && saved.broadcasterId === config.broadcasterId && saved.fingerprint === fingerprint &&
+        const saved = await readJson<TokenPair&{clientId:string;broadcasterId:string;fingerprint:string}>(path);
+        if (saved?.clientId === config.clientId && saved.broadcasterId === config.broadcasterId && saved.fingerprint === fingerprint &&
           typeof saved.accessToken === "string" && typeof saved.refreshToken === "string") {
           return { accessToken: saved.accessToken, refreshToken: saved.refreshToken };
         }

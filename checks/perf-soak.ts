@@ -1,4 +1,4 @@
-import {fixtureServer,delay} from "./fixture-server.js";
+import {fixtureServer,delay,worktreeCount} from "./fixture-server.js";
 import {parseArgs} from "node:util";
 import {mkdir,writeFile,cp} from "node:fs/promises";
 import {join,resolve,dirname} from "node:path";
@@ -44,6 +44,6 @@ try{
   if(Date.now()-lastHealth>=60000){lastHealth=Date.now();const heap=await memory(),stats=await page.evaluate(()=>window.__worldStats);const value={at:new Date().toISOString(),heapUsed:heap.heapUsed,fps:stats.avgFps,citizens:stats.citizenCount};report.health.push(value);await save();console.log(JSON.stringify({health:value}));}
   await delay(1000);
  }
- await sample(Math.round(seconds/60));report.status=aborted?"cancelled":"complete";report.finishedAt=new Date().toISOString();report.worktrees=(await git(root,"worktree","list","--porcelain")).split("worktree ").length-1;await page.screenshot({path:output.replace(/\.json$/,".png")});await save();
+ await sample(Math.round(seconds/60));report.status=aborted?"cancelled":"complete";report.finishedAt=new Date().toISOString();report.worktrees=await worktreeCount(root);await page.screenshot({path:output.replace(/\.json$/,".png")});await save();
  if(aborted||report.errors.length||report.worktrees!==1||report.samples.some(s=>s.fps<50||s.citizens!==300))process.exitCode=1;
 }catch(error){report.status="failed";report.errors.push(error instanceof Error?error.message:"Soak failed");await save();process.exitCode=1;}finally{inspector?.close();await world?.browser.close();await fixture.dispose();}
