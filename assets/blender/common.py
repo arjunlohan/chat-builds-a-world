@@ -1,4 +1,4 @@
-"""Original procedural demo art. Not imported or used by the running product."""
+"""Original procedural reaction art. Blender is an offline authoring tool only."""
 import argparse
 from array import array
 import json
