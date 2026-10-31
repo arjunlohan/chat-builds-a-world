@@ -129,16 +129,16 @@ The previous M1 Pro/Metal development run held about 60 FPS at 1920×1080 with 8
 citizens; the Phase 4 check also verifies fixture effects, credits, camera focus,
 render receipts and zero label overlaps. Performance depends on hardware and load.
 
-A reproducible ten-minute physical-GPU soak runs the full simulator in a disposable
-clone, then samples real frame intervals and saves average FPS and p95 frame time:
+A reproducible physical-GPU soak seeds 300 citizens through the real chat pipeline
+in a disposable clone. It samples frame intervals and CPU update/render timings:
 
 ```sh
 pnpm sim:soak --output=state/soak.json
 ```
 
-`--ref=<commit>` selects a baseline revision; `--seconds=600` is the default. It
-injects offline fixtures, waits for the checked round to complete before sampling,
-never loads credentials, and removes its clone and owned worktrees afterward.
+`--ref=<commit>` selects a baseline revision; `--seconds=600` is the default.
+It excludes concurrent builder gates and provider work for matched render-loop
+comparisons, never loads credentials, and removes its clone afterward.
 
 ## Runner, candidate checks and rollback
 
