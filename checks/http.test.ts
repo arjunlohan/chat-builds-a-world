@@ -6,13 +6,16 @@ import { WorldPipeline } from "../server/pipeline.js";
 import {Versions} from "../server/versions/index.js";
 import {emptyUsage} from "../world/shared/limits.js";
 import {randomUUID} from "node:crypto";
+import {mkdtemp,rm} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 test("only the primary world may report a bounded base reservation, without checkpoint writes",async()=>{
- const versions=new Versions(process.cwd(),()=>{});let writes=0;
+ const root=await mkdtemp(join(tmpdir(),"base-report-")),versions=new Versions(root,()=>{});let writes=0;
  const app=await createWorldServer(new WorldPipeline(),undefined,undefined,versions,{live:false,durable:async()=>{writes++;},async fault(){}});await new Promise<void>(r=>app.server.listen(0,"127.0.0.1",r));const base=`http://127.0.0.1:${(app.server.address() as AddressInfo).port}`,controller=new AbortController();
  const clientId=randomUUID();try{const stream=await fetch(base+"/events?world="+clientId,{signal:controller.signal});await stream.body!.getReader().read();
   const report=(clientId:string,value:unknown)=>fetch(base+"/modules/budget",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({clientId,base:value})});
   assert.equal((await report("other",emptyUsage())).status,409);assert.equal((await report(clientId,{...emptyUsage(),triangles:-1})).status,409);const usage={...emptyUsage(),triangles:110000};assert.equal((await report(clientId,usage)).status,200);assert.deepEqual(versions.baseUsage,usage);assert.equal(writes,0);
- }finally{controller.abort();app.closeStreams();app.server.closeAllConnections();await new Promise<void>(r=>app.server.close(()=>r()));}
+ }finally{controller.abort();app.closeStreams();app.server.closeAllConnections();await new Promise<void>(r=>app.server.close(()=>r()));await rm(root,{recursive:true,force:true});}
 });
 
 /** Actual HTTP + SSE, using the same server factory as pnpm dev, on an ephemeral port. */

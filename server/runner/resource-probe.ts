@@ -1,6 +1,6 @@
 import {Group,Vector3} from "three";
 import {ModuleHost,type ModuleStatus} from "../../world/engine/module-host.js";
-import {ResourceLedger,emptyUsage,modulePool,GLOBAL_CAP,usageKeys,CITIZEN_CAP,type Usage} from "../../world/shared/limits.js";
+import {ResourceLedger,emptyUsage,modulePool,usageKeys,CITIZEN_CAP,type Usage} from "../../world/shared/limits.js";
 import {parseSceneSpec,specUsage} from "../summon/scene-spec.js";
 import type {WorldModuleFactory} from "../../world/engine/api.js";
 import {CANDIDATE_THRESHOLDS} from "../../checks/candidate-policy.js";
@@ -8,7 +8,7 @@ import {MODULE_BUDGET} from "../../world/engine/module-host.js";
 import type {ResourceContext} from "./self-check.js";
 const request=await (await fetch("/input.json")).json() as ResourceContext&{modules:ResourceContext["retained"];candidateId?:string};
 declare global {interface Window {__resourceResult:import("./self-check.js").SelfCheckResult}}
-const pool=request.base?modulePool(request.base):{...GLOBAL_CAP};
+const pool=modulePool(request.base??emptyUsage());
 const ledger=new ResourceLedger(emptyUsage(),pool),status:ModuleStatus[]=[],root=new Group();let clock=0,serial=0;
 const citizens=Object.freeze(Array.from({length:CITIZEN_CAP},(_,i)=>Object.freeze({id:`check-${i}`,displayName:`Neighbor${i}`,color:"#79D7CF",position:Object.freeze(new Vector3(i%10,3,Math.floor(i/10)))})));
 const host=new ModuleHost({root,ledger,now:()=>clock,onStatus:s=>status.push(s),services:{citizens:{get:id=>citizens.find(c=>c.id===id),list:()=>citizens},camera:{focus(){}},effects:{play(){}},log(){},spawnSpec:spec=>{

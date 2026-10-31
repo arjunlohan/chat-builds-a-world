@@ -74,11 +74,13 @@ export class Runner {
       const { latencyMs: _latency, mode: _mode, reviewed: _reviewed, ...data } = request.decision;
       const approved = await validateDecision(data, this.root);
       if (approved.verdict !== "accept" || !approved.spec) throw new Error("Only guard-accepted specs can build.");
+      const baseUsage=this.options.versions.baseUsage;
+      if(!baseUsage)throw new Error("World resource baseline is unknown; open /world before building.");
       base = await cleanMaster(this.root); await this.options.versions.baselineAt(base); version = await this.reserve();
       tree = await createTree(this.root, version, base); await this.options.versions.setPending({ path: tree, base, version });
       const before = await inventory(tree); feed("plan", `Created isolated worktree v${version}.`);
       const sourceEnv = this.options.env ?? process.env;
-      const context:ResourceContext={...(this.options.versions.baseUsage?{base:this.options.versions.baseUsage}:{}),retained:(this.options.versions.current?.modules??[]).filter(m=>m.id!==approved.spec!.moduleId).map(m=>({...m,code:this.options.versions.bundle(m.hash)!}))};
+      const context:ResourceContext={base:baseUsage,retained:(this.options.versions.current?.modules??[]).filter(m=>m.id!==approved.spec!.moduleId).map(m=>({...m,code:this.options.versions.bundle(m.hash)!}))};
       const input={...context,file:approved.files[0]!,id:approved.spec.moduleId,files:approved.files};
       const manifest=await selfCheckManifest(this.root,input),command=selfCheckCommand(manifest);
       // Probe retained allocations through the same resource ledger, without renderer work.
@@ -89,7 +91,7 @@ export class Runner {
       for(let attempt=1;attempt<=BUILD_ATTEMPTS;attempt++){
         if(signal.aborted||performance.now()>=deadline)throw new Error("Build timed out or was cancelled.");
         check=undefined;
-        const prompt=await runnerPrompt(this.root,approved,{command,resources:{base:context.base??"not yet reported; browser gate remains authoritative",...existing},...(firstReason?{rejection:firstReason}:{})});
+        const prompt=await runnerPrompt(this.root,approved,{command,resources:{base:baseUsage,...existing},...(firstReason?{rejection:firstReason}:{})});
         const builderStart=performance.now();let diagnostic:string|undefined;attempts=attempt;
         try{const built=await (this.options.builder??runCodex)({root:this.root,tree,bin:this.options.bin??sourceEnv.CODEX_BIN??"codex",env:sourceEnv,decision:approved,signal,feed,prompt,attempt,timeoutMs:Math.max(1,deadline-performance.now()),onSpawn:async pid=>{await this.options.versions.setPending({path:tree,base,version,process:pid,owner:process.pid});}});addTokens(built);diagnostic=built.diagnostic;}
         catch(error){const used=(error as {tokens?:Usage})?.tokens;addTokens(used??{input:null,output:null,total:null});throw error;}

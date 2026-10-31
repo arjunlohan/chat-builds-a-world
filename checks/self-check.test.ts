@@ -6,7 +6,7 @@ import {join} from "node:path";
 import {exec,execFile} from "node:child_process";
 import {promisify} from "node:util";
 import {selfCheck,selfCheckManifest,selfCheckCommand,resourceCheck} from "../server/runner/self-check.js";
-import {GLOBAL_CAP,SUMMON_POOL,emptyUsage} from "../world/shared/limits.js";
+import {GLOBAL_CAP,SUMMON_POOL,emptyUsage,modulePool} from "../world/shared/limits.js";
 test("locked CLI and runner share static/type/resource admission with a live base reservation",async()=>{
  const root=await mkdtemp(join(tmpdir(),"self-check-")),file="world/modules/check.ts",signal=new AbortController().signal;
  try{
@@ -38,4 +38,7 @@ test("exact rendered self-check runs under the builder workspace-write sandbox w
 test("retained resources count against the pool before the new candidate",async()=>{
  const code='import {Points,PointsMaterial,BufferGeometry,Float32BufferAttribute} from "/assets/three.js";export default ()=>({id:"retained",init(s){const g=new BufferGeometry();g.setAttribute("position",new Float32BufferAttribute(new Float32Array(30),3));s.scene.add(new Points(g,new PointsMaterial()));},update(){},onChat(){},onCitizenSpawn(){},onRaid(){},dispose(){}});';
  const input={base:emptyUsage(),retained:[{id:"retained",file:"world/modules/retained.ts",code}]};const result=await resourceCheck(input,input.retained,new AbortController().signal);assert.equal(result.ok,true,result.reason);assert.equal(result.retained!.particles,10);assert.equal(result.available!.particles,GLOBAL_CAP.particles-SUMMON_POOL.particles-10);
+});
+test("a standalone probe without base facts still reserves the summon pool",async()=>{
+ const result=await resourceCheck({retained:[]},[],new AbortController().signal);assert.equal(result.ok,true,result.reason);assert.deepEqual(result.pool,modulePool(emptyUsage()));
 });

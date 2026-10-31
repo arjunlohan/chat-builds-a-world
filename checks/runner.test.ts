@@ -21,6 +21,7 @@ test("the checked import manifest drives policy, both prompts and the engineerin
  const source=(await readFile("checks/fixtures/modules/particles.ts","utf8")).replace("../../../world/engine/api.js","../engine/api.js");assert.doesNotThrow(()=>inspectModule(source,"world/modules/test.ts"));
  assert.throws(()=>inspectModule(source.replace("Points, PointsMaterial","WebGLRenderer, Points, PointsMaterial"),"world/modules/test.ts"),/Only vetted/);
 });
+async function knownVersions(root:string,publish:ConstructorParameters<typeof Versions>[1]){const v=new Versions(root,publish);await v.reportBaseUsage({nodes:0,triangles:0,draws:0,lights:0,particles:0});return v;}
 async function repository() {
   const root = await mkdtemp(join(tmpdir(), "runner-unit-")); await mkdir(join(root, "world/modules"), { recursive: true });
   await writeFile(join(root, "README.md"), "session file\n"); await writeFile(join(root, ".gitignore"), "state/\nworktrees/\n.env\n.codex-runtime/\n");
@@ -101,7 +102,7 @@ test("protected data written only into module source is rejected before compilat
  const root=await repository(), secret="synthetic-fixture-secret";const feed:string[]=[];
  try {
   await writeFile(join(root,"AGENTS.md"),"## World Module API v1\nSynchronous hooks only.\n## Scene Spec v1\n");await git(root,"add","AGENTS.md");await git(root,"-c","user.name=Test","-c","user.email=test@localhost","commit","--no-gpg-sign","-m","Contract");
-  const head=await git(root,"rev-parse","HEAD"),versions=new Versions(root,()=>{});
+  const head=await git(root,"rev-parse","HEAD"),versions=await knownVersions(root,()=>{});
   const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:secret},bin:resolve("checks/fixtures/fake-builder.cjs"),feed:(_kind,text)=>feed.push(text),announce:async()=>{}});
   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"Test",reason:"Fixture",spec:{moduleId:"security",description:"protected",steps:["Small visual"],checks:["Cleanup"],estimatedSeconds:60},files:["world/modules/security.ts"],mode:"live",latencyMs:0}});
   assert.equal(result.ok,false);assert.match(result.reason,/protected data/);assert.ok(!JSON.stringify({result,feed}).includes(secret));assert.equal(await git(root,"rev-parse","HEAD"),head);
@@ -111,7 +112,7 @@ test("protected data written only into module source is rejected before compilat
 test("a completed builder with no edits reports its explanation and retains only redacted public evidence",async()=>{
  const root=await repository(),secret="synthetic-nochange-secret";try{
   await writeFile(join(root,"AGENTS.md"),"## World Module API v1\nSynchronous hooks only.\n## Scene Spec v1\n");await git(root,"add","AGENTS.md");await git(root,"-c","user.name=Test","-c","user.email=test@localhost","commit","--no-gpg-sign","-m","Contract");
-  const versions=new Versions(root,()=>{}),head=await git(root,"rev-parse","HEAD");
+  const versions=await knownVersions(root,()=>{}),head=await git(root,"rev-parse","HEAD");
   const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:secret},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{}});
   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"Rain",reason:"Safe",spec:{moduleId:"rain",description:"nochange",steps:["Implement rain"],checks:["Dispose"],estimatedSeconds:60},files:["world/modules/rain.ts"],mode:"fixture",latencyMs:0}});
   assert.equal(result.outcome,"REVERTED");assert.match(result.reason,/no module changes.*could not implement.*available API/);assert.ok(!result.reason.includes(secret));assert.deepEqual(result.tokens,{input:123,output:45,total:168});
@@ -125,7 +126,7 @@ test("failed live acknowledgement restores module content with a forward commit 
   await mkdir(join(root,"world/engine"));await writeFile(join(root,"world/engine/api.ts"),'import type {Group} from "three"; export interface WorldModule {id:string;init(s:{scene:Group}):void;update(dt:number):void;onChat():void;onCitizenSpawn():void;onRaid():void;dispose():void;}');
   await writeFile(join(root,"AGENTS.md"),"## World Module API v1\nSynchronous hooks only.\n## Scene Spec v1\n");await git(root,"add",".");await git(root,"-c","user.name=Test","-c","user.email=test@localhost","commit","--no-gpg-sign","-m","Contract");
   const baseline=await git(root,"rev-parse","HEAD");let versions!:Versions;
-  versions=new Versions(root,version=>{if(version)versions.acknowledge(version.version,version.receipt,false)});
+  versions=await knownVersions(root,version=>{if(version)versions.acknowledge(version.version,version.receipt,false)});
   const runner=new Runner({root,versions,bin:resolve("checks/fixtures/fake-builder.cjs"),env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"synthetic-fixture-secret"},feed(){},announce:async()=>{},check:async()=>({ok:true,fps:60,avgFps:60})});
   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"Test",reason:"Fixture",spec:{moduleId:"activation",description:"good",steps:["Small visual"],checks:["Cleanup"],estimatedSeconds:60},files:["world/modules/activation.ts"],mode:"fixture",latencyMs:0}});
   assert.equal(result.ok,false);assert.match(result.reason,/activation/);assert.equal(versions.current!.modules.length,0);assert.equal(versions.previous(),null,"A failed activation must never become a rollback target");
@@ -145,7 +146,7 @@ test("a metrics write failure cannot revert a successfully activated version", a
  try{
   await mkdir(join(root,"world/engine"));await writeFile(join(root,"world/engine/api.ts"),'import type {Group} from "three"; export interface WorldModule {id:string;init(s:{scene:Group}):void;update(dt:number):void;onChat():void;onCitizenSpawn():void;onRaid():void;dispose():void;}');
   await writeFile(join(root,"AGENTS.md"),"## World Module API v1\nSynchronous hooks only.\n## Scene Spec v1\n");await git(root,"add",".");await git(root,"-c","user.name=Test","-c","user.email=test@localhost","commit","--no-gpg-sign","-m","Contract");
-  let versions!:Versions;versions=new Versions(root,v=>{if(v)versions.acknowledge(v.version,v.receipt,true)});
+  let versions!:Versions;versions=await knownVersions(root,v=>{if(v)versions.acknowledge(v.version,v.receipt,true)});
   const runner=new Runner({root,versions,bin:resolve("checks/fixtures/fake-builder.cjs"),env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"synthetic-fixture-secret"},feed(){},announce:async()=>{},record(){throw new Error("disk full")},check:async()=>({ok:true,fps:60,avgFps:60})});
   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"accept",title:"Test",reason:"Safe",spec:{moduleId:"metric",description:"good",steps:["Small visual"],checks:["Cleanup"],estimatedSeconds:60},files:["world/modules/metric.ts"],mode:"live",latencyMs:0}});
   assert.equal(result.outcome,"SHIPPED");assert.equal(versions.current?.tag,"v1");assert.equal(await git(root,"tag","--list"),"v1");versions.close();
@@ -164,7 +165,7 @@ test("automatic rollback preempts a real queued build and waits for its worktree
  const root=await repository(),events:string[]=[];
  try{
   const first=await git(root,"rev-parse","HEAD"),firstSource=await readFile(join(root,"world/modules/a.ts"),"utf8");let versions!:Versions;
-  versions=new Versions(root,v=>{if(v)versions.acknowledge(v.version,v.receipt,true)});await versions.baselineAt(first);
+  versions=await knownVersions(root,v=>{if(v)versions.acknowledge(v.version,v.receipt,true)});await versions.baselineAt(first);
   const bundle='export default () => ({id:"visual",init(){},update(){},onChat(){},onCitizenSpawn(){},onRaid(){},dispose(){}});';
   const one=await versions.artifact("visual","world/modules/a.ts",bundle);await versions.activate({version:1,tag:"v1",commit:first,title:"One",requester:"viewer",modules:[one]},false);
   await writeFile(join(root,"world/modules/a.ts"),"export default () => ({id:'failed'});\n");const second=await commitTree(root,"v2 fixture");const two=await versions.artifact("visual","world/modules/a.ts",bundle+'\n// second version');
@@ -182,7 +183,7 @@ test("verified EventSub moderator veto drains a running CLI and its worktree",as
  class Socket extends EventEmitter{close(){this.emit("close");}terminate(){}message(type:string,payload:object,id:string){this.emit("message",Buffer.from(JSON.stringify({metadata:{message_type:type,message_id:id},payload})));}}
  let rounds:Rounds|undefined,client:InstanceType<typeof TwitchClient>|undefined,child=0;try{
   await writeFile(join(root,"AGENTS.md"),"## World Module API v1\nSynchronous hooks only.\n## Scene Spec v1\n");await git(root,"add","AGENTS.md");await git(root,"-c","user.name=Test","-c","user.email=test@localhost","commit","--no-gpg-sign","-m","Contract");
-  const versions=new Versions(root,()=>{}),pipeline=new WorldPipeline();let spawned!:()=>void;const ready=new Promise<void>(r=>spawned=r);let result!:ReturnType<Runner["build"]>;
+  const versions=await knownVersions(root,()=>{}),pipeline=new WorldPipeline();let spawned!:()=>void;const ready=new Promise<void>(r=>spawned=r);let result!:ReturnType<Runner["build"]>;
   const runner=new Runner({root,versions,bin:resolve("checks/fixtures/fake-builder.cjs"),env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"offline-fixture"},feed(){},announce:async()=>{},builder:options=>runCodex({...options,onSpawn:async pid=>{await options.onSpawn?.(pid);child=pid;spawned();}})});
   rounds=new Rounds({publish(){},review:()=>({verdict:"accept",reason:"Safe fixture",title:"Lantern",spec:{moduleId:"lantern",description:"timeout",steps:["Create a small lantern"],checks:["Dispose"],estimatedSeconds:60},files:["world/modules/lantern.ts"],mode:"fixture",latencyMs:0}),build:request=>result=runner.build(request)});pipeline.attachRounds(rounds);
   rounds.command({id:"idea",userId:"viewer",displayName:"Viewer",color:"#79D7CF",text:"!idea A small lantern",timestamp:Date.now()});rounds.skip();rounds.skip();await ready;assert.equal(rounds.snapshot().phase,"building");
@@ -199,7 +200,7 @@ test("a rejected fast-forward removes its new tag without changing master",async
  }finally{if(tree)await removeTree(root,tree);await rm(root,{recursive:true,force:true});}
 });
 test("fallback policy explicitly selects previous, healthy current or baseline",async()=>{
- const root=await mkdtemp(join(tmpdir(),"fallback-policy-")),versions=new Versions(root,()=>{});try{
+ const root=await mkdtemp(join(tmpdir(),"fallback-policy-")),versions=await knownVersions(root,()=>{});try{
   await versions.baselineAt("base");assert.equal(versions.fallbackTarget({allowBaseline:false}),null);assert.equal(versions.fallbackTarget({allowBaseline:true})!.tag,"v0");
   const one=await versions.artifact("one","world/modules/one.ts","export default 1;");await versions.activate({version:1,tag:"v1",commit:"one",title:"One",requester:"viewer",modules:[one]},false);
   assert.equal(versions.fallbackTarget({allowBaseline:false}),null);assert.equal(versions.fallbackTarget({excludingCommit:"interrupted",allowBaseline:false})!.tag,"v1");
@@ -212,18 +213,25 @@ async function retryRepository(){
  const root=await repository();await mkdir(join(root,"world/engine"));await writeFile(join(root,"world/engine/api.ts"),'import type {Group} from "three"; export interface WorldModule {id:string;init(s:{scene:Group}):void;update(dt:number):void;onChat():void;onCitizenSpawn():void;onRaid():void;dispose():void;}');await git(root,"add",".");await git(root,"-c","user.name=Test","-c","user.email=test@localhost","commit","--no-gpg-sign","-m","Locked API");return root;
 }
 const repairDecision=(description="repair")=>({verdict:"accept" as const,title:"Repair visual",reason:"Safe",spec:{moduleId:"repair",description,steps:["Create visual"],checks:["Dispose"],estimatedSeconds:60},files:["world/modules/repair.ts"],mode:"fixture" as const,latencyMs:0});
+test("base reservation survives restart and an unknown baseline refuses work before creating a tree",async()=>{
+ const root=await retryRepository();let called=0;try{
+  const versions=new Versions(root,()=>{}),runner=new Runner({root,versions,feed(){},announce:async()=>{},builder:async()=>{called++;return{input:0,output:0,total:0};}});
+  const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.match(result.reason,/baseline is unknown/);assert.equal(called,0);assert.equal(result.attempts,0);assert.equal(versions.pending,undefined);assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);
+  const usage={nodes:20,triangles:114000,draws:20,lights:0,particles:216};assert.equal(await versions.reportBaseUsage(usage),true);const restored=new Versions(root,()=>{});await restored.init();assert.deepEqual(restored.baseUsage,usage);assert.equal(await restored.reportBaseUsage({...usage,particles:-1}),false);assert.deepEqual(restored.baseUsage,usage);await runner.close();versions.close();restored.close();
+ }finally{await rm(root,{recursive:true,force:true});}
+});
 test("fake builder repairs a candidate rejection in the same worktree, gates again and ships once",async()=>{
  const root=await retryRepository(),feed:string[]=[],records:unknown[]=[],trees:string[]=[],timeouts:number[]=[];let checks=0,calls=0,versions!:Versions;
  const firstReason="Candidate is not stream-readable: needs 4096 contrasted 1080p pixel-equivalents and 64x64px in two of three probes (best 3600px).";
  try{
-  versions=new Versions(root,v=>{if(v)void versions.acknowledge(v.version,v.receipt,true);});
+  versions=await knownVersions(root,v=>{if(v)void versions.acknowledge(v.version,v.receipt,true);});
   const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed:(_kind,text)=>feed.push(text),record:r=>{records.push(r);},announce:async()=>{},builder:async options=>{calls++;trees.push(options.tree);timeouts.push(options.timeoutMs!);assert.match(options.prompt!,/LOCKED_SELF_CHECK_COMMAND/);if(calls===2){assert.ok(options.prompt!.includes(JSON.stringify(firstReason)));assert.ok((await readFile(join(options.tree,options.decision.files[0]!),"utf8")).includes("0.03"));}return runCodex(options);},check:async(_root,modules)=>{checks++;assert.ok(modules.at(-1)!.code.includes(checks===1?"0.03":"2.2"));return checks===1?{ok:false,reason:firstReason}:{ok:true,fps:60,avgFps:60};}});
   const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.equal(result.outcome,"SHIPPED",result.reason);assert.equal(result.attempts,2);assert.equal(result.firstReason,firstReason);assert.equal(calls,2);assert.equal(checks,2);assert.equal(trees[0],trees[1]);assert.ok(timeouts[1]!<timeouts[0]!);assert.deepEqual(result.tokens,{input:200,output:400,total:600});assert.ok(feed.some(s=>s.startsWith("Retry 2/2")));assert.equal((records[0] as {attempts:number}).attempts,2);assert.equal(await git(root,"tag","--list"),"v1");assert.equal((await git(root,"worktree","list","--porcelain")).split("worktree ").length-1,1);await runner.close();versions.close();
  }finally{await rm(root,{recursive:true,force:true});}
 });
 test("guard rejections and outside-module diffs never invoke a repair",async()=>{
  const root=await retryRepository();let calls=0;try{
-  const versions=new Versions(root,()=>{}),runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{},builder:options=>{calls++;return runCodex(options);}});
+  const versions=await knownVersions(root,()=>{}),runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{},builder:options=>{calls++;return runCodex(options);}});
   const guard=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:{verdict:"reject",title:"No",reason:"Unsafe",spec:null,files:[],mode:"fixture",latencyMs:0}});assert.equal(guard.outcome,"REVERTED");assert.equal(calls,0);assert.equal(guard.attempts,0);
   const outside=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision("outside")});assert.match(outside.reason,/outside approved/);assert.equal(calls,1);assert.equal(outside.attempts,1);assert.equal(outside.firstReason,undefined);assert.equal(await git(root,"tag","--list"),"");await runner.close();versions.close();
  }finally{await rm(root,{recursive:true,force:true});}
@@ -231,7 +239,7 @@ test("guard rejections and outside-module diffs never invoke a repair",async()=>
 test("resource rejections get one repair then retain the final reason; checker timeouts never retry",async()=>{
  for(const timeout of [false,true]){
   const root=await retryRepository();let calls=0;try{
-   const versions=new Versions(root,()=>{});if(!timeout)versions.reportBaseUsage({nodes:0,triangles:129999,draws:0,lights:0,particles:0});
+   const versions=await knownVersions(root,()=>{});if(!timeout)await versions.reportBaseUsage({nodes:0,triangles:129999,draws:0,lights:0,particles:0});
    const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{},builder:options=>{calls++;return runCodex(options);},check:async()=>({ok:false,reason:"Candidate checker timed out after 24 seconds.",retryable:false})});
    const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.equal(result.outcome,"REVERTED");assert.equal(calls,timeout?1:2);assert.match(result.reason,timeout?/timed out/:/triangles world limit/);assert.equal(result.attempts,calls);assert.equal(await git(root,"tag","--list"),"");await runner.close();versions.close();
   }finally{await rm(root,{recursive:true,force:true});}

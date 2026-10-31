@@ -61,7 +61,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       await post(request,response,async input=>{
         switch(path){
           case "/modules/budget": {
-            const accepted=primary(input.clientId)&&!!versions?.reportBaseUsage(input.base);
+            const accepted=primary(input.clientId)&&!!await versions?.reportBaseUsage(input.base);
             return {status:accepted?200:409,value:{accepted}};
           }
           case "/runner/live": {
