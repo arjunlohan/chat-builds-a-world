@@ -147,7 +147,17 @@ Codex runs there via CODEX_BIN, workspace-write sandbox, medium effort, JSON eve
 and ephemeral mode. The child inherits only PATH, HOME, the Bedrock bearer token
 and a private writable CODEX_HOME under `.codex-runtime/runs/`. Each invocation
 is seeded from the tracked `.codex-runtime/config.toml` and cleaned on completion;
-CLI preference writes cannot dirty that canonical file. No Twitch credentials
+CLI preference writes cannot dirty that canonical file.
+Runtime argv uses `--no-daemon`, `--strict-config`, disables plugins, remote
+plugins, plugin prefetch, apps, skill dependency installation and hooks, and
+skips host skill discovery. These switches were checked against the installed
+0.166.0-alpha.5.1 CLI's `exec --help` and `features list`, using its supported
+[feature controls](https://learn.chatgpt.com/docs/config-file/config-reference).
+The owned process group is killed/drained on normal exit as well as cancellation,
+including descendants with ignored stdio. Home removal retries transient races;
+cleanup failures warn with secret redaction and preserve the verdict. Startup
+reclaims inactive/dead-owner and stale legacy homes while preserving live leases.
+ No Twitch credentials
 are inherited. The approved plan and locked World Module API become the prompt;
 no runtime dependencies are installed. The overlay shows short plan/file/check
 lines, never raw JSON, shell commands, private reasoning or stderr.
@@ -160,20 +170,32 @@ unsafe hooks; every approved source is type-checked against the engine API.
 The host uses the TypeScript 5.9 compiler API alias for this analysis because the
 project's TypeScript 7 CLI package does not expose that JavaScript API.
 
-The headless gate starts Chromium with **SwiftShader, a 1920×1080 viewport and
-300 citizens**, using the production render profile at a reduced 160×90 framebuffer, warms up, then samples **15 seconds**. It fails on console/hook
-errors, measured or rolling average FPS below **40**, a >1-second frame gap,
-unchanging/black pixels or no visible pixels from the candidate itself. An
-external **24-second watchdog** keeps the entire headless check under 25 seconds
-and kills the browser/worker groups if JavaScript freezes.
+The headless gate starts Chromium with **SwiftShader**, a 1920×1080 viewport,
+300 citizens and the production render profile at a reduced 160×90 framebuffer.
+It samples **15 seconds** after warmup. It rejects errors, measured/rolling FPS
+below **40**, actual rendered-frame intervals over one second, and frozen/black
+canvas pixels. Delayed Playwright polls are diagnostic data, not render freezes.
+A 24-second external watchdog keeps the complete check under 25 seconds.
 
-The gate and OBS use the same materials, full citizen geometry, shadows, bloom,
-lighting and simulation. Only render resolution differs. Check-only visibility
-probe targets are allocated only when requested; production allocates no cached
-background or probe targets. There are no citizen proxies or material substitutions.
-Static garden batching preserves every authored triangle and color. The gate
-measures completed real frames and candidate visibility; it is still a software
-admission check, not a full-HD hardware benchmark.
+Visibility is checked before/after the timed window, so probe shader compilation
+and GPU readback cannot be attributed to candidate frame work. Identical 192×108
+HDR renders with/without the module measure its actual contrasted contribution,
+including world occlusion and output tone mapping. The module needs at least
+**4,096 full-HD pixel-equivalents** and a **64×64px** footprint in two of three
+observations, including the final one. `modulePixels` now explicitly means
+full-HD equivalents; `moduleProbePixels` is the raw reduced probe count. The old
+96×54 isolated probe's 12 pixels represented roughly 4,800 full-HD equivalents,
+not 12 stream pixels, and did not establish visibility through terrain/trees.
+Builder instructions aim for a recognizable 3–5-unit feature and 96×96px silhouette.
+
+Every check retains `state/checks/<id>/input.json`, `result.json`, incremental
+`evidence.json` (samples, actual frame intervals/work times, footprints and errors)
+and a canvas screenshot when the page is responsive. Timeouts retain the last
+checkpoint and candidate source. `pnpm check:gate` tests a readable, an occluded
+and a tiny fixture in real Chromium. These artifacts are local and ignored.
+The live benchmark's world client starts with `?standby=1`: it keeps SSE connected
+without rendering while the independent gate runs, then wakes on the new version
+for the real hot-swap acknowledgement. Normal `/world` is unchanged.
 
 On pass, commit `vN: <title> (requested by @user)` in the worktree, recheck master,
 fast-forward it and tag vN. Immutable local module bundles share the engine's

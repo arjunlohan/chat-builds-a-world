@@ -1,3 +1,4 @@
+import { contributionFootprint, VISIBILITY_PROBE } from "./visibility.js";
 import { PRODUCTION_PROFILE, type RenderProfile } from "./render-profile.js";
 import { SUMMON_POOL, modulePool, emptyUsage, RenderFailure } from "../shared/limits.js";
 import type { WorldVersion } from "../../server/versions/index.js";
@@ -5,7 +6,7 @@ import type { WorldModuleFactory } from "./api.js";
 import { isChatCommand, hasPhysicalReaction } from "../../server/commands.js";
 import {
   ACESFilmicToneMapping, Group, PCFSoftShadowMap, PerspectiveCamera, Raycaster,
-  Scene, SRGBColorSpace, Vector2, WebGLRenderer, WebGLRenderTarget, HemisphereLight, Color,
+  Scene, SRGBColorSpace, HalfFloatType, Vector2, WebGLRenderer, WebGLRenderTarget,
 } from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -28,6 +29,7 @@ import { log } from "./log.js";
 
 export interface RendererOptions {
   profile?: Readonly<RenderProfile>;
+  standbyUntilVersion?: boolean;
   probeId?: string;
   fixedTime?: number;
   labels?: HTMLElement;
@@ -42,7 +44,7 @@ export interface RendererOptions {
 /** Fixed OBS framebuffer; CSS fits it into any viewport without extra DPR work. */
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions = {}) {
   const profile = options.profile ?? PRODUCTION_PROFILE;
-  let shadowDirty = true;
+  let shadowDirty = true, standby = !!options.standbyUntilVersion;
   const clientId = crypto.randomUUID();
   const post = (url: string, data: object) => void fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, clientId }) }).catch(() => {});
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -117,11 +119,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   let pendingAck: { version: WorldVersion; frames: number } | null = null;
   let activeVersion: WorldVersion | null = null;
   const moduleReceipt = (version: WorldVersion, ok: boolean) => post("/modules/ack", { version: version.version, receipt: version.receipt, ok });
-  const probeScene = profile.probe ? new Scene() : undefined;
-  if (probeScene) { probeScene.background = new Color("#000000"); probeScene.add(new HemisphereLight("#ffffff", "#ffffff", 3)); }
-  const probeTarget = profile.probe ? new WebGLRenderTarget(96, 54) : undefined;
-  const probePixels = profile.probe ? new Uint8Array(96 * 54 * 4) : undefined;
-  let lastProbe = -1;
+  const probeTarget = profile.probe ? new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height) : undefined;
+  const probeHdrTarget = profile.probe ? new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,{type:HalfFloatType}) : undefined;
+  const withPixels = profile.probe ? new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4) : undefined;
+  const withoutPixels = profile.probe ? new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4) : undefined;
   let activation = 0;
   async function activate(version: WorldVersion | null) {
     const generation = ++activation; shadowDirty = true;
@@ -143,7 +144,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       if (version) moduleReceipt(version, false);
     }
   }
-  const stats = new FrameStats();
+  const stats = new FrameStats(profile.probe?2048:0);
+  if(stats.trace)window.__worldFrameTrace=stats.trace;
   window.__worldStats = stats.value;
   let elapsed = 0, disposed = false, ready = false, frameId = 0, uiTime = 0;
   let serverOffset = 0;
@@ -156,7 +158,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       citizens.sync(event.citizens, event.now); stats.value.raidCount = event.raids;
       for (const failure of materializer.sync(event.summons)) ack(failure.state, failure.code);
       break; }
-    case "version": void activate(event.version); break;
+    case "version": void activate(event.version).then(()=>{if(standby){standby=false;visibility();}}); break;
     case "chat": {
       const spawned = citizens.upsert(event.citizen, event.now);
       if (spawned) {
@@ -189,7 +191,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   }, connected => options.onConnection?.(connected), clientId);
 
   function frame(now: number) {
-    if (disposed || document.hidden) return;
+    if (disposed || document.hidden || standby) return;
     const realDt = stats.sample(now);
     const dt = Math.min(0.05, realDt);
     elapsed += dt;
@@ -218,17 +220,22 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       composer.render(dt);
       stats.value.renderMs = performance.now() - renderStart; stats.value.triangles = renderer.info.render.triangles;
       materializer.rendered(camera);
-      if (probeScene && probeTarget && probePixels && options.probeId && elapsed - lastProbe > 0.75 && stats.value.moduleCount) {
-        lastProbe = elapsed;
-        const roots = host.visualRoots(options.probeId), parents = roots.map(root => root.parent);
-        for (const root of roots) probeScene.add(root);
-        renderer.setRenderTarget(probeTarget); renderer.render(probeScene, camera);
-        renderer.readRenderTargetPixels(probeTarget, 0, 0, 96, 54, probePixels);
-        let lit = 0; for (let i = 0; i < probePixels.length; i += 4) if (probePixels[i]! + probePixels[i+1]! + probePixels[i+2]! > 24) lit++;
-        stats.value.modulePixels = lit;
-        for (let i = 0; i < roots.length; i++) { roots[i]!.removeFromParent(); parents[i]?.add(roots[i]!); }
-        renderer.setRenderTarget(null);
+      const probeStart=probeTarget?performance.now():0;
+      if (probeTarget && probeHdrTarget && withPixels && withoutPixels && options.probeId && stats.value.probeRequest>stats.value.probeCompleted) {
+        const roots=host.visualRoots(options.probeId),visible=roots.map(root=>root.visible),toScreen=output.renderToScreen;
+        try {
+          output.renderToScreen=false;
+          renderer.setRenderTarget(probeHdrTarget);renderer.render(scene,camera);
+          output.render(renderer,probeTarget,probeHdrTarget,0,false);
+          renderer.readRenderTargetPixels(probeTarget,0,0,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,withPixels);
+          for(const root of roots)root.visible=false;
+          renderer.setRenderTarget(probeHdrTarget);renderer.render(scene,camera);output.render(renderer,probeTarget,probeHdrTarget,0,false);renderer.readRenderTargetPixels(probeTarget,0,0,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,withoutPixels);
+          const footprint=contributionFootprint(withPixels,withoutPixels,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height);
+          stats.value.modulePixels=footprint.hdPixels;stats.value.moduleProbePixels=footprint.probePixels;stats.value.moduleWidth=footprint.hdWidth;stats.value.moduleHeight=footprint.hdHeight;
+          stats.value.probeCompleted=stats.value.probeRequest;
+        }finally{output.renderToScreen=toScreen;for(let i=0;i<roots.length;i++)roots[i]!.visible=visible[i]!;renderer.setRenderTarget(null);}
       }
+      if(stats.trace)stats.recordWork(performance.now()-probeStart);
       if (!ready) { ready = true; options.onReady?.(); }
       if (now - uiTime >= 250) {
         uiTime = now;
@@ -241,10 +248,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     frameId = requestAnimationFrame(frame);
   }
   function visibility() {
-    host.setPaused(document.hidden);
+    host.setPaused(document.hidden || standby);
     stats.resetClock();
     cancelAnimationFrame(frameId);
-    if (!document.hidden && !disposed) frameId = requestAnimationFrame(frame);
+    if (!document.hidden && !disposed && !standby) frameId = requestAnimationFrame(frame);
   }
   const raycaster = new Raycaster(), pointer = new Vector2();
   function explore(event: PointerEvent) {
@@ -265,8 +272,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   document.addEventListener("visibilitychange", visibility);
   canvas.addEventListener("pointerup", explore);
   canvas.addEventListener("webglcontextlost", contextLost);
-  host.setPaused(document.hidden);
-  if (!document.hidden) frameId = requestAnimationFrame(frame);
+  host.setPaused(document.hidden || standby);
+  if (!document.hidden && !standby) frameId = requestAnimationFrame(frame);
 
   return {
     renderer, scene, camera, director, get host(){return host;}, citizens, materializer, stats: stats.value, baseUsage: base,
@@ -280,7 +287,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       disconnect(); resizeLabels.disconnect(); citizens.dispose(); labelManager.dispose();
       host.dispose(); materializer.dispose(); moduleMaterializer.dispose();
       engineResources.dispose(environment);
-      probeTarget?.dispose();
+      probeTarget?.dispose();probeHdrTarget?.dispose();
       bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose(); renderer.dispose();
     },
   };

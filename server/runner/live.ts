@@ -9,7 +9,7 @@ if (!process.env.AWS_BEARER_TOKEN_BEDROCK?.trim()) {
   const base = `http://127.0.0.1:${readConfig().port}`;
   const browser = await chromium.launch({ headless: true, args: process.platform === "darwin" ? ["--use-angle=metal", "--enable-gpu"] : ["--enable-gpu"] });
   try {
-    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } }); let reloads=0; page.on("framenavigated",frame=>{if(frame===page.mainFrame())reloads++;}); await page.goto(`${base}/world`); await page.waitForSelector('canvas[data-ready="true"]'); reloads=0;
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } }); let reloads=0; page.on("framenavigated",frame=>{if(frame===page.mainFrame())reloads++;}); await page.goto(`${base}/world?standby=1`); await page.waitForFunction(()=>!!window.__worldStats); reloads=0;
     const response = await fetch(`${base}/runner/live`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idea: process.argv.slice(2).join(" ") || "Add one original amber crystal that gently floats above the ridge." }) });
     if (!response.ok) throw new Error("Live round refused. Restart dev with the key, clean master and an empty idea round.");
     const { round } = await response.json() as { round: number };

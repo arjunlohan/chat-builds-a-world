@@ -3,7 +3,7 @@ import "./style.css";
 import { createRenderer } from "./engine/renderer.js";
 import type { WorldStats } from "./engine/stats.js";
 
-declare global { interface Window { __worldStats: WorldStats } }
+declare global { interface Window { __worldStats: WorldStats; __worldFrameTrace?: import("./engine/stats.js").FrameTrace } }
 
 const canvas = document.querySelector<HTMLCanvasElement>("#world");
 const status = document.querySelector<HTMLElement>("#status");
@@ -24,6 +24,7 @@ function fail(message: string) {
 try {
   if (!canvas) throw new Error("World canvas is missing");
   const world = createRenderer(canvas, {
+    standbyUntilVersion: query.get("standby") === "1",
     profile: query.get("check") === "1" ? CANDIDATE_PROFILE : PRODUCTION_PROFILE,
     probeId: query.get("probe") ?? "",
     ...(labels ? { labels } : {}),

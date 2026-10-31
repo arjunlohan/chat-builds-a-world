@@ -933,6 +933,26 @@ Full JSON schema (keep identical to the canonical file):
   immutable garden meshes are baked once, and module trees audit on mutation or
   once per second. Frozen citizen lists are shared within a frame.
 
+## Phase 7 verification corrections
+
+- Runtime Codex is foreground (`--no-daemon`) with strict config and supported
+  feature controls disabling plugin sync/prefetch, remote plugins, apps, hooks and
+  skill dependency installation, plus skipped host skill discovery. Own and drain
+  its complete process group even after successful exit. A late cleanup writer
+  must never replace a verdict with an exception; retry, warn redacted and reclaim
+  stale leased homes at startup. Never delete a live invocation's home.
+- The gate measures actual RAF frame intervals, not Playwright polling gaps. Its
+  check-only trace records frame timestamps and CPU/render/probe work. Visibility
+  probes happen outside the 15-second production-performance window. Keep the
+  24-second external watchdog and retain candidate source, incremental evidence,
+  result and a responsive-page screenshot under ignored state/checks/.
+- Visibility uses paired normal HDR renders with/without candidate ownership,
+  retaining world occlusion. A ship needs at least 4096 contrasted full-HD
+  pixel-equivalents spanning at least 64x64px in two of three observations,
+  including the last. Distinguish raw 192x108 probe pixels from HD equivalents.
+  Aim builder geometry at a clear 96x96px silhouette. A standby runner test client
+  renders only after a version event, avoiding self-imposed GPU contention.
+
 ## Working agreements
 
 Keep scaffolding at the repository root. Implement tiers in order and document

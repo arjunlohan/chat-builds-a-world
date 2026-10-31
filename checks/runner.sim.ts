@@ -74,7 +74,7 @@ try {
    assert.equal(await page.evaluate(()=>window.__worldStats.moduleError),"");
   } else if(kind!=="guard-reject") {
    assert.equal(result?.ok,false);
-   const expected: Record<string,RegExp>={outside:/outside approved/,throws:/update threw/,slow:/overruns/,empty:/draws nothing/,timeout:/timed out|cancelled/};
+   const expected: Record<string,RegExp>={outside:/outside approved/,throws:/update threw/,slow:/overruns/,empty:/stream-readable/,timeout:/timed out|cancelled/};
    assert.match(row.reason,expected[kind]!);
   }
   assert.equal((await readdir(join(root,"worktrees")).catch(()=>[])).length,0,"Worktree leaked");
