@@ -3,6 +3,7 @@ import math
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import common
 from common import setup, finish, material, empty, ico, tube, key, ease
 
 scene, options = setup("worm-takeover", 7, center=1.75, width=13.8)
@@ -26,7 +27,7 @@ for x in [-.24, .24]:
     ico("antenna tip", (x * 1.55, -.03, .81), (.09, .09, .09), gold, head)
 tube("smile", [(-.14, -.48, -.12), (0, -.505, -.19), (.14, -.48, -.12)], .022, ink, head)
 for f in range(1, scene.frame_end + 1):
-    t = (f - 1) / 30
+    t = (f - 1) / common.FPS
     if t < 1.4:
         size = .25 + .65 * ease(t / 1.4)
         x = -7 + 5.3 * ease(t / 1.4)
@@ -49,4 +50,4 @@ for f in range(1, scene.frame_end + 1):
     head.rotation_euler.y = math.sin(t * 4) * .08
     key(head, f)
     key(worm, f)
-finish(scene, options, "worm-takeover", require_empty_ends=True)
+finish(scene, options, "worm-takeover")

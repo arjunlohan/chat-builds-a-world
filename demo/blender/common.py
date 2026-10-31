@@ -40,8 +40,8 @@ def empty(name, parent=None):
     return obj
 
 
-def ico(name, location, scale, mat, parent=None, detail=2):
-    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=detail, radius=1)
+def ico(name, location, scale, mat, parent=None):
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=1)
     obj = bpy.context.object
     obj.name, obj.parent = name, parent
     obj.location, obj.scale = location, scale
@@ -157,12 +157,7 @@ def endpoint_alpha(path):
         bpy.data.images.remove(image)
 
 
-def assert_empty_endpoints(endpoints):
-    if any(frame["visiblePixels"] for frame in endpoints.values()):
-        raise AssertionError("Overlay endpoints must be fully transparent: " + json.dumps(endpoints))
-
-
-def finish(scene, options, name, require_empty_ends=False):
+def finish(scene, options, name):
     """Render once to PNG, then encode that sequence through Blender's VSE, without rerendering 3D."""
     output = options.output.resolve() / ("preview" if options.preview else "")
     frames = output / "frames"
@@ -189,14 +184,11 @@ def finish(scene, options, name, require_empty_ends=False):
     result = {"name": name, "prerendered": True, "engine": "EEVEE", "preview": options.preview,
               "width": scene.render.resolution_x, "height": scene.render.resolution_y, "fps": fps,
               "frames": len(paths), "durationSeconds": len(paths) / fps, "codec": "QuickTime PNG RGBA",
-              "renderSeconds": round(render_seconds, 2), "endpoints": endpoints, "status": "validating"}
-    if require_empty_ends:
-        try:
-            assert_empty_endpoints(endpoints)
-        except AssertionError:
-            result["status"] = "failed-endpoint-alpha"
-            (output / "render.json").write_text(json.dumps(result, indent=2) + "\n")
-            raise
+              "renderSeconds": round(render_seconds, 2), "endpoints": endpoints}
+    if any(frame["visiblePixels"] for frame in endpoints.values()):
+        result["status"] = "failed-endpoint-alpha"
+        (output / "render.json").write_text(json.dumps(result, indent=2) + "\n")
+        raise AssertionError("Overlay endpoints must be fully transparent: " + json.dumps(endpoints))
     encode = bpy.data.scenes.new("encode PNG alpha sequence")
     encode.render.resolution_x, encode.render.resolution_y = scene.render.resolution_x, scene.render.resolution_y
     encode.render.resolution_percentage, encode.render.fps = 100, fps

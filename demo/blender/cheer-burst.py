@@ -4,6 +4,7 @@ import random
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import common
 from common import setup, finish, material, empty, ico, cone, tube, shadow, key, ease
 
 scene, options = setup("cheer-burst", 6, center=2.1, width=13.4)
@@ -37,7 +38,7 @@ for i in range(44):
     obj.parent = group
     confetti.append((obj, rng.uniform(-3.8, 3.8), rng.uniform(-.4, 1.4), rng.uniform(3.0, 5.8), rng.random() * 5))
 for f in range(1, scene.frame_end + 1):
-    t = (f - 1) / 30
+    t = (f - 1) / common.FPS
     appear = ease((t - .2) / .35)
     group.scale = (appear, appear, appear)
     group.location.z = 10 * ease((t - 4.5) / 1.0)
@@ -63,4 +64,4 @@ for f in range(1, scene.frame_end + 1):
         obj.location = (vx * age * .55, vy, max(.02, .8 + vz * age - 1.3 * age * age))
         obj.rotation_euler = (age * 3 + phase, age * 2, age * 4 + phase)
         key(obj, f)
-finish(scene, options, "cheer-burst", require_empty_ends=True)
+finish(scene, options, "cheer-burst")

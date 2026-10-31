@@ -3,6 +3,7 @@ import math
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import common
 from common import setup, finish, material, empty, ico, cone, tube, shadow, key, ease
 
 scene, options = setup("dog-carrot", 7, center=1.1, width=13.2)
@@ -44,7 +45,7 @@ for i, angle in enumerate([-.5, .0, .5]):
 shade = shadow("running shadow", 0, 1.1, .44)
 shade.scale = (2, 2, 1)
 for f in range(1, scene.frame_end + 1):
-    t = (f - 1) / 30
+    t = (f - 1) / common.FPS
     # Carrot leads the dog into view; both clear the right edge with a quiet tail.
     x = -12 + 8 * ease(t / .95) + 7 * ease((t - .8) / 5) + 9 * ease((t - 5.2) / 1.35)
     stride = t * math.tau * 2.7
@@ -63,4 +64,4 @@ for f in range(1, scene.frame_end + 1):
     shade.location.x = x
     for obj in [dog, head, tail, carrot, shade]:
         key(obj, f)
-finish(scene, options, "dog-carrot", require_empty_ends=True)
+finish(scene, options, "dog-carrot")

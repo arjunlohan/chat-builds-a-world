@@ -20,13 +20,9 @@ assets; runtime modules may not import assets or external URLs.
 
 ## Demo B-roll (prerendered)
 
-The clips under `demo/blender/` use original procedural geometry, materials,
-lighting and animation authored in scripts by Codex for this demo. They contain
-no third-party models, textures, HDRIs, fonts, logos or audio. Blender is the
-rendering tool, not an asset source. Generated PNG sequences and alpha movies
-remain local under ignored `demo/renders/`; no rendered media is committed.
-These concept clips are prerendered and are not output from, or used by, the
-running server or world.
+The clips under `demo/blender/` contain original procedural geometry, materials,
+lighting and animation authored by Codex, with no third-party models, textures,
+HDRIs, fonts, logos or audio.
 
 ## three
 
