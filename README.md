@@ -92,15 +92,16 @@ fps, avgFps, frame and citizenCount regardless of that flag. `/world` keeps a fi
 
 ## Environment
 
-`.env.example` is a **names-only inventory**, not a populated dotenv file and not
-a copy of `.env`. To configure live services:
+`.env.example` contains empty dotenv assignments and commented optional settings,
+not credentials or a copy of `.env`. On a new clone, configure live services with:
 
 ```sh
 cp .env.example .env
 ```
 
-Edit the required lines into `NAME=value` assignments and delete unused names.
-Keep the file private. Environment variables take precedence; restart after edits.
+Fill in the required values and uncomment optional settings only to override their
+defaults. Edit an existing `.env` rather than overwriting it. Keep the file private.
+Environment variables take precedence; restart after edits.
 No `.env` is needed for the fixture demo above.
 
 | Name | Meaning / default |
@@ -128,24 +129,34 @@ Without the Bedrock key, live AI requests fail clearly; they never silently use 
 ## Twitch app and tokens
 
 1. Register an application in the [Twitch developer console](https://dev.twitch.tv/docs/authentication/register-app/).
-   Record its client ID and client secret. Register an exact OAuth redirect URI
-   for an authorization-code callback you control. This repository does not host
-   a Twitch login/callback endpoint.
-2. Follow Twitch's [authorization code grant](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#authorization-code-grant-flow).
-   Authorize as the broadcaster with **user:read:chat** and **user:write:chat**.
-   The authorization request uses response_type=code, your client_id, registered
-   redirect_uri, those scopes, and a random state value checked by your callback.
-3. Exchange the returned code at `POST https://id.twitch.tv/oauth2/token` with
-   client_id, client_secret, code, grant_type=authorization_code and the identical
-   redirect_uri. Store access_token and refresh_token privately in the two env names.
-4. Validate the user token at `GET https://id.twitch.tv/oauth2/validate` with
+   Record its client ID and client secret. Configure those credentials privately
+   in the [Twitch CLI](https://dev.twitch.tv/docs/cli/) using its configuration prompt.
+2. Use the device code flow, which needs no self-hosted callback:
+
+   ```sh
+   twitch token -u --dcf -s 'user:read:chat user:write:chat'
+   ```
+
+   Follow the verification link and sign in as the broadcaster. Store the returned
+   access and refresh tokens privately in TWITCH_ACCESS_TOKEN and TWITCH_REFRESH_TOKEN.
+   The flags were checked against the installed `twitch token --help`.
+3. Validate the token at `GET https://id.twitch.tv/oauth2/validate` with
    `Authorization: OAuth <access token>`. Set TWITCH_BROADCASTER_ID to its user_id.
-   The app and token must belong to the same client ID and broadcaster. An app-only
-   token is insufficient for this implementation.
-5. Populate all five Twitch variables, enable Twitch AutoMod on the channel,
+   The client ID and both scopes must match. An app-only token is insufficient.
+4. Populate all five Twitch variables, enable Twitch AutoMod on the channel,
    leave SIMULATION_MODE unset, and run `pnpm dev`. The server validates identity
    and scopes, subscribes on EventSub welcome, reconnects with backoff and refreshes
    tokens. Rotations persist privately in state/twitch-auth.json.
+
+Alternatively, use Twitch's [authorization code grant](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#authorization-code-grant-flow):
+register an exact redirect URI for a callback you control; authorize as the
+broadcaster with response_type=code, client_id, redirect_uri, both scopes and a
+random state checked by your callback. Exchange the returned code at
+`POST https://id.twitch.tv/oauth2/token` with client_id, client_secret, code,
+grant_type=authorization_code and the identical redirect_uri. Store both tokens,
+then validate and set the broadcaster ID as above. This repository does not host
+an OAuth callback. Authentication is an interactive account-owner step, separate
+from the credential-free command checks.
 
 This implementation uses the broadcaster as both chat subscription user and
 message sender. See Twitch's [chat authentication](https://dev.twitch.tv/docs/chat/authenticating/).
@@ -202,16 +213,14 @@ appear as raw speech bubbles. Guard rejections and failed builds retain the worl
   output or an insufficient visible footprint. The gate has a 24-second watchdog.
   It uses a 1920x1080 viewport and a reduced 160x90 framebuffer for software
   rendering, with separate visibility probes; it is not a full-HD GPU benchmark.
-- A checked commit is tagged before fast-forwarding master. Eight stable live
-  frames acknowledge activation. Failure restores modules with a forward commit;
-  the runner does not stash/reset user work. Unchanged module instances survive
+- Checked modules require a live activation acknowledgement. Failed activations
+  restore the healthy world without stashing/resetting user work. Unchanged instances survive
   hot swaps. Hooks have cooperative 2ms/module and 4ms/total frame budgets.
 - JavaScript hooks cannot be preempted. Static policy, isolated checks and the
   watchdog reduce risk; CSP and hook try/catch are not an arbitrary-code sandbox.
-- State is private, versioned and written atomically. Ordinary live changes use a
-  1.5s trailing debounce; phase/summon/receipt changes flush immediately. GET polls
-  do not write. Active countdowns recover elapsed time from savedAt; interrupted
-  provider calls are cancelled rather than replayed.
+- Saved state is validated before restoration. Interrupted provider calls are
+  cancelled rather than replayed. Persistence and promotion mechanics are in
+  [operation notes](docs/operation.md); implementation rules are in [AGENTS.md](AGENTS.md).
 - The server binds to loopback. Browser connections use a same-origin CSP/SSE.
   `.env`, state/, worktrees/, node_modules/ and runtime homes are ignored. Only
   `.codex-runtime/config.toml` is tracked. Visuals are procedural; no third-party
@@ -239,8 +248,7 @@ The engineering contract is [AGENTS.md](AGENTS.md); operational details are in
 
 ## Verification and reproduction
 
-Current cleanup verification: **179 tests**, strict TypeScript and browser bundles.
-The judge-facing fresh-clone command log is in
+Current check results and the judge-facing fresh-clone command log are in
 [docs/phase10-verification.md](docs/phase10-verification.md).
 
 Completed Phase 9 runs at the revisions recorded in

@@ -80,7 +80,8 @@ is `medium`; use `codex exec` and `CODEX_HOME` in a per-invocation `.codex-runti
 `.codex-runtime/runs/`, seeded from the canonical config and cleaned afterward.
 This prevents CLI preference writes from dirtying tracked configuration. Availability,
 configuration and latency will be verified when the integration is built.
-`.env.example` contains names only; do not add example values or credentials.
+`.env.example` contains empty dotenv assignments, with optional defaults in comments;
+never add credentials or populated values.
 
 ## Phase 3 event and citizen contract
 

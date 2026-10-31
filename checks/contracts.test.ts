@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {parse as parseEnv} from "dotenv";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { parseSceneSpec, type SceneSpec } from "../server/summon/scene-spec.js";
@@ -48,11 +49,11 @@ test("citizen behaviors require an ID, and every behavior targets an existing no
   changed.behaviors[0]!.targetId = "missing";
   assert.throws(() => parse(changed), /Unknown behavior target/);
 });
-test("environment template has names only and no credentials", () => {
-  const names = readFileSync(".env.example", "utf8").trim().split("\n");
-  assert.equal(names.length, 14);
-  assert.ok(names.includes("CODEX_BIN"));assert.ok(names.includes("DEMO_MODE"));
-  assert.ok(names.every(name => /^[A-Z][A-Z0-9_]*$/.test(name)));
+test("environment template is parseable with empty values and documented optional names", () => {
+  const template=readFileSync(".env.example","utf8"),assignments=template.split("\n").filter(line=>/^(?:# )?[A-Z][A-Z0-9_]*=/.test(line));
+  assert.equal(assignments.length,14);assert.ok(assignments.every(line=>/^(?:# )?[A-Z][A-Z0-9_]*=$/.test(line)));
+  assert.ok(assignments.includes("# CODEX_BIN="));assert.ok(assignments.includes("# DEMO_MODE="));
+  assert.equal(parseEnv(template).TWITCH_CLIENT_ID,"");assert.ok(Object.values(parseEnv(template)).every(value=>value===""));
 });
 test("AGENTS embeds the canonical Scene Spec schema", () => {
   const agents = readFileSync("AGENTS.md", "utf8");
