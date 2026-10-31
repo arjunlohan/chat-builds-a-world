@@ -13,6 +13,7 @@ Twitch EventSub WebSocket          Local simulator
                        v
               Node.js / TypeScript
               | citizens, raids, rounds, votes
+              | reactions -> chat meter/vote -> local alpha WebM playback
               | summon -> Bedrock Responses -> Scene Spec validation
               | idea -> Codex guard -> Codex builder in git worktree
               |                      -> policy + Chromium checks
@@ -290,8 +291,9 @@ isolated HTTP server and browser. It can run without a dev server.
 
 ## Verification and reproduction
 
-Current check results and the judge-facing fresh-clone command log are in
-[docs/phase10-verification.md](docs/phase10-verification.md).
+Current reaction checks and the fresh-clone command log are in
+[docs/reactions-verification.md](docs/reactions-verification.md). The earlier
+judge setup log is in [docs/phase10-verification.md](docs/phase10-verification.md).
 
 Completed Phase 9 runs at the revisions recorded in
 [the historical report](docs/phase9-verification.md) measured **60.06 FPS** with
