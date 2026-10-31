@@ -39,7 +39,8 @@ ANGLE Metal, Node 25.1.0. Results depend on hardware and concurrent load.
 
 ## Install and run the no-Twitch demo
 
-Start with a clean clone on `master`. From its repository root:
+Start with a clean clone on `master`, with Twitch credentials unset in the shell
+and no copied `.env`. From its repository root:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -130,7 +131,7 @@ Without the Bedrock key, live AI requests fail clearly; they never silently use 
 
 1. Register an application in the [Twitch developer console](https://dev.twitch.tv/docs/authentication/register-app/).
    Record its client ID and client secret. Configure those credentials privately
-   in the [Twitch CLI](https://dev.twitch.tv/docs/cli/) using its configuration prompt.
+   in the [Twitch CLI](https://dev.twitch.tv/docs/cli/) using `twitch configure`.
 2. Use the device code flow, which needs no self-hosted callback:
 
    ```sh

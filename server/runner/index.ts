@@ -35,6 +35,7 @@ export class Runner {
       const pending=this.options.versions.pending,current=this.options.versions.current;
       if(pending&&pending.path!==join(this.root,"worktrees",`v${pending.version}`))throw new Error("Invalid pending worktree recovery path.");
       if(pending?.process&&pending.owner)await stopOrphan(pending.process,pending.owner,pending.path);
+      if(pending)await discardUnshippedTag(this.root,pending.version);
       const head=await git(this.root,"rev-parse","master"),advanced=!!pending&&head!==pending.base;
       if(advanced||current?.healthy===false){
         const tag=`v${advanced?pending!.version:current!.version}`,tagHead=await git(this.root,"rev-parse",`refs/tags/${tag}`).catch(()=>"");
@@ -43,7 +44,7 @@ export class Runner {
         const target=this.options.versions.fallbackTarget(head);if(!target)throw new Error("No known-good version is available for recovery.");
         if(pending)await removeTree(this.root,pending.path);
         await this.restoreForward(head,target,"Recovered previous world","system",false);
-      }else if(pending){await discardUnshippedTag(this.root,pending.version);await removeTree(this.root,pending.path);}
+      }else if(pending)await removeTree(this.root,pending.path);
       await this.options.versions.setPending();
   }
   private async reserve() {

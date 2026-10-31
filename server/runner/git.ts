@@ -36,7 +36,8 @@ export async function promote(root: string, base: string, commit: string, tag: s
 /** Only the recorded reserved version may be removed, and never if master reaches it. */
 export async function discardUnshippedTag(root:string,version:number){
   const ref=`refs/tags/v${version}`,commit=await git(root,"rev-parse","--verify",ref).catch(()=>"");if(!commit)return;
-  try{await git(root,"merge-base","--is-ancestor",commit,"master");}catch{await git(root,"update-ref","-d",ref,commit);}
+  const reachable=(await git(root,"for-each-ref","--merged=master","--format=%(refname)",ref)).split("\n");
+  if(!reachable.includes(ref))await git(root,"update-ref","-d",ref,commit);
 }
 /** Snapshot includes ignored files, so hiding an engine edit behind .gitignore cannot pass. */
 export async function inventory(root: string) {
