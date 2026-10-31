@@ -1,4 +1,4 @@
-import { MODULE_CAP, WORLD_BOUNDS, SPEC_LIMITS } from "../../world/shared/limits.js";
+import { MODULE_CAP, fitsBounds, clampToWorld, SPEC_LIMITS } from "../../world/shared/limits.js";
 export { SPEC_LIMITS } from "../../world/shared/limits.js";
 import type { ValidateFunction } from "ajv";
 import { validateSceneData, validateSceneStructure } from "../../world/engine/scene-validators.generated.js";
@@ -75,13 +75,11 @@ export function specUsage(spec: SceneSpec) {
 function checkEnvelope(spec: SceneSpec) {
   for (const node of spec.nodes) {
     const e = nodeEnvelope(spec, node);
-    const [x, y, z] = node.position;
-    if (x - e.x < WORLD_BOUNDS.minX || x + e.x > WORLD_BOUNDS.maxX || z - e.z < WORLD_BOUNDS.minZ || z + e.z > WORLD_BOUNDS.maxZ || y - e.y < WORLD_BOUNDS.minY || y + e.y > WORLD_BOUNDS.maxY) throw new Error("Transformed or animated node exceeds world bounds");
+    if (!fitsBounds(new Vector3(...node.position), e)) throw new Error("Transformed or animated node exceeds world bounds");
   }
   for (const item of [...spec.lights, ...spec.emitters]) {
     const radius = "distance" in item ? item.distance : item.size + item.lifetime * 0.2;
-    const [x, y, z] = item.position;
-    if (x - radius < WORLD_BOUNDS.minX || x + radius > WORLD_BOUNDS.maxX || z - radius < WORLD_BOUNDS.minZ || z + radius > WORLD_BOUNDS.maxZ || y - radius < WORLD_BOUNDS.minY || y + radius > WORLD_BOUNDS.maxY) throw new Error("Light or emitter exceeds world bounds");
+    if (!fitsBounds(new Vector3(...item.position), radius)) throw new Error("Light or emitter exceeds world bounds");
   }
   const usage = specUsage(spec);
   if (usage.triangles > MODULE_CAP.triangles || usage.draws > MODULE_CAP.draws || usage.particles > MODULE_CAP.particles) throw new Error("Scene workload exceeds hard limits");
@@ -111,13 +109,12 @@ export function normalizeSceneSpec(json: string): { spec: SceneSpec; clamped: bo
     const pulse = spec.behaviors.filter(b => b.targetId === node.id && b.kind === "pulse").reduce((f, b) => f * (1 + Math.min(0.5, b.amplitude * 0.1)), 1);
     node.scale = node.scale.map((n, axis) => Math.min(n, SPEC_LIMITS.maxScaledAxis / geometry.size[axis]! / pulse)) as Vec3;
     const e = nodeEnvelope(spec, node);
-    if (e.x > (WORLD_BOUNDS.maxX-WORLD_BOUNDS.minX)/2 || e.z > (WORLD_BOUNDS.maxZ-WORLD_BOUNDS.minZ)/2 || e.y > (WORLD_BOUNDS.maxY-WORLD_BOUNDS.minY)/2) throw new Error("Animation envelope cannot fit world bounds");
-    node.position = [clamp(node.position[0], WORLD_BOUNDS.minX + e.x, WORLD_BOUNDS.maxX - e.x), clamp(node.position[1], WORLD_BOUNDS.minY + e.y, WORLD_BOUNDS.maxY - e.y), clamp(node.position[2], WORLD_BOUNDS.minZ + e.z, WORLD_BOUNDS.maxZ - e.z)];
+    node.position = clampToWorld(new Vector3(...node.position),e).toArray() as Vec3;
   }
   for (const item of [...spec.lights, ...spec.emitters]) {
     if ("distance" in item) item.distance = Math.min(item.distance, 24);
     const r = "distance" in item ? item.distance : item.size + item.lifetime * 0.2;
-    item.position = [clamp(item.position[0], WORLD_BOUNDS.minX + r, WORLD_BOUNDS.maxX - r), clamp(item.position[1], WORLD_BOUNDS.minY + r, WORLD_BOUNDS.maxY - r), clamp(item.position[2], WORLD_BOUNDS.minZ + r, WORLD_BOUNDS.maxZ - r)];
+    item.position = clampToWorld(new Vector3(...item.position),r).toArray() as Vec3;
   }
   const encoded = JSON.stringify(spec);
   return { spec: parseSceneSpec(encoded), clamped: encoded !== before };

@@ -156,3 +156,9 @@ test("frame stats use real time, rolling samples and exclude hidden-tab pauses",
   stats.sample(100_000 + 1000 / 30);
   assert.ok(stats.value.avgFps < 60);
 });
+test("shared world bounds handle box extents and light radii consistently",async()=>{
+ const {clampToWorld,fitsBounds}=await import("../world/shared/limits.js");
+ const p=new Vector3(100,-10,-100),extent=new Vector3(2,3,4);assert.equal(clampToWorld(p,extent),p);assert.deepEqual(p.toArray(),[62,-5,-60]);assert.equal(fitsBounds(p,extent),true);
+ assert.equal(fitsBounds(new Vector3(63,0,0),2),false);assert.deepEqual(clampToWorld(new Vector3(63,0,0),2).toArray(),[62,0,0]);
+ assert.throws(()=>clampToWorld(new Vector3(),new Vector3(65,0,0)));assert.equal(fitsBounds(new Vector3(NaN,0,0)),false);
+});

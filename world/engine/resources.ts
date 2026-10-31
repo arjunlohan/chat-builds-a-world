@@ -1,7 +1,7 @@
 import { BufferGeometry, Group, Light, Material, Mesh, Points, Texture, type Object3D } from "three";
 
-import { GLOBAL_CAP, MODULE_CAP, emptyUsage, usageKeys as keys, RenderFailure, type Usage } from "../shared/limits.js";
-export { GLOBAL_CAP, MODULE_CAP, emptyUsage, type Usage } from "../shared/limits.js";
+import { emptyUsage, type Usage } from "../shared/limits.js";
+export { GLOBAL_CAP, MODULE_CAP, emptyUsage, ResourceLedger, type Usage } from "../shared/limits.js";
 
 export class ResourceOwner {
   readonly geometries = new Set<BufferGeometry>();
@@ -63,21 +63,4 @@ export class ResourceOwner {
     root.clear();
     this.geometries.clear(); this.materials.clear(); this.textures.clear(); this.objects.clear();
   }
-}
-
-export class ResourceLedger {
-  private readonly reservations = new Map<string, Usage>();
-  constructor(readonly base: Usage = emptyUsage(), private readonly cap: Readonly<Usage> = GLOBAL_CAP) {}
-
-  reserve(id: string, usage: Usage) {
-    for (const key of keys) {
-      if (!Number.isFinite(usage[key]) || usage[key] < 0 || usage[key] > MODULE_CAP[key]) throw new RenderFailure("capacity", `${key} module limit exceeded`);
-      let total = this.base[key] + usage[key];
-      for (const [owner, used] of this.reservations) if (owner !== id) total += used[key];
-      if (total > this.cap[key]) throw new RenderFailure("capacity", `${key} world limit exceeded`);
-    }
-    this.reservations.set(id, usage);
-  }
-
-  release(id: string) { this.reservations.delete(id); }
 }

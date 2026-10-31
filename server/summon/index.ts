@@ -33,7 +33,6 @@ export class SummonService {
   private readonly scenes = new Map<string, SummonState>();
   private readonly reservations = new SummonReservations(id => this.remove(id, "evicted"));
   private readonly users = new Map<string, number>();
-  private readonly replyTimes = new Map<string, number>();
   private lastGlobal = -Infinity;
   private readonly now: () => number;
   private readonly record: NonNullable<Options["record"]>;
@@ -51,10 +50,7 @@ export class SummonService {
   }
   private async fail(job: InternalJob, reason: string) {
     job.public.status = "failed"; job.public.reason = reason;
-    if (this.now() - (this.replyTimes.get(job.chat.userId) ?? -Infinity) >= 10_000) {
-      this.replyTimes.set(job.chat.userId, this.now());
-      await this.reply(job, failureText[reason] ?? "That summon could not safely appear. Please try a simpler visual wish later.");
-    }
+    await this.reply(job, failureText[reason] ?? "That summon could not safely appear. Please try a simpler visual wish later.");
     await this.log(job);
   }
   async submit(chat: ChatEvent, context: { source?: "sim" | "twitch" } = {}) {
@@ -127,7 +123,6 @@ export class SummonService {
       job.public.renderTimedOut = true; void this.log(job);
     }
     for (const [id, at] of this.users) if (now - at >= USER_COOLDOWN) this.users.delete(id);
-    for (const [id, at] of this.replyTimes) if (now - at >= 60_000) this.replyTimes.delete(id);
     for (const [id, job] of this.jobs) if (this.jobs.size > 100 && job.public.status !== "generating" && job.public.status !== "awaiting-render" && !this.scenes.has(id)) this.jobs.delete(id);
   }
 }

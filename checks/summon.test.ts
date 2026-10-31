@@ -165,14 +165,18 @@ test("unobserved scenes have null latency; late receipts update metrics without 
   assert.equal(service.status(scene.id)!.latencyMs, 40_000); assert.equal(service.status(scene.id)!.reason, null);
   assert.equal(records.at(-1)!.usage!.total, 0);
 });
-test("reservation charges in-flight worst case, evicts FIFO before provider, commits and releases", async () => {
-  const { SummonReservations, WORST_SPEC, emptyUsage } = await import("../world/shared/limits.js");
+test("pending summons only reserve count; actual resource commits evict FIFO when necessary", async () => {
+  const { SummonReservations, SUMMON_COUNT, emptyUsage } = await import("../world/shared/limits.js");
   const evicted: string[] = [], pool = new SummonReservations(id => evicted.push(id));
-  assert.equal(pool.reserve("a"),true); assert.deepEqual(pool.usage(),WORST_SPEC);
-  assert.equal(pool.reserve("b"),false,"Pending worst-case reservations cannot be evicted");
-  pool.commit("a",{...emptyUsage(),triangles:15000});assert.equal(pool.reserve("b"),true);
-  pool.commit("b",{...emptyUsage(),triangles:15000});assert.equal(pool.reserve("c"),true);assert.deepEqual(evicted,["a"]);
-  pool.release("c");assert.equal(pool.usage().triangles,15000);pool.release("b");assert.equal(pool.size,0);
+  assert.equal(pool.reserve("a"),true);assert.equal(pool.reserve("b"),true);assert.deepEqual(pool.usage(),emptyUsage());
+  pool.commit("a",{...emptyUsage(),triangles:10000});pool.commit("b",{...emptyUsage(),triangles:10000});
+  assert.equal(pool.reserve("c"),true);assert.equal(pool.reserve("d"),true);assert.deepEqual(evicted,[]);
+  pool.commit("c",{...emptyUsage(),triangles:40000});assert.deepEqual(evicted,[]);
+  pool.commit("d",{...emptyUsage(),triangles:20000});assert.deepEqual(evicted,["a"]);assert.equal(pool.usage().triangles,70000);
+  assert.equal(pool.reserve("invalid"),true);assert.throws(()=>pool.commit("invalid",{...emptyUsage(),triangles:50001}));assert.deepEqual(evicted,["a"]);pool.release("invalid");
+  const pending=new SummonReservations(()=>assert.fail("Pending jobs cannot be evicted"));
+  for(let i=0;i<SUMMON_COUNT;i++)assert.equal(pending.reserve(String(i)),true);
+  assert.equal(pending.reserve("overflow"),false);pending.release("0");assert.equal(pending.reserve("replacement"),true);
 });
 test("render timeout is an observation metric; secondary render failures never remove scenes", async () => {
  let now=0,replies=0;const service=new SummonService({provider:fixtureProvider,mode:"fixture",config,now:()=>now,publish(){},reply(){replies++},record(){}});
