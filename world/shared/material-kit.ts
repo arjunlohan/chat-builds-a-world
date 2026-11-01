@@ -2,7 +2,7 @@
 export const MATERIAL_KIT={
  wood:{roughness:.74,metalness:0,texture:'wood'},
  'weathered-wood':{roughness:.94,metalness:0,texture:'wood'},
- stone:{roughness:.94,metalness:0,texture:'basalt'},
+ stone:{roughness:.94,metalness:0,texture:'moss'},
  brick:{roughness:.92,metalness:0,texture:'brick'},
  iron:{roughness:.56,metalness:.94},brass:{roughness:.34,metalness:.9},copper:{roughness:.4,metalness:.92},gold:{roughness:.25,metalness:.96},
  paper:{roughness:.87,metalness:0,texture:'canvas'},glass:{roughness:.08,metalness:.05,opacity:.35},canvas:{roughness:.98,metalness:0,texture:'canvas'},

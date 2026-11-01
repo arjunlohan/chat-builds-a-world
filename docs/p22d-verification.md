@@ -54,3 +54,15 @@ source disposal releases the cached mask without disposing borrowed textures.
 Fresh-page world/composite capture hashes match; zero browser errors.
 150-raider day/dusk/night FPS: 59.96/59.94/59.75; GPU means 14.35/13.98/13.80ms.
 Cold load 2.167s. Logs `state/asset-cache/p22d-sky-*`.
+
+## Readable stone
+
+The new garden now preserves UV seams when indexing textured primitives. Classic
+keeps its prior untextured indexing. Stone uses the moss-rock surface; floating
+fragments and scanned supports retain daylight detail. Cliff albedo and AO retain
+contrast without treating the whole underside as wet lake shore. Atlas sampling
+uses unwrapped derivatives, avoiding mip jumps at tile boundaries.
+The UV regression and full check pass. Final 150-raider day/dusk/night FPS:
+59.95/60.14/59.96; GPU means 14.06/13.96/13.80ms; cold load 2.282s.
+Fixed stills/crops: `state/visual/p22d-stone-*`. Final logs end in
+`p22d-stone-{hardware,stills}-grad.log`.

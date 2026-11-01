@@ -25,7 +25,7 @@ export function createGarden(look:WorldLook="new") {
   const teal = surfaceMaterial({ color: "#b2f5d6", emissive: "#74e1cc", emissiveIntensity: 1.3, roughness: 0.5 },look);
 
   function instances(geometry: BufferGeometry, material: MeshStandardMaterial, count: number, name: string, shadows = true) {
-    const mesh = new InstancedMesh(indexGeometry(surfaceNormals(geometry,look)), material, count);
+    const mesh = new InstancedMesh(indexGeometry(surfaceNormals(geometry,look),look!=="classic"), material, count);
     mesh.name = name;
     mesh.castShadow = shadows;
     mesh.receiveShadow = shadows;
@@ -149,7 +149,7 @@ export function createGarden(look:WorldLook="new") {
   for (let i = 0; i < islets.count; i++) {
     const a = rng() * Math.PI * 2, r = 17 + rng() * 8, s = 0.2 + rng() * 0.7;
     place(islets, i, Math.cos(a) * r, -5 - rng() * 6, Math.sin(a) * r, s * 1.6, s * 2.5, s, a);
-    islets.setColorAt(i, color.set("#7d8f9c"));
+    islets.setColorAt(i, color.set(look==="classic"?"#7d8f9c":"#d5d8cc"));
   }
   for (const mesh of [trunks, crowns, steps, stems, lanterns, caps, grass, rocks, roots, islets]) {
     mesh.instanceMatrix.needsUpdate = true;

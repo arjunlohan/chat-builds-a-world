@@ -78,7 +78,7 @@ export function createTerrain(look:WorldLook="new") {
   rock.receiveShadow = true;
   group.add(rock);
   if(look!=="classic"&&assetModel('rock')){
-    const model=modelTemplate('rock',true),materials=model.materials.map(m=>{const n=m.clone();n.color.multiplyScalar(.28);n.envMapIntensity=.18;n.roughness=.94;return n;});
+    const model=modelTemplate('rock',true),materials=model.materials.map(m=>{const n=m.clone();n.color.multiplyScalar(.85);n.envMapIntensity=.55;n.roughness=.94;return n;});
     const outcrops=new InstancedMesh(model.geometry.clone(),materials,16),dummy=new Object3D();outcrops.name="scanned basalt buttresses";
     for(let i=0;i<16;i++){const a=i/16*Math.PI*2,r=.78+Math.sin(i*2.2)*.06;dummy.position.set(Math.cos(a)*10.5*coast(a)*r,-3.5+rng()*.6,Math.sin(a)*8.4*coast(a)*r);dummy.rotation.set(.1*Math.sin(a),a,.12*Math.cos(a));dummy.scale.set(1.4+rng(),2.6+rng()*1.2,1.3+rng()*.7);dummy.updateMatrix();outcrops.setMatrixAt(i,dummy.matrix);}outcrops.castShadow=true;outcrops.receiveShadow=true;outcrops.computeBoundingSphere();group.add(outcrops);
   }
