@@ -1,10 +1,13 @@
+import {createRealWater} from "./real-water.js";
+import type {WorldLook} from "./render-profile.js";
 import {
   AdditiveBlending, BufferGeometry, CircleGeometry, Color, DoubleSide, Float32BufferAttribute,
   Group, Mesh, PlaneGeometry, Points, ShaderMaterial,
 } from "three";
 import { random } from "./terrain.js";
 
-export function createWater() {
+export function createWater(look:WorldLook="new") {
+  if(look!=="classic")return createRealWater();
   const root = new Group();
   root.name = "spring, stream and falling water";
   const uniforms = {

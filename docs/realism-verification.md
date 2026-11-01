@@ -301,3 +301,32 @@ world/composite hashes pass. `pnpm check`: 263/263 plus bundles/media/history.
 The isolation test confirms proxies cannot replace a module material and restore
 all originals. Images/logs `state/visual/realism-cost-proxy-*`,
 `state/asset-cache/cost-proxy-*`.
+
+## Step 7: flowing water
+
+The spring and stream now use a deterministic tiled micro-normal field,
+terrain-derived depth color, shallow-edge foam, physical sky reflections and
+restrained clearcoat. The waterfall has vertical normal flow, soft strand edges
+and 64 pooled spray droplets leaving the lip. All landmark positions and the
+stream route are unchanged. No transmission scene capture or downloaded water
+texture is required. Classic retains its original water shader.
+
+The cost proxies use unlit base shading rather than Lambert lighting so new
+engine surfaces cannot consume the module gate's watchdog. Module materials,
+shadow casters and full-look visibility remain native; every threshold is unchanged.
+Final cheap idle/loaded: 28.70/23.16 FPS, 24 frames per slice, paired drops
+2.14%/-3.79%, 34.297/39.487s. Expensive rejects in 7.588/8.391s.
+
+| Phase | FPS, 150 raiders | GPU average ms | GPU p95 ms |
+| --- | ---: | ---: | ---: |
+| Day | 59.95 | 14.00 | 14.90 |
+| Dusk | 59.96 | 13.92 | 16.30 |
+| Night | 59.96 | 13.52 | 16.46 |
+
+Cold load 2.119s. Base: 121,155 triangles and 280 particles, retaining 8,845
+module triangles and 744 particles after summon reserves. Water regression
+checks depth bounds, unchanged fall anchor, 360 triangles and 64 spray particles.
+`pnpm check`: 264/264 plus bundles/media/history. Six 4K stills and fresh-page
+world/composite hashes match with no errors; world steps about 28-30ms.
+Images `state/visual/realism-step7-*`; logs `state/asset-cache/step7-*-passed.log`,
+`step7-gate-unlit.log`, `step7-check-unlit.log`.

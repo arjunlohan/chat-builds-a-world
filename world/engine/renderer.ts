@@ -76,7 +76,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const director = new CameraDirector(camera, reducedMotion.matches,profile.look);
   const terrain = createTerrain(profile.look);
   const garden = createGarden(profile.look);
-  const water = createWater();
+  const water = createWater(profile.look);
   const motes = createMotes();
   const sky = createSky(scene, options.fixedTime,profile.look,profile.probe?SHADOW_RESOLUTION.classic:shadowResolution(profile));
   // Capture pins ambient fill: HDR-derived PMREM caused one-bit cross-page GPU variance.
