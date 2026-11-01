@@ -263,3 +263,22 @@ logs `state/asset-cache/step6-*`.
 The fresh-clone README fixture demo at vegetation commit e8e2b68 also shipped v1
 on attempt one: 184 events, 104 citizens, zero errors, 68.91s simulator,
 41.18s complete build and 36.34s gate. No Twitch/Bedrock calls.
+
+## Shadow work parity before water
+
+The first water trial held 60 FPS but its loaded cheap gate reached slice 14
+and hit the unchanged 45s watchdog. The checker was refreshing every scanned
+canopy shadow every frame while live rendering cached the map. New-look live
+and measurement now share a 0.25s simulation-time refresh, invalidated immediately
+by scene changes or A/B root toggles. Full-look probes force a fresh map for both
+images. This also keeps moving live props' shadows current. Geometry, materials,
+1024px cost shadows, paired frame counts and every rejection threshold remain.
+Classic retains its prior shadow path.
+
+After parity, cheap passes idle/loaded at 27.50/20.00 FPS, median paired drops
+-1.95%/1.51%, exactly 24 frames per slice, 34.057/40.017s total. Expensive rejects
+in 10.448/11.722s on the same hook budget. Live 150-raider day/dusk/night FPS:
+59.93/59.98/60.17; GPU means 14.01/14.12/13.42ms. Cold load 1.894s.
+Six 4K stills, capture hashes and classic/MSAA/SMAA fallback pass with no errors.
+`pnpm check`: 262/262 plus bundles/media/history. Images/logs:
+`state/visual/realism-shadow-parity-*`, `state/asset-cache/shadow-parity-*`.

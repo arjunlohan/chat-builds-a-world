@@ -26,3 +26,7 @@ test('offline GPU completion yields until the fence signals and always releases 
  const {captureFence}=await import('../world/engine/gpu-fence.js');let polls=0,deleted=0,flushed=0;const gl={SYNC_GPU_COMMANDS_COMPLETE:1,ALREADY_SIGNALED:2,CONDITION_SATISFIED:3,WAIT_FAILED:4,fenceSync:()=>({}),flush(){flushed++;},clientWaitSync(){return ++polls<3?0:3;},isContextLost:()=>false,deleteSync(){deleted++;}} as unknown as WebGL2RenderingContext;await captureFence(gl);assert.equal(polls,3);assert.equal(deleted,1);assert.equal(flushed,1);
  const lost={...gl,clientWaitSync:()=>4};await assert.rejects(captureFence(lost as WebGL2RenderingContext),/context lost/);assert.equal(deleted,2);
 });
+
+test('live and measurement share a simulation-time shadow cadence with immediate scene/root invalidation',async()=>{
+ const {ShadowClock,SHADOW_REFRESH_SECONDS}=await import('../world/engine/shadow-clock.js'),s=new ShadowClock();assert.equal(s.update(0,false),true);assert.equal(s.update(.1,false),false);assert.equal(s.update(SHADOW_REFRESH_SECONDS,false),true);assert.equal(s.update(.26,false),false);assert.equal(s.update(.27,false,false),true);assert.equal(s.update(.28,false,false),false);assert.equal(s.update(.29,true,false),true);assert.equal(s.update(.30,false,true),true);
+});

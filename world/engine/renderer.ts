@@ -1,3 +1,4 @@
+import {ShadowClock} from "./shadow-clock.js";
 import {captureFence} from "./gpu-fence.js";
 import {measureRender} from "./render-timing.js";
 import {SimulationClock} from "./clock.js";
@@ -52,7 +53,7 @@ export interface RendererOptions {
 /** Fixed OBS framebuffer; CSS fits it into any viewport without extra DPR work. */
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions = {}) {
   const profile = options.profile ?? PRODUCTION_PROFILE;
-  let shadowDirty = true;const clock=new SimulationClock(Date.now());let anchored=false;
+  let shadowDirty = true;const clock=new SimulationClock(Date.now()),shadows=new ShadowClock();let anchored=false;
   const clientId = crypto.randomUUID();
   const post = (url: string, data: object) => { if(options.playback)return;void fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, clientId }) }).catch(() => {}); };
   const reducedMotion = options.capture?{matches:false}:window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -65,7 +66,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = profile.shadows;
   renderer.shadowMap.type = PCFSoftShadowMap;
-  renderer.shadowMap.autoUpdate = profile.probe;
+  renderer.shadowMap.autoUpdate = profile.probe&&profile.look==="classic";
   renderer.shadowMap.needsUpdate = true;
   const scene = new Scene();
   canvas.dataset.look=profile.look??"new";canvas.dataset.resolution=`${profile.width}x${profile.height}`;
@@ -132,7 +133,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     pipeline:worldPipeline(renderer,scene,camera,{...profile,width:VISIBILITY_PROBE.width,height:VISIBILITY_PROBE.height}),
     halves:new Uint16Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),
     withPixels:new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),withoutPixels:new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),
-    capture(pixels:Uint8Array){this.pipeline.render(0,false);renderer.readRenderTargetPixels(this.pipeline.composer.readBuffer,0,0,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,this.halves);for(let i=0;i<pixels.length;i++)pixels[i]=Math.max(0,Math.min(255,Math.round(DataUtils.fromHalfFloat(this.halves[i]!)*255)));},
+    capture(pixels:Uint8Array){renderer.shadowMap.needsUpdate=true;this.pipeline.render(0,false);renderer.readRenderTargetPixels(this.pipeline.composer.readBuffer,0,0,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,this.halves);for(let i=0;i<pixels.length;i++)pixels[i]=Math.max(0,Math.min(255,Math.round(DataUtils.fromHalfFloat(this.halves[i]!)*255)));},
   }:undefined;
   if(probe){canvas.dataset.probePipeline=probe.pipeline.passes.join(',');canvas.dataset.probeTargets=JSON.stringify(probe.pipeline.samples);}
   let activation = 0;
@@ -239,7 +240,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         if (stats.value.moduleError) { moduleReceipt(pendingAck.version, false); pendingAck = null; }
         else if (++pendingAck.frames >= 8) { moduleReceipt(pendingAck.version, true); if(pendingAck.celebrate&&!reducedMotion.matches)effects.celebrate(); pendingAck = null; }
       }
-      if (shadowDirty) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; }
+      if(profile.look!=="classic"?shadows.update(clock.seconds,shadowDirty,stats.value.measureCandidateVisible):shadowDirty)renderer.shadowMap.needsUpdate=true;shadowDirty=false;
       materializer.beforeRender(camera);
       const renderStart = performance.now(); stats.value.updateMs = renderStart - cpuStart;
       // Checker-only A/B slices: hooks and chat keep running; only owned visual roots change.
@@ -263,7 +264,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
           let hash=2166136261,lit=0;for(let i=0;i<probe.withPixels.length;i+=20){if(probe.withPixels[i]!+probe.withPixels[i+1]!+probe.withPixels[i+2]!>24)lit++;for(let k=0;k<4;k++)hash=Math.imul(hash^probe.withPixels[i+k]!,16777619);}
           stats.value.probeHash=hash;stats.value.probeLit=lit;window.__worldProbePixels=probe.withPixels;
           stats.value.probeCompleted=stats.value.probeRequest;
-        }finally{for(let i=0;i<roots.length;i++)roots[i]!.visible=visible[i]!;renderer.setRenderTarget(null);}
+        }finally{for(let i=0;i<roots.length;i++)roots[i]!.visible=visible[i]!;shadowDirty=true;renderer.setRenderTarget(null);}
       }
       if(stats.trace)stats.recordWork(performance.now()-probeStart);
       if (!ready) { ready = true; options.onReady?.(); }
