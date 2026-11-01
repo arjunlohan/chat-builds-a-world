@@ -1,3 +1,6 @@
+import {skyEnvironment} from "./environment.js";
+import {SelectiveBloomPass} from "./selective-bloom.js";
+import {ambientOcclusion} from "./ambient-occlusion.js";
 import {antialiasTarget} from "./antialias.js";
 import {moduleBounds} from "./module-bounds.js";
 import { contributionFootprint, VISIBILITY_PROBE } from "./visibility.js";
@@ -72,7 +75,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const garden = createGarden(profile.look);
   const water = createWater();
   const motes = createMotes();
-  const sky = createSky(scene, options.fixedTime);
+  const sky = createSky(scene, options.fixedTime,profile.look);
+  const ibl=profile.look!=="classic"?skyEnvironment(renderer,scene,sky.sky):undefined;ibl?.update(sky.phase);
   const effects = createEffects();
   const labelLayer = options.labels ?? document.createElement("div");
   const labelManager = new LabelManager();
@@ -88,9 +92,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const composer = new EffectComposer(renderer,aa.target);
   const renderPass = new RenderPass(scene, camera);
   const bloom = new UnrealBloomPass(new Vector2(profile.width / 2, profile.height / 2), 0.38, 0.65, 1.05);
+  const ao=profile.look!=="classic"?ambientOcclusion(scene,camera,profile.width,profile.height,aa.samples):undefined;
+  const selective=profile.look!=="classic"&&profile.bloom?new SelectiveBloomPass(renderer,scene,camera,profile.width,profile.height):undefined;
   const output = new OutputPass();
   composer.addPass(renderPass);
-  if (profile.bloom) composer.addPass(bloom);
+  if(ao)composer.addPass(ao);
+  if(selective)composer.addPass(selective);else if (profile.bloom) composer.addPass(bloom);
   if(aa.smaa)composer.addPass(aa.smaa);
   composer.addPass(output);
   canvas.dataset.aa=aa.samples?`msaa-${aa.samples}`:aa.smaa?"smaa":"none";
@@ -227,7 +234,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       stats.value.citizenCount=citizens.count;
       renderer.info.reset();
       const cpuStart = performance.now();
-      sky.update(visualTime);
+      sky.update(visualTime);ibl?.update(sky.phase);if(profile.look!=="classic")renderer.toneMappingExposure=1.05+(1-sky.day)*.15;
       water.update(visualTime, sky.day);
       motes.update(visualTime, 1 - sky.day);
       effects.update(elapsed);stats.value.raidPortalActive=raidPortal.update(elapsed,reducedMotion.matches);
@@ -319,7 +326,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       host.dispose(); materializer.dispose(); moduleMaterializer.dispose();
       engineResources.dispose(environment);
       probe?.target.dispose();probe?.hdr.dispose();
-      aa.smaa?.dispose(); bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose(); renderer.dispose();
+      ibl?.dispose();ao?.dispose();selective?.dispose();aa.smaa?.dispose(); bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose(); renderer.dispose();
     },
   };
 }
