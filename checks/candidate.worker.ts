@@ -1,3 +1,4 @@
+import {COST_MATERIAL_POLICY} from "../world/engine/measurement-materials.js";
 import sharp from "sharp";
 import {scaleVerdict} from "../world/shared/scale.js";
 import {CHAT_PLAY as P} from "../world/shared/chat-play.js";
@@ -17,7 +18,7 @@ const modules=await Promise.all(input.modules.map(m=>versions.artifact(m.id,m.fi
 await versions.activate({version:1,tag:"baseline",commit:"baseline",title:"Baseline",requester:"check",modules:retained},false);
 for(let i=0;i<300;i++)pipeline.roster.accept({id:`check-${i}`,userId:`check-${i}`,displayName:`Neighbor${i}`,color:"#79D7CF",text:"hello",timestamp:Date.now()},Date.now());
 const commands=chatCommands({description:(input.commands??[]).join(" "),steps:[],checks:[]}),sent:{text:string;userId:string;burst:number}[]=[];let burst=0;
-const errors:string[]=[],footprints:Footprint[]=[],evidence:Record<string,unknown>={status:"starting",profile:"production",viewport:[1920,1080],framebuffer:[160,90],probe:[192,108],measurement:"fixed main + classic-cost shadows; full live composer for visibility",probeId:input.probeId,retained:retained.map(m=>m.id),look:input.look??"new",commands,sent,footprints,errors};
+const errors:string[]=[],footprints:Footprint[]=[],evidence:Record<string,unknown>={status:"starting",profile:"production",viewport:[1920,1080],framebuffer:[160,90],probe:[192,108],measurement:"fixed main + classic-cost shadows; full live composer for visibility",costMaterials:COST_MATERIAL_POLICY,probeId:input.probeId,retained:retained.map(m=>m.id),look:input.look??"new",commands,sent,footprints,errors};
 const canvasSamples:{hash:number;lit:number}[]=[];evidence.canvasSamples=canvasSamples;
 const save=()=>writeFile(join(directory,"evidence.json"),JSON.stringify(evidence,null,2),{mode:0o600});
 await save();

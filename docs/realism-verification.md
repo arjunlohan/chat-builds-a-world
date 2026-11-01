@@ -282,3 +282,22 @@ in 10.448/11.722s on the same hook budget. Live 150-raider day/dusk/night FPS:
 Six 4K stills, capture hashes and classic/MSAA/SMAA fallback pass with no errors.
 `pnpm check`: 262/262 plus bundles/media/history. Images/logs:
 `state/visual/realism-shadow-parity-*`, `state/asset-cache/shadow-parity-*`.
+
+## Fixed engine cost for module admission
+
+The water trial still exposed insufficient software-gate margin after shadow
+parity. Cost rendering now uses fixed Lambert/flat-shader proxies only for the
+locked engine base. It retains base geometry, leaf alpha holes and vertex motion;
+module/retained-module geometry, shaders and materials remain native. Full-look
+visibility restores every production material and uses the same complete composer.
+The policy is rendered into builder rules and recorded in candidate evidence.
+No admission, visibility, frame-count, budget or watchdog threshold changed.
+
+Cheap idle/loaded: 28.70/23.16 FPS, median paired drops 2.18%/-1.83%, 24 frames
+per slice, 34.102/38.468s. Expensive rejects on hook budget in 9.097/10.181s.
+Live output is unchanged: 150-raider day/dusk/night FPS 59.95/59.96/59.97;
+GPU means 14.00/14.59/13.35ms; cold load 1.370s. Six 4K stills and fresh-page
+world/composite hashes pass. `pnpm check`: 263/263 plus bundles/media/history.
+The isolation test confirms proxies cannot replace a module material and restore
+all originals. Images/logs `state/visual/realism-cost-proxy-*`,
+`state/asset-cache/cost-proxy-*`.

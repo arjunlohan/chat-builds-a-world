@@ -94,7 +94,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   resizeLabels.observe(canvas);
   environment.add(terrain, garden, water.root, motes.root, sky.root, effects.root, raidPortal.root, citizens.root);
 
-  const pipeline=worldPipeline(renderer,scene,camera,profile,profile.probe);
+  const pipeline=worldPipeline(renderer,scene,camera,profile,profile.probe,environment);
   canvas.dataset.aa=pipeline.aa;canvas.dataset.pipeline=pipeline.passes.join(',');canvas.dataset.targets=JSON.stringify(pipeline.samples);
   const engineResources = new ResourceOwner();
   const base = engineResources.audit(environment);
