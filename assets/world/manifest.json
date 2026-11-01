@@ -237,7 +237,8 @@
           "bytes": 828492,
           "sha256": "4424328a5c1d16e78338af5a2249936c5cc4b78483236fb16819a107bc2a1601"
         }
-      ]
+      ],
+      "lowDraws": 5
     },
     {
       "name": "bench",
@@ -261,7 +262,8 @@
           "bytes": 501100,
           "sha256": "e7f025db7cd2bc1e8799933893f39df02b49744bff5d3ad9d34db2fa974b6184"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "crate",
@@ -285,7 +287,8 @@
           "bytes": 543696,
           "sha256": "4c74631b813d850533b029cc05410db4208e30a533d5f2d4e8629528d9c901e5"
         }
-      ]
+      ],
+      "lowDraws": 3
     },
     {
       "name": "barrel",
@@ -309,7 +312,8 @@
           "bytes": 458880,
           "sha256": "5577c40d928bcd028b59fb1008bee62660a5fdf46513b418a811c14c6a785158"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "bridge-planks",
@@ -333,7 +337,8 @@
           "bytes": 855916,
           "sha256": "80b5c7a7acf70132af1820ee362f7b2b758f60fa868c2636f420934d8bb698cc"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "plinth",
@@ -357,7 +362,8 @@
           "bytes": 579856,
           "sha256": "16e897ab773f09cf01ac7576e21c2516a299051bdc13949d88058f151e4004c7"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "campfire",
@@ -381,7 +387,8 @@
           "bytes": 793584,
           "sha256": "9b323521cf5f907604ab45464e8c67abef1b05cc8abbde36b2b3f51edfd8ac65"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "bucket",
@@ -405,7 +412,8 @@
           "bytes": 561532,
           "sha256": "fa2a3a9f6347074a9c795589a9727e8d79833f0a7feae333ddcc0fcb5cac60c6"
         }
-      ]
+      ],
+      "lowDraws": 2
     },
     {
       "name": "pot",
@@ -429,7 +437,8 @@
           "bytes": 388868,
           "sha256": "7f2326c6ffeec41306b292e08cfbd93ae09d1739ebfdd26d5705e24524f39693"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "flowers",
@@ -453,7 +462,8 @@
           "bytes": 319608,
           "sha256": "b82e1939b77788cbec8202e25fd1911ba1cc1f51ead51ebe275f32342839ad0c"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "fern",
@@ -477,7 +487,8 @@
           "bytes": 228508,
           "sha256": "01cbee52fa268e46e81196688d64e3cff12c4a63b2e8601f2dfdf7c0e559d548"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "rock",
@@ -501,7 +512,8 @@
           "bytes": 461080,
           "sha256": "5abee1cc2b7eaa8626076e6c66ef2fbdc3198361a1c15879691dfc88230ec66c"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "moss-rock",
@@ -525,7 +537,8 @@
           "bytes": 447508,
           "sha256": "3e6bd9b52627288df12cc205b8cf36fce40e059b1ca06707131acd2b41814f34"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "shrub",
@@ -549,7 +562,8 @@
           "bytes": 419124,
           "sha256": "12e9ec67a87dbbf2d6d972504df959db037e518bbe318a91604076ca3ed01bd3"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "log",
@@ -573,7 +587,8 @@
           "bytes": 1052760,
           "sha256": "d34cb60f8059886f655a96824553509300ded61906d73207fde75c38dd297609"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "ladder",
@@ -597,7 +612,8 @@
           "bytes": 747264,
           "sha256": "a82184e70727c64259457917d8511fd1c67fddf00214d3ffc55d48c03bf0433c"
         }
-      ]
+      ],
+      "lowDraws": 2
     },
     {
       "name": "chair",
@@ -621,7 +637,8 @@
           "bytes": 322152,
           "sha256": "099f9fa2571bd3de6742282ddfbb314a1b206d0c03d46d5d83a55637551b175a"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "table",
@@ -645,7 +662,8 @@
           "bytes": 237584,
           "sha256": "8582f882649e131fc27b368a4a55ec8d4ef9df09409a545485f2a41942c255b8"
         }
-      ]
+      ],
+      "lowDraws": 1
     },
     {
       "name": "ground",
@@ -714,7 +732,8 @@
           "bytes": 211492,
           "sha256": "44bc71917158aa92f66db03e35eb1757837fa93b2e80201fa327eca962e2a760"
         }
-      ]
+      ],
+      "lowDraws": 2
     },
     {
       "name": "scanned-tree",
@@ -738,7 +757,8 @@
           "bytes": 2150328,
           "sha256": "30934ccb9543dbeb930dc206d63eea6c3bb0b47958b408681729815901f15c4b"
         }
-      ]
+      ],
+      "lowDraws": 4
     },
     {
       "name": "clouds",

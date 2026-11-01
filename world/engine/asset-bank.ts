@@ -16,8 +16,6 @@ async function loadModel(a:typeof manifest.assets[number]){
  models.set(a.name,{root:high!.scene,low:low!.scene,triangles:('triangles' in a?a.triangles:0)??0,draws:('draws' in a?a.draws:0)??0});
 }
 function ensureModel(a:typeof manifest.assets[number]){let load=modelLoads.get(a.name);if(!load){load=loadModel(a);modelLoads.set(a.name,load);}return load;}
-/** Resolve synchronous spawnSpec dependencies before calling a module factory. */
-export async function prepareModuleAssets(source:string,look:WorldLook='new'){if(look==='classic'||!source.includes('spawnSpec'))return;await Promise.all(manifest.assets.filter(a=>a.type==='model').map(ensureModel));}
 export const assetMaps=(name:string)=>textures.get(name);
 export const assetModel=(name:string)=>models.get(name);
 export const assetSky=()=>hdr;
@@ -43,4 +41,10 @@ export function fittedModel(name:string,size:Vector3,low=false){
  const asset=models.get(name);if(!asset)throw new Error(`Missing committed model: ${name}`);
  const root=(low?asset.low:asset.root).clone(true),box=new Box3().setFromObject(root),extent=box.getSize(new Vector3()),center=box.getCenter(new Vector3());
  const wrapper=new Group();wrapper.add(root);root.position.sub(center);wrapper.scale.set(size.x/Math.max(.001,extent.x),size.y/Math.max(.001,extent.y),size.z/Math.max(.001,extent.z));return wrapper;
+}
+
+/** Closed local names only; called before a synchronous module factory or Scene Spec allocation. */
+export async function prepareNamedModels(names:readonly string[],look:WorldLook='new'){
+ if(look==='classic')return;
+ await Promise.all(manifest.assets.filter(a=>a.type==='model'&&names.includes(a.name)).map(ensureModel));
 }

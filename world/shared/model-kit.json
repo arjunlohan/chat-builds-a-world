@@ -1,0 +1,142 @@
+{
+  "lantern": {
+    "triangles": 1136,
+    "lowTriangles": 820,
+    "draws": 5,
+    "lowDraws": 5,
+    "fallback": "cylinder"
+  },
+  "bench": {
+    "triangles": 630,
+    "lowTriangles": 200,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "box"
+  },
+  "crate": {
+    "triangles": 652,
+    "lowTriangles": 390,
+    "draws": 3,
+    "lowDraws": 3,
+    "fallback": "box"
+  },
+  "barrel": {
+    "triangles": 500,
+    "lowTriangles": 194,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "cylinder"
+  },
+  "bridge-planks": {
+    "triangles": 900,
+    "lowTriangles": 288,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "box"
+  },
+  "plinth": {
+    "triangles": 498,
+    "lowTriangles": 286,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "cylinder"
+  },
+  "campfire": {
+    "triangles": 697,
+    "lowTriangles": 223,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "cone"
+  },
+  "bucket": {
+    "triangles": 709,
+    "lowTriangles": 472,
+    "draws": 2,
+    "lowDraws": 2,
+    "fallback": "cylinder"
+  },
+  "pot": {
+    "triangles": 450,
+    "lowTriangles": 144,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "cylinder"
+  },
+  "flowers": {
+    "triangles": 446,
+    "lowTriangles": 142,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "mushroom"
+  },
+  "fern": {
+    "triangles": 449,
+    "lowTriangles": 143,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "plane"
+  },
+  "grass": {
+    "triangles": 4,
+    "lowTriangles": 4,
+    "draws": 2,
+    "lowDraws": 2,
+    "fallback": "plane"
+  },
+  "scanned-tree": {
+    "triangles": 1581,
+    "lowTriangles": 507,
+    "draws": 4,
+    "lowDraws": 4,
+    "fallback": "tree"
+  },
+  "rock": {
+    "triangles": 240,
+    "lowTriangles": 76,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "crystal"
+  },
+  "moss-rock": {
+    "triangles": 452,
+    "lowTriangles": 144,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "crystal"
+  },
+  "shrub": {
+    "triangles": 499,
+    "lowTriangles": 159,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "sphere"
+  },
+  "log": {
+    "triangles": 620,
+    "lowTriangles": 198,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "cylinder"
+  },
+  "ladder": {
+    "triangles": 1450,
+    "lowTriangles": 1450,
+    "draws": 2,
+    "lowDraws": 2,
+    "fallback": "box"
+  },
+  "chair": {
+    "triangles": 700,
+    "lowTriangles": 346,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "box"
+  },
+  "table": {
+    "triangles": 649,
+    "lowTriangles": 207,
+    "draws": 1,
+    "lowDraws": 1,
+    "fallback": "box"
+  }
+}

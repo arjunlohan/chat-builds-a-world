@@ -1,17 +1,20 @@
+import {isModelKind,type GeometryKind} from "../../world/shared/model-kit.js";
+import type {MaterialPreset} from "../../world/shared/material-kit.js";
+import {TALLEST_TREE_HEIGHT} from "../../world/shared/scale.js";
 import { MODULE_CAP, fitsBounds, clampToWorld, SPEC_LIMITS } from "../../world/shared/limits.js";
 export { SPEC_LIMITS } from "../../world/shared/limits.js";
 import type { ValidateFunction } from "ajv";
 import { validateSceneData, validateSceneStructure } from "../../world/engine/scene-validators.generated.js";
 import { Box3, Euler, Matrix4, Vector3 } from "three";
-import { triangleCost } from "../../world/engine/spec-geometry.js";
+import { triangleCost,drawCost } from "../../world/shared/scene-cost.js";
 import schema from "./scene-spec.schema.json";
 
 export type Vec3 = [number, number, number];
 export interface SceneSpec {
   version: 1;
   name: string;
-  geometries: { id: string; kind: "box" | "sphere" | "cylinder" | "cone" | "torus" | "plane" | "crystal" | "mushroom" | "tree"; size: Vec3; detail: number }[];
-  materials: { id: string; color: string; emissive: string; emissiveIntensity: number; roughness: number; metalness: number; opacity: number }[];
+  geometries: { id: string; kind: GeometryKind; size: Vec3; detail: number }[];
+  materials: { id: string; preset?:MaterialPreset; color: string; emissive: string; emissiveIntensity: number; roughness: number; metalness: number; opacity: number }[];
   nodes: { id: string; geometryId: string; materialId: string; position: Vec3; rotation: Vec3; scale: Vec3 }[];
   lights: { id: string; kind: "point" | "spot"; color: string; intensity: number; distance: number; position: Vec3 }[];
   emitters: { id: string; kind: "sparkle" | "mist" | "fireflies"; position: Vec3; color: string; maxParticles: number; rate: number; lifetime: number; size: number }[];
@@ -69,10 +72,11 @@ export function specUsage(spec: SceneSpec) {
   const geometries = new Map(spec.geometries.map(g => [g.id, g]));
   return { nodes: spec.nodes.length+spec.emitters.length, triangles: spec.nodes.reduce((n, node) => {
     const g = geometries.get(node.geometryId)!; return n + triangleCost(g.kind, g.detail);
-  }, 0), draws: spec.nodes.length + spec.emitters.length, lights: spec.lights.length,
+  }, 0), draws: spec.nodes.reduce((n,node)=>{const g=geometries.get(node.geometryId)!;return n+drawCost(g.kind,g.detail);},0) + spec.emitters.length, lights: spec.lights.length,
     particles: spec.emitters.reduce((n, emitter) => n + emitter.maxParticles, 0) };
 }
 function checkEnvelope(spec: SceneSpec) {
+  if(spec.geometries.some(g=>isModelKind(g.kind))){const bounds=new Box3();for(const node of spec.nodes){const extent=nodeEnvelope(spec,node),center=new Vector3(...node.position);bounds.expandByPoint(center.clone().sub(extent));bounds.expandByPoint(center.add(extent));}for(const emitter of spec.emitters){const r=emitter.size+emitter.lifetime*.2;bounds.expandByPoint(new Vector3(...emitter.position).addScalar(r));bounds.expandByPoint(new Vector3(...emitter.position).addScalar(-r));}if(bounds.max.y-bounds.min.y>TALLEST_TREE_HEIGHT)throw new Error("Kit scene exceeds tallest tree envelope");}
   for (const node of spec.nodes) {
     const e = nodeEnvelope(spec, node);
     if (!fitsBounds(new Vector3(...node.position), e)) throw new Error("Transformed or animated node exceeds world bounds");

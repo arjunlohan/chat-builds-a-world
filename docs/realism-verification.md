@@ -330,3 +330,75 @@ checks depth bounds, unchanged fall anchor, 360 triangles and 64 spray particles
 world/composite hashes match with no errors; world steps about 28-30ms.
 Images `state/visual/realism-step7-*`; logs `state/asset-cache/step7-*-passed.log`,
 `step7-gate-unlit.log`, `step7-check-unlit.log`.
+
+
+## Step 4: named PBR and model kits
+
+The closed Scene Spec catalog adds 20 local CC0 models and 17 named surfaces.
+The model kinds and LOD accounting generate from the audited manifest; the same
+names and exact resource counts render into the builder contract. A drift check
+runs in `pnpm check`. The server, browser ledger and resource worker share pure
+admission arithmetic. Both glTF LODs retain their scanned material groups and
+UVs, fit the requested bounding box and count every rendered triangle/draw.
+The kit uses the existing tree-height envelope. No external asset lookup is added.
+
+Raw standard materials normalize in place, preserving captured color/opacity
+references. Basic/Lambert/Phong meshes map to a standard preset with bridged
+animation fields. Custom shaders and particles remain authored. Each owner gets
+independent texture objects and upload versions; disposal cannot invalidate the
+base bank. Immutable decoded pixels remain engine-owned. Local dependencies are
+prepared and model templates warmed before synchronous module activation.
+Classic needs no photo assets and uses budgeted procedural model substitutes.
+
+The fixture demo now builds three scanned lanterns. A separate race-track visual
+fixture uses bridge planks and crates. Both pass the real policy/type/browser gate:
+orchard 35.208s, race track 35.081s. The allocation smoke passes all 57 cases
+(20 models at two LODs plus 17 presets), with exact ledger parity and no base
+texture disposal/version changes. Full native shaders warm before timed visibility
+probes, under the existing whole-worker watchdog. Cold shader startup does not
+consume an individual probe timeout; all three measured probes retain their
+original timeout. Faulty hooks reject before
+shader warmup; actual probe, cost and watchdog thresholds are unchanged.
+
+Final base plus three lanterns, 150 raiders, production 1920x1080, ANGLE Metal:
+
+| Phase | FPS | GPU mean ms | GPU p95 ms |
+| --- | ---: | ---: | ---: |
+| Day | 59.75 | 14.80 | 19.24 |
+| Dusk | 59.75 | 14.71 | 20.99 |
+| Night | 59.95 | 13.98 | 15.48 |
+
+Cold readiness including the active kit module: 1.626s. These are five-second
+steady-state windows after warmup, with separate thirty-frame GPU timer queries.
+GPU p95 can exceed a frame even when average throughput remains vsync capped.
+The base remains 121,155 triangles at all 300 allocated citizen slots, retaining
+8,845 module triangles after the summon reserve. Assets total 59,443,090 bytes
+including source scripts/media/manifest; world payloads alone are 43,235,305 bytes.
+
+The final fixed cost pipeline uses a 256px shadow target and engine-only unlit
+proxies. Module geometry/materials remain native. Full-look visibility restores
+all materials and uses the complete live composer. Final interleaved results:
+
+| Fixture | CPU workers | Candidate FPS | Median paired drop | Frames/slice | Seconds | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Cheap | 0 | 29.34 | -2.23% | 24 | 35.032 | PASS |
+| Expensive | 0 | n/a | n/a | n/a | 7.603 | REJECT: three hook overruns |
+| Cheap | 6 | 25.39 | -4.08% | 24 | 38.668 | PASS |
+| Expensive | 6 | n/a | n/a | n/a | 8.396 | REJECT: three hook overruns |
+
+See `state/candidate-load-results.json` for exact evidence paths and all paired
+rates. The negative paired drops are scheduler noise, not a speedup claim.
+Six native 4K stills show the kit and settled raid crowd at midday/golden hour,
+from orbit, push-in and flyover. Virtual frame step times are 29.44-31.34ms,
+excluding PNG encoding. Capture retains the documented fixed hemisphere-fill
+fallback instead of dynamic PMREM. Live pages retain the photo-sky environment.
+Images: `state/visual/realism-final-{day,golden}-{orbit,push-in,flyover}-4k.png`.
+1080p comparisons/crops: `state/visual/realism-kit-*`; prior P22 reference:
+`state/visual/before-*`. Logs: `state/asset-cache/step4-*`, `final-*.log`.
+
+Final `pnpm check`: 268/268, browser bundles, fourteen alpha media/playback cases
+and history credits. Both the seeded math fixture and scanned-lantern fixture
+produce identical fresh-page PNG hashes for `/world` and `/capture`, with active
+reaction playback. Classic, new/MSAA and forced-SMAA smoke paths pass with zero
+browser errors. See `state/visual/capture-{default,kit}-final-results.json` and
+`state/asset-cache/final-{capture,kit-capture,fallback}.log`.

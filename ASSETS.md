@@ -4,7 +4,7 @@ Powered by [Poly Haven](https://polyhaven.com). Prepared with `pnpm assets:fetch
 
 All source models are simplified, meshopt-compressed glTF with 1K WebP textures and a second LOD. Materials use 1K WebP color, OpenGL normals and packed AO/roughness/metalness. The terrain packs four sets into a padded 2K atlas. The sky is 2K HDR; photographic cloud cutouts are derived as 1K alpha WebP. Only data files survive the offline conversion. Raw sources and ZIPs stay in ignored state/. Collection assets select one named variant before simplification. Tree canopies and grass preserve the source scan coverage as offline-baked alpha cards; only continuous woody geometry is decimated for the tree LODs. Rebuilding these two assets also requires Blender (BLENDER_BIN may override it). No source scripts, Blender files or executable extensions are copied.
 
-Compressed world outputs: 43,235,305 bytes. All committed asset sources and media: 59,442,673 bytes; limit 120,000,000. Manifest records exact download URLs, checksums and per-file sizes in [manifest.json](assets/world/manifest.json).
+Compressed world outputs: 43,235,305 bytes. All committed asset sources and media: 59,443,090 bytes; limit 120,000,000. Manifest records exact download URLs, checksums and per-file sizes in [manifest.json](assets/world/manifest.json).
 
 | Name | Type | Source | License | Bytes | Outputs |
 | --- | --- | --- | --- | ---: | --- |

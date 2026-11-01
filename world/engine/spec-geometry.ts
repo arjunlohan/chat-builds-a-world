@@ -1,3 +1,5 @@
+import {MODEL_KIT,isModelKind,type PrimitiveKind} from "../shared/model-kit.js";
+import {modelTemplate} from "./model-template.js";
 import {RoundedBoxGeometry} from "three/addons/geometries/RoundedBoxGeometry.js";
 import {surfaceNormals} from "./materials.js";
 import type {WorldLook} from "./render-profile.js";
@@ -6,11 +8,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { SceneSpec } from "../../server/summon/scene-spec.js";
 
 type GeometrySpec = SceneSpec["geometries"][number];
-export function triangleCost(kind: GeometrySpec["kind"], detail: number,look:WorldLook="new") {
-  const w = (look==="classic"?8:16) + detail * 4, h = (look==="classic"?4:8) + detail * 2;
-  return { box: look==="classic"?12:300, sphere: 2 * w * (h - 1), cylinder: 4 * w, cone: 2 * w,
-    torus: 2 * w * (look==="classic"?6:10), plane: 2, crystal: 20, mushroom: 2 * w * (h - 1) + 4 * w, tree: look==="classic"?424:448 }[kind];
-}
+export {triangleCost,drawCost} from "../shared/scene-cost.js";
 function merge(parts: BufferGeometry[]) {
   const flat = parts.map(p => p.index ? p.toNonIndexed() : p.clone());
   const geometry = mergeGeometries(flat, false);
@@ -20,9 +18,11 @@ function merge(parts: BufferGeometry[]) {
 }
 /** Vetted, finite recipes. Every result is fitted to its declared local bounding box. */
 export function createSpecGeometry(spec: GeometrySpec,look:WorldLook="new") {
+  let kind=spec.kind;
+  if(isModelKind(kind)){if(look!=="classic"){const geometry=modelTemplate(kind,spec.detail===0).geometry.clone();geometry.scale(...spec.size);geometry.computeBoundingBox();geometry.computeBoundingSphere();return geometry;}kind=MODEL_KIT[kind].fallback as PrimitiveKind;}
   const w = (look==="classic"?8:16) + spec.detail * 4, h = (look==="classic"?4:8) + spec.detail * 2;
   let geometry: BufferGeometry;
-  switch (spec.kind) {
+  switch (kind) {
     case "box": geometry = look==="classic"?new BoxGeometry(1, 1, 1):new RoundedBoxGeometry(1,1,1,2,.06); break;
     case "sphere": geometry = new SphereGeometry(1, w, h); break;
     case "cylinder": geometry = new CylinderGeometry(1, 1, 1, w); break;
@@ -40,7 +40,7 @@ export function createSpecGeometry(spec: GeometrySpec,look:WorldLook="new") {
       geometry = merge(parts); break;
     }
   }
-  if(look!=="classic")geometry=surfaceNormals(geometry,look,["cylinder","cone","crystal"].includes(spec.kind)?Math.PI/4:Math.PI);
+  if(look!=="classic")geometry=surfaceNormals(geometry,look,["cylinder","cone","crystal"].includes(kind)?Math.PI/4:Math.PI);
   geometry.center(); geometry.computeBoundingBox();
   const box = geometry.boundingBox!;
   const dimensions = [box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z];

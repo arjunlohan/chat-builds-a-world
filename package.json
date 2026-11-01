@@ -14,7 +14,7 @@
     "sim": "tsx server/sim/index.ts",
     "sim:raid": "tsx server/sim/raid.ts",
     "check:raid": "tsx checks/phase8.raid.ts",
-    "check": "tsx checks/generate-module-policy.ts --check && tsx checks/generate-validator.ts --check && tsc --noEmit && tsx --test checks/*.test.ts && tsx checks/build.ts && tsx checks/reactions.smoke.ts && tsx checks/history.smoke.ts",
+    "check": "node scripts/model-kit.mjs --check && tsx checks/generate-module-policy.ts --check && tsx checks/generate-validator.ts --check && tsc --noEmit && tsx --test checks/*.test.ts && tsx checks/build.ts && tsx checks/reactions.smoke.ts && tsx checks/history.smoke.ts",
     "summon:bench": "tsx server/summon/bench.ts",
     "guard:eval": "tsx server/guard/eval.ts",
     "runner:live": "tsx server/runner/live.ts",

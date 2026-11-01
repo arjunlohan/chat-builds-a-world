@@ -1,4 +1,8 @@
-import {surfaceMaterial} from "./materials.js";
+import {kitMaterial} from "./materials.js";
+import {isModelKind} from "../shared/model-kit.js";
+import {modelTemplate} from "./model-template.js";
+import {cloneModelMaterial} from "./pbr-kit.js";
+import {Texture} from "three";
 import type {WorldLook} from "./render-profile.js";
 import { SUMMON_COUNT, clampToWorld, RenderFailure } from "../shared/limits.js";
 import {
@@ -46,13 +50,18 @@ export class SpecMaterializer {
     try {
       const geometries = new Map(spec.geometries.map(g => { const geometry = createSpecGeometry(g,this.options.look); owner.geometries.add(geometry); return [g.id, geometry]; }));
       const materials = new Map(spec.materials.map(m => {
-        const material = surfaceMaterial({ color: m.color, emissive: m.emissive, emissiveIntensity: m.emissiveIntensity,
-          roughness: m.roughness, metalness: m.metalness, opacity: m.opacity, transparent: m.opacity < 1, flatShading: true, side: 2 },this.options.look);
-        owner.materials.add(material); return [m.id, material];
+        const material = kitMaterial({ color: m.color, emissive: m.emissive, emissiveIntensity: m.emissiveIntensity,
+          roughness: m.roughness, metalness: m.metalness, opacity: m.opacity, transparent: m.opacity < 1, flatShading: true, side: 2 },m.preset,this.options.look??"new");
+        owner.ownMaterial(material); return [m.id, material];
       }));
-      const nodes = new Map<string, NodeState>();
+      const nodes = new Map<string, NodeState>(),models=new Map<string,MeshStandardMaterial[]>(),textureCopies=new Map<Texture,Texture>();
       for (const n of spec.nodes) {
-        const mesh = new Mesh(geometries.get(n.geometryId)!, materials.get(n.materialId)!);
+        const geometry=spec.geometries.find(g=>g.id===n.geometryId)!,request=spec.materials.find(m=>m.id===n.materialId)!;
+        let material:MeshStandardMaterial|MeshStandardMaterial[]=materials.get(n.materialId)!;
+        if(this.options.look!=="classic"&&isModelKind(geometry.kind)){
+          const key=geometry.id+":"+request.id;let native=models.get(key);if(!native){native=modelTemplate(geometry.kind,geometry.detail===0).materials.map(source=>{const m=cloneModelMaterial(source,request.color,request.opacity,request.emissive,request.emissiveIntensity,textureCopies);owner.ownMaterial(m);return m;});models.set(key,native);}material=native;
+        }
+        const mesh = new Mesh(geometries.get(n.geometryId)!,material);
         mesh.position.set(...n.position); mesh.rotation.set(...n.rotation); mesh.scale.set(...n.scale);
         mesh.castShadow = true; mesh.receiveShadow = true; root.add(mesh);
         nodes.set(n.id, { mesh, base: mesh.position.clone(), scale: mesh.scale.clone(), extent: nodeEnvelope(spec, n), drift: new Vector3(), offset: new Vector3(), pulse: 1 });

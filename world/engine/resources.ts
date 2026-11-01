@@ -12,6 +12,16 @@ export class ResourceOwner {
   private readonly scannedMaterials = new WeakSet<Material>();
   constructor(private readonly protectedResources?: ResourceOwner, private readonly changed?: () => void, private readonly moduleOwned=false) {}
 
+  ownMaterial(material:Material){
+    if(this.protectedResources?.materials.has(material))throw new Error("engine material is not module-owned");
+    this.materials.add(material);
+    if(!this.scannedMaterials.has(material))for(const value of Object.values(material)){
+      if(value instanceof Texture){if(this.protectedResources?.textures.has(value))throw new Error("engine texture is not module-owned");this.textures.add(value);}
+    }
+    this.scannedMaterials.add(material);
+  }
+  materialChanged(material:Material){this.scannedMaterials.delete(material);}
+
   /** Audit a bounded tree. Assets removed later still belong to this owner. */
   audit(root: Object3D, limit = 2048): Usage {
     const usage = emptyUsage(), stack = [root];
@@ -26,17 +36,7 @@ export class ResourceOwner {
         if (this.protectedResources?.geometries.has(object.geometry)) throw new Error("engine geometry is not module-owned");
         this.geometries.add(object.geometry);
         const materials = Array.isArray(object.material) ? object.material : [object.material];
-        for (const material of materials) {
-          if (this.protectedResources?.materials.has(material)) throw new Error("engine material is not module-owned");
-          this.materials.add(material);
-          if (!this.scannedMaterials.has(material)) for (const value of Object.values(material)) {
-            if (value instanceof Texture) {
-              if (this.protectedResources?.textures.has(value)) throw new Error("engine texture is not module-owned");
-              this.textures.add(value);
-            }
-          }
-          this.scannedMaterials.add(material);
-        }
+        for (const material of materials)this.ownMaterial(material);
         // Charge allocated capacity, not just today's draw count/range. A module may
         // animate those without adding/removing a scene node or reallocating.
         let count = 1;

@@ -27,6 +27,7 @@ interface HostOptions {
   services: Omit<WorldServices, "scene">;
   ledger?: ResourceLedger;
   protectedResources?: ResourceOwner;
+  prepare?: (root:Group,owner:ResourceOwner)=>boolean;
   now?: () => number;
   clock?:()=>number;
   random?:()=>number;
@@ -132,7 +133,8 @@ export class ModuleHost {
   }
 
   private audit(record: RecordState) {
-    const raw = record.owner.audit(record.root, 256);
+    let raw = record.owner.audit(record.root, 256);
+    if(this.options.prepare?.(record.root,record.owner))raw=record.owner.audit(record.root,256);
     for (const key of Object.keys(MODULE_CAP) as (keyof Usage)[]) {
       let total = raw[key]; for (const usage of record.spawnUsage.values()) total += usage[key];
       if (total > MODULE_CAP[key]) throw new Error(`${key} module limit exceeded`);

@@ -18,9 +18,9 @@ export function createGarden(look:WorldLook="new") {
   const rng = random(72);
   const transform = new Object3D();
   const color = new Color();
-  const stone = surfaceMaterial({ color: "#d4cead", roughness: 0.95, flatShading: true },look);
-  const bark = surfaceMaterial({ color: "#806b6e", roughness: 1, flatShading: true },look);
-  const leaves = surfaceMaterial({ color: "#ffffff", roughness: 0.9, flatShading: true },look);
+  const stone = surfaceMaterial({ color: "#d4cead", roughness: 0.95, flatShading: true },look,"stone");
+  const bark = surfaceMaterial({ color: "#806b6e", roughness: 1, flatShading: true },look,"wood");
+  const leaves = surfaceMaterial({ color: "#ffffff", roughness: 0.9, flatShading: true },look,"foliage");
   const amber = surfaceMaterial({ color: "#ffdf99", emissive: "#ffc66b", emissiveIntensity: 2.4, roughness: 0.5 },look);
   const teal = surfaceMaterial({ color: "#b2f5d6", emissive: "#74e1cc", emissiveIntensity: 1.3, roughness: 0.5 },look);
 

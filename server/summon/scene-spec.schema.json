@@ -112,7 +112,27 @@
             "plane",
             "crystal",
             "mushroom",
-            "tree"
+            "tree",
+            "lantern",
+            "bench",
+            "crate",
+            "barrel",
+            "bridge-planks",
+            "plinth",
+            "campfire",
+            "bucket",
+            "pot",
+            "flowers",
+            "fern",
+            "grass",
+            "scanned-tree",
+            "rock",
+            "moss-rock",
+            "shrub",
+            "log",
+            "ladder",
+            "chair",
+            "table"
           ]
         },
         "size": {
@@ -175,6 +195,27 @@
           "type": "number",
           "minimum": 0.25,
           "maximum": 1
+        },
+        "preset": {
+          "enum": [
+            "wood",
+            "weathered-wood",
+            "stone",
+            "brick",
+            "iron",
+            "brass",
+            "copper",
+            "gold",
+            "paper",
+            "glass",
+            "canvas",
+            "rope",
+            "foliage",
+            "water",
+            "ice",
+            "glow",
+            "painted"
+          ]
         }
       }
     },

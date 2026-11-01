@@ -9,7 +9,7 @@ export function cutoutNormals(ao:GTAOPass,scene:Scene){
  function normal(source:Material){
   const m=source as AlphaMaterial;if(!m.alphaTest||!m.map)return source;let n=cached.get(m);if(n)return n;
   n=new MeshNormalMaterial({side:m.side});n.allowOverride=false;
-  const uniforms:{map:IUniform<Texture>;cutoff:IUniform<number>}={map:{value:m.map},cutoff:{value:m.alphaTest}};
+  const uniforms:{map:IUniform<Texture>;cutoff:IUniform<number>}={map:{value:m.map},cutoff:{value:m.alphaTest/Math.max(.001,m.opacity)}};
   n.onBeforeCompile=shader=>{shader.uniforms.uCutoutMap=uniforms.map;shader.uniforms.uCutoutAlpha=uniforms.cutoff;
    shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 vCutoutUv;').replace('#include <begin_vertex>','#include <begin_vertex>\nvCutoutUv=uv;');
    shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 vCutoutUv;uniform sampler2D uCutoutMap;uniform float uCutoutAlpha;');

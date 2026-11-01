@@ -14,10 +14,10 @@ export function batchStaticGarden(root: Group) {
   const world=new Matrix4(),instance=new Matrix4(),normalMatrix=new Matrix3(),point=new Vector3(),normal=new Vector3(),tint=new Color();
   root.clear();
   for(const batch of batches.values()){
-    const positions=new Float32Array(batch.vertices*3),normals=new Float32Array(batch.vertices*3),colors=new Float32Array(batch.vertices*3),indices=new (batch.vertices>65535?Uint32Array:Uint16Array)(batch.indices);
+    const positions=new Float32Array(batch.vertices*3),normals=new Float32Array(batch.vertices*3),uvs=new Float32Array(batch.vertices*2),colors=new Float32Array(batch.vertices*3),indices=new (batch.vertices>65535?Uint32Array:Uint16Array)(batch.indices);
     let vertexOffset=0,indexOffset=0;
     for(const object of batch.objects){
-      const source=object.geometry,p=source.getAttribute("position"),n=source.getAttribute("normal"),c=source.getAttribute("color"),instanced=object as InstancedMesh,count=instanced.isInstancedMesh?instanced.count:1;
+      const source=object.geometry,p=source.getAttribute("position"),n=source.getAttribute("normal"),c=source.getAttribute("color"),uv=source.getAttribute("uv"),instanced=object as InstancedMesh,count=instanced.isInstancedMesh?instanced.count:1;
       for(let i=0;i<count;i++){
         world.copy(object.matrixWorld);tint.setRGB(1,1,1);
         if(instanced.isInstancedMesh){instanced.getMatrixAt(i,instance);world.multiply(instance);if(instanced.instanceColor)instanced.getColorAt(i,tint);}
@@ -26,13 +26,14 @@ export function batchStaticGarden(root: Group) {
           const offset=(vertexOffset+j)*3;
           point.fromBufferAttribute(p,j).applyMatrix4(world);point.toArray(positions,offset);
           normal.fromBufferAttribute(n,j).applyNormalMatrix(normalMatrix);normal.toArray(normals,offset);
+          uvs[(vertexOffset+j)*2]=uv?.getX(j)??0;uvs[(vertexOffset+j)*2+1]=uv?.getY(j)??0;
           colors[offset]=tint.r*(c?.getX(j)??1);colors[offset+1]=tint.g*(c?.getY(j)??1);colors[offset+2]=tint.b*(c?.getZ(j)??1);
         }
         for(let j=0;j<(source.index?.count??p.count);j++)indices[indexOffset++]=vertexOffset+(source.index?.getX(j)??j);
         vertexOffset+=p.count;
       }
     }
-    const geometry=new BufferGeometry();geometry.setAttribute("position",new BufferAttribute(positions,3));geometry.setAttribute("normal",new BufferAttribute(normals,3));geometry.setAttribute("color",new BufferAttribute(colors,3));geometry.setIndex(new BufferAttribute(indices,1));
+    const geometry=new BufferGeometry();geometry.setAttribute("position",new BufferAttribute(positions,3));geometry.setAttribute("normal",new BufferAttribute(normals,3));geometry.setAttribute("color",new BufferAttribute(colors,3));geometry.setAttribute("uv",new BufferAttribute(uvs,2));geometry.setIndex(new BufferAttribute(indices,1));
     const mesh=new Mesh(geometry,batch.material);mesh.name="immutable garden batch";mesh.castShadow=batch.cast;mesh.receiveShadow=batch.receive;root.add(mesh);
   }
   for(const geometry of originals)geometry.dispose();for(const material of materials)material.dispose();return root;

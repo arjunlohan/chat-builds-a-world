@@ -63,6 +63,14 @@ try{
  await page.waitForFunction(()=>window.__worldStats.moduleVersion===2||!!window.__worldStats.moduleError,undefined,{timeout:6500});const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(candidateRejected(error));
  const initialFocuses=await page.evaluate(()=>window.__worldStats.moduleFocuses);
  await sendCommands(page);await warm(page,C.candidateWarmupFrames);
+ // Reject faulty hooks before spending time compiling native PBR/post shaders.
+ // Cost rendering intentionally never compiles this production pipeline.
+ const nativeStart=performance.now(),nativeRequest=await page.evaluate(()=>++window.__worldStats.probeRequest);
+ // Cold shader compilation is startup, not a timed visibility probe. The existing
+ // external watchdog still bounds the entire worker, including this warmup.
+ await page.waitForFunction(request=>window.__worldStats.probeCompleted>=request||!!window.__worldStats.moduleError,nativeRequest,{polling:50,timeout:C.watchdogMs});
+ const warmError=await page.evaluate(()=>window.__worldStats.moduleError);if(warmError)throw new GateError(candidateRejected(warmError));
+ evidence.nativeWarmupMs=performance.now()-nativeStart;await save();
  // Visibility rejects happen before the expensive timing window.
  if(commands.length)await waitSim(page,P.focusDuration);
  await probe(page);await waitSim(page,.2);await probe(page);

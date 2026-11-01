@@ -97,8 +97,9 @@ fps, avgFps, frame and citizenCount regardless of that flag. `/world` defaults t
 
 ## Rendering and frame capture
 
-The new look is the default: 4x MSAA (SMAA fallback), smooth procedural surfaces,
-sky environment lighting, contact AO and emissive-only bloom. OBS stays at
+The new look is the default: scanned CC0 ground, trees and props, HDR sky lighting,
+flowing water, smooth creatures, 4x MSAA (SMAA fallback), contact AO and
+emissive-only bloom. OBS stays at
 1920x1080. `?resolution=4k` selects a native 3840x2160 framebuffer independently of
 CSS size; use a 1920x1080 viewport and deviceScaleFactor 2 for a 4K screenshot.
 
@@ -121,7 +122,16 @@ Measured frame rates, comparison images and capture hashes are recorded in the
 
 The committed CC0 asset set needs no download at startup. Maintainers can rebuild
 it with `pnpm assets:fetch`; raw downloads stay in ignored `state/asset-cache/`.
-See [ASSETS.md](ASSETS.md) for sources, compression and sizes.
+See [ASSETS.md](ASSETS.md) for sources, compression and sizes, and
+[realism verification](docs/realism-verification.md) for current GPU measurements.
+
+Scene Specs can use the 20 named model kinds and 17 material presets listed in
+the [rendered builder rules](AGENTS.md#world-module-api-v1). Model sizes are fitted
+bounding boxes; detail 0 selects the low LOD. Referenced models load locally before
+activation. Scanned model parts keep their PBR maps and accept color tint. Primitive
+parts use `material.preset`; plain runtime mesh materials map to the same kit.
+Custom shaders and particles retain their authored materials. Classic uses bounded
+procedural substitutes for kit models, so saved versions still load in the fallback.
 
 ## Environment
 
