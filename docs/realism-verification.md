@@ -234,3 +234,32 @@ hook overruns in 10.355/11.030s. The loaded check passes, but its 2.4s watchdog
 margin is narrow and remains a performance constraint for subsequent steps.
 Images: `state/visual/realism-step5-*`, including day/golden orbit, push-in and
 flyover 4K stills. Logs: `state/asset-cache/step5-*`, `vegetation-prepare.log`.
+
+## Step 6: upgraded citizens
+
+Creatures retain the same silhouette, ears, cream face patch, viewer colors and
+label layout. Smoother bodies, soft physical sheen, rounded limbs, eye highlights,
+blinking, alternating footfalls and ear/tail motion share one instanced draw.
+Animation is bounded per citizen; GPU vertices use four prepared animation values
+instead of evaluating trigonometry for every vertex. Jump, dance, follow and
+home routing are unchanged. Each new creature is 300 triangles versus 296 before;
+all 300 reserved slots leave 8,965 module triangles after the summon pool.
+Classic retains its original geometry/material look.
+
+| Phase | FPS, 150 raiders | GPU average ms | GPU p95 ms |
+| --- | ---: | ---: | ---: |
+| Day | 59.95 | 13.51 | 15.52 |
+| Dusk | 60.16 | 13.13 | 14.07 |
+| Night | 59.96 | 13.54 | 15.30 |
+
+Cold load 1.591s. Geometry regression checks the triangle count, silhouette and
+all eye/limb regions. `pnpm check`: 261/261 plus bundles/media/history. Native-4K
+stills: 28.1-30.0ms/frame; fresh world/composite PNG hashes match, zero errors.
+Interleaved cheap gate idle/loaded: 25.39/16.71 FPS, 24 frames per slice,
+35.069/43.295s, paired drops 0%/3.81%. Expensive rejects both at 10.290/11.107s.
+The loaded watchdog margin remains narrow. Images `state/visual/realism-step6-*`;
+logs `state/asset-cache/step6-*`.
+
+The fresh-clone README fixture demo at vegetation commit e8e2b68 also shipped v1
+on attempt one: 184 events, 104 citizens, zero errors, 68.91s simulator,
+41.18s complete build and 36.34s gate. No Twitch/Bedrock calls.

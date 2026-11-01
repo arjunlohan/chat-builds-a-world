@@ -1,12 +1,11 @@
-import {surfaceMaterial,surfaceNormals} from "./materials.js";
+import {creatureMaterial} from "./materials.js";
+import {creatureGeometry} from "./creature-geometry.js";
 import type {WorldLook} from "./render-profile.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { indexGeometry } from "./index-geometry.js";
 import { CITIZEN_CAP, IDLE_MS, FADE_MS, inParade } from "../shared/limits.js";
 import { isChatCommand } from "../../server/commands.js";
 import {
-  BufferGeometry, Float32BufferAttribute, Matrix4, Color, ConeGeometry, DynamicDrawUsage, Group, IcosahedronGeometry,
-  InstancedBufferAttribute, InstancedMesh, MeshStandardMaterial, SphereGeometry, Sphere, Vector3,
+  Color, DynamicDrawUsage, Group,
+  InstancedBufferAttribute, InstancedMesh, MeshStandardMaterial, Sphere, Vector3,
   type PerspectiveCamera,
 } from "three";
 import type { Citizen, WorldServices } from "./api.js";
@@ -34,43 +33,37 @@ export class Citizens {
   private dirtyLast=-1;
   private frozenList: readonly Citizen[] | undefined;
   private readonly speakers = new Set<string>();
+  private readonly animation=new InstancedBufferAttribute(new Float32Array(LIMIT*4),4);
   private readonly body: {mesh:InstancedMesh;fade:InstancedBufferAttribute;bounce:InstancedBufferAttribute;fadeChanged:boolean;bounceChanged:boolean};
 
   constructor(private readonly labels: HTMLElement, private readonly layout: LabelManager, look:WorldLook="new" ) {
     this.root.name = "citizens • 300 reserved creature slots";
-    const pieces: BufferGeometry[] = [];
-    const piece = (geometry: BufferGeometry, tint: boolean, color: string, x: number, y: number, z: number, sx: number, sy: number, sz: number, body=false) => {
-      const smooth=surfaceNormals(geometry,look);const g=smooth.index ? smooth.toNonIndexed() : smooth.clone();if(smooth!==geometry)smooth.dispose();geometry.dispose();
-      g.applyMatrix4(new Matrix4().makeScale(sx,sy,sz));g.translate(x,y,z);
-      const count=g.getAttribute("position").count,c=new Color(color),colors=new Float32Array(count*3);
-      for(let i=0;i<count;i++){colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;}
-      g.setAttribute("color",new Float32BufferAttribute(colors,3));g.setAttribute("aTint",new Float32BufferAttribute(new Float32Array(count).fill(Number(tint)),1));
-      g.setAttribute("aBody",new Float32BufferAttribute(new Float32Array(count).fill(Number(body)),1));pieces.push(g);
-    };
-    piece(look==="classic"?new IcosahedronGeometry(1,1):new SphereGeometry(1,12,5),true,"#ffffff",0,.31,0,.24,.3,.21,true);
-    piece(new IcosahedronGeometry(1,1),false,"#f4e6c5",0,.34,.16,.175,.145,.075);
-    piece(new IcosahedronGeometry(1,0),true,"#ffffff",0,.22,-.23,.09,.09,.09);
-    for(const side of [-1,1]){
-      piece(new ConeGeometry(1,1,5),true,"#ffffff",side*.125,.64,0,.08,.24,.065);
-      piece(new IcosahedronGeometry(1,0),false,"#283b42",side*.065,.385,.225,.024,.032,.018);
-      piece(new IcosahedronGeometry(1,0),false,"#eee1bf",side*.12,.055,.06,.095,.055,.12);
-    }
-    const combined=mergeGeometries(pieces)!;for(const g of pieces)g.dispose();
-    // Flat shading reconstructs face normals in the fragment shader. Shared vertices cut
-    // repeated instance/lighting transforms without changing triangles or silhouettes.
-    const normals=combined.getAttribute("normal");if(look==="classic")for(let i=0;i<normals.count;i++)normals.setXYZ(i,0,1,0);
-    const geometry=indexGeometry(combined);
+    const geometry=creatureGeometry(look);
+    this.animation.setUsage(DynamicDrawUsage);geometry.setAttribute("aAnimation",this.animation);
     const fade=new InstancedBufferAttribute(new Float32Array(LIMIT).fill(1),1),bounce=new InstancedBufferAttribute(new Float32Array(LIMIT),1);
     fade.setUsage(DynamicDrawUsage);bounce.setUsage(DynamicDrawUsage);geometry.setAttribute("aFade",fade);geometry.setAttribute("aBounce",bounce);
-    const material=surfaceMaterial({color:"#ffffff",vertexColors:true,roughness:.9,flatShading:true},look);
+    const material=creatureMaterial(look);
+    const modern=look!=="classic";
     material.onBeforeCompile=shader=>{
       shader.vertexShader=shader.vertexShader.replace("#include <common>","#include <common>\nattribute float aFade,aBounce,aTint,aBody; varying float vFade;")
         .replace("#include <begin_vertex>","#include <begin_vertex>\nvFade=aFade; transformed.y+=aBody*aBounce*(1.0+(position.y-0.31)/0.3);")
         .replace("#include <color_vertex>","#include <color_vertex>\n#ifdef USE_INSTANCING_COLOR\nvColor.rgb=color*mix(vec3(1.0),instanceColor,aTint);\n#endif");
       shader.fragmentShader=shader.fragmentShader.replace("#include <common>","#include <common>\nvarying float vFade;")
         .replace("#include <alphatest_fragment>","#include <alphatest_fragment>\nif(vFade<0.999&&fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)>vFade)discard;");
+      if(modern){
+        shader.vertexShader=shader.vertexShader.replace("#include <common>","#include <common>\nattribute float aPart;attribute vec4 aAnimation;varying float vEye;varying vec2 vCreatureUv;")
+          .replace("#include <begin_vertex>",`#include <begin_vertex>
+            vEye=step(4.5,aPart)*(1.0-step(6.5,aPart));vCreatureUv=uv;
+            if(aPart>6.5){float stride=aAnimation.x*(aPart>7.5?-1.0:1.0);transformed.z+=stride;transformed.y+=max(0.0,stride)*.45;}
+            if(vEye>.5)transformed.y=.385+(transformed.y-.385)*aAnimation.y;
+            if(aPart>2.5&&aPart<4.5)transformed.x+=(position.y-.55)*aAnimation.z;
+            if(aPart>1.5&&aPart<2.5)transformed.x+=aAnimation.w;`);
+        shader.fragmentShader=shader.fragmentShader.replace("#include <common>","#include <common>\nvarying float vEye;varying vec2 vCreatureUv;")
+          .replace("#include <color_fragment>","#include <color_fragment>\nfloat glint=(1.0-smoothstep(.02,.1,length(vCreatureUv-vec2(.25,.68))))*vEye;diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.97,.99,1.0),glint);")
+          .replace("#include <roughnessmap_fragment>","#include <roughnessmap_fragment>\nroughnessFactor=mix(roughnessFactor,.14,vEye);");
+      }
     };
-    material.customProgramCacheKey=()=>"citizen-merged-v2";
+    material.customProgramCacheKey=()=>modern?"citizen-sheen-animation-v3":"citizen-merged-v2";
     const mesh=new InstancedMesh(geometry,material,LIMIT);mesh.instanceMatrix.setUsage(DynamicDrawUsage);mesh.boundingSphere=new Sphere(new Vector3(0,3,0),24);
     mesh.name="citizens • one shared creature geometry";mesh.castShadow=false;mesh.receiveShadow=true;this.root.add(mesh);
     this.body={mesh,fade,bounce,fadeChanged:false,bounceChanged:false};
@@ -167,7 +160,7 @@ export class Citizens {
     if (part.fade.getX(index) !== Math.fround(opacity)) { part.fade.setX(index,opacity); part.fadeChanged = true; }
   }
   update(dt: number, time: number, now: number, camera: PerspectiveCamera, reducedMotion: boolean) {
-    this.frozenList = undefined;this.dirtyFirst=Infinity;this.dirtyLast=-1;
+    this.frozenList = undefined;this.dirtyFirst=Infinity;this.dirtyLast=-1;let animationChanged=false;
     for (let i = 0; i < this.items.length; i++) {
       const c = this.items[i]!, s = c.state; c.snapshot = undefined;
       const age = Math.max(0, (now - s.commandAt) / 1000);
@@ -197,6 +190,10 @@ export class Citizens {
       const dancing = command?.kind === "dance" && age < 8;
       const jump = jumping && !reducedMotion ? Math.sin(age / 1.15 * Math.PI) * 0.85 : 0;
       const bob = reducedMotion||waiting ? 0 : moving ? Math.abs(Math.sin(time * 8 + c.phase)) * 0.035 : Math.sin(time * 2 + c.phase) * 0.012;
+      const walk=reducedMotion?0:moving?Math.sin(time*9+c.phase)*.035:0;
+      const blink=reducedMotion?1:1-Math.max(0,Math.min(1,(Math.sin(time*.72+c.phase)-.97)/.029))*.9;
+      const wiggle=reducedMotion?0:Math.sin(time*2+c.phase),ear=wiggle*.06,tail=wiggle*.015;
+      if(this.animation.getX(i)!==Math.fround(walk)||this.animation.getY(i)!==Math.fround(blink)||this.animation.getZ(i)!==Math.fround(ear)||this.animation.getW(i)!==Math.fround(tail)){this.animation.setXYZW(i,walk,blink,ear,tail);animationChanged=true;}
       const yaw = c.yaw + (dancing && !reducedMotion ? Math.sin(age * 9) * 0.6 : 0);
       c.position.y = terrainHeight(c.position.x, c.position.z) + jump + bob;
       c.cos = Math.cos(yaw); c.sin = Math.sin(yaw);
@@ -210,6 +207,7 @@ export class Citizens {
     }
     const part=this.body;part.mesh.count=this.count;
     if(this.dirtyLast>=0){part.mesh.instanceMatrix.addUpdateRange(this.dirtyFirst*16,(this.dirtyLast-this.dirtyFirst+1)*16);part.mesh.instanceMatrix.needsUpdate=true;}
+    if(animationChanged)this.animation.needsUpdate=true;
     if(part.fadeChanged)part.fade.needsUpdate=true;
     if(part.bounceChanged)part.bounce.needsUpdate=true;
     if(this.dirtyColors.size&&part.mesh.instanceColor)part.mesh.instanceColor.needsUpdate=true;

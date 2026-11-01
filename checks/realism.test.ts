@@ -13,3 +13,7 @@ test('scan templates decode quantized positions and normalized UVs before splitt
  const a=new MeshStandardMaterial(),b=new MeshStandardMaterial(),mesh=new Mesh(geometry,[a,b]),root=new Group();mesh.position.set(2.12,3.22,1.52);mesh.scale.set(.003,.007,.009);root.add(mesh);const flat=flattenModel(root),p=flat.geometry.getAttribute('position'),uv=flat.geometry.getAttribute('uv');
  assert.equal(flat.geometry.groups.length,2);assert.equal(flat.materials[1],b);assert.ok(Math.abs(new Box3().setFromBufferAttribute(p as import('three').BufferAttribute).getSize(new Vector3()).x-1)<1e-5);assert.ok(Math.abs(uv.getX(1)-1)<1e-9);assert.equal(uv.getY(2),1);assert.equal(geometry.getAttribute('position').array[3],30000);flat.geometry.dispose();geometry.dispose();a.dispose();b.dispose();
 });
+
+test('upgraded citizen silhouette fits one bounded 300-triangle instanced creature with eye/limb regions',async()=>{
+ const {creatureGeometry}=await import('../world/engine/creature-geometry.js');const geometry=creatureGeometry('new');geometry.computeBoundingBox();const size=geometry.boundingBox!.getSize(new Vector3());assert.equal(geometry.index!.count/3,300);assert.ok(Math.abs(size.x-.48)<.001);assert.ok(size.y<=.761&&size.y>.74);const parts=geometry.getAttribute('aPart');assert.deepEqual([...new Set(Array.from(parts.array))].sort((a,b)=>a-b),[0,1,2,3,4,5,6,7,8]);assert.ok(Array.from(geometry.getAttribute('normal').array).every(Number.isFinite));geometry.dispose();
+});
