@@ -1,3 +1,4 @@
+import type {WorldLook} from "../world/engine/render-profile.js";
 import {CLIPS} from "./reactions/catalog.js";
 import { incomingRaid } from "./twitch/raid.js";
 import type { Versions } from "./versions/index.js";
@@ -37,7 +38,7 @@ async function post(request: IncomingMessage, response: ServerResponse, handler:
   catch {request.resume();if(!response.headersSent)json(response,400,{error:"Invalid JSON event or body; maximum 8 KiB, application/json required"});}
 }
 
-export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { durable?:()=>Promise<void>; broadcasterId?:string; simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
+export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { worldLook?:WorldLook; durable?:()=>Promise<void>; broadcasterId?:string; simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
   const assets = await buildClient();
   const pages = new Map([
     ["/world", await readFile(new URL("../world/index.html", import.meta.url))],
@@ -64,7 +65,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
       await post(request,response,async input=>{
         switch(path){
           case "/modules/budget": {
-            const accepted=primary(input.clientId)&&!!await versions?.reportBaseUsage(input.base);
+            const accepted=primary(input.clientId)&&!!await versions?.reportBaseUsage(input.base,input.look==="classic"?"classic":input.look==="new"?"new":undefined);
             return {status:accepted?200:409,value:{accepted}};
           }
           case "/runner/live": {
@@ -142,7 +143,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     if (path === "/") { response.writeHead(302, { Location: "/world" }).end(); return; }
     const page = pages.get(path);
     const asset = path.startsWith("/assets/") ? assets.get(path.slice(8)) : undefined;
-    const output = page ?? asset;
+    const output = page ? page.toString().replace("<head>",`<head><meta name="world-look" content="${automation?.worldLook??"new"}">`) : asset;
     if (!output) { response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("Not found"); return; }
     response.writeHead(200, { "Content-Type": page ? "text/html; charset=utf-8" : path.endsWith(".css") ? "text/css; charset=utf-8" : "text/javascript; charset=utf-8" });
     response.end(request.method === "HEAD" ? undefined : output);

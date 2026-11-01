@@ -12,3 +12,9 @@ test('surface factory keeps classic facets but new surfaces use smooth normals a
  for(const look of ['classic','new'] as const){const material=surfaceMaterial({flatShading:true},look);assert.equal(material.flatShading,look==='classic');material.dispose();
  for(const kind of ['box','sphere','cylinder','cone','torus','crystal','mushroom','tree','plane'] as const){const geometry=createSpecGeometry({id:'shape',kind,detail:1,size:[1,1,1]},look);assert.equal((geometry.index?.count??geometry.getAttribute('position').count)/3,triangleCost(kind,1,look),`${look}:${kind}`);geometry.dispose();}}
 });
+
+test('look overrides share one profile resolver and the primary world persists its gate look',async()=>{
+ assert.equal(pageProfile(new URLSearchParams(),'classic').look,'classic');assert.equal(pageProfile(new URLSearchParams('look=new'),'classic').look,'new');
+ const {Versions}=await import('../server/versions/index.js'),{mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{join}=await import('node:path');const root=await mkdtemp(join(tmpdir(),'look-profile-'));
+ try{const versions=new Versions(root,()=>{});await versions.reportBaseUsage({nodes:1,triangles:1,draws:1,particles:0,lights:0},'classic');const restored=new Versions(root,()=>{});await restored.init();assert.equal(restored.renderLook,'classic');await restored.reportBaseUsage(restored.baseUsage!,'new');assert.equal(restored.renderLook,'new');versions.close();restored.close();}finally{await rm(root,{recursive:true,force:true});}
+});

@@ -37,7 +37,7 @@ async function start(){
   const durable=async()=>{checkpoint.changed();await checkpoint.flush();};
   const unsubscribe=pipeline.subscribe(event=>{checkpoint.changed();if(event.type==="rounds"){const next=key(event.state);if(next!==phaseKey)void checkpoint.flush().catch(onError);phaseKey=next;}});
   checkpoint.changed();await checkpoint.flush();
-  const app=await createWorldServer(pipeline,summons,rounds,versions,{durable,broadcasterId:config.broadcasterId,simulationAllowed:config.simulationAllowed,...(simulation?{setOutcome:simulation.setOutcome}:{}),live:!!config.summon.key&&!simulation,fault:async()=>{if(versions.current)await versions.invalidate(versions.current.version);rounds.cancelForRevert();rounds.externalResult(await runner.rollback("system",true));}});
+  const app=await createWorldServer(pipeline,summons,rounds,versions,{worldLook:config.worldLook,durable,broadcasterId:config.broadcasterId,simulationAllowed:config.simulationAllowed,...(simulation?{setOutcome:simulation.setOutcome}:{}),live:!!config.summon.key&&!simulation,fault:async()=>{if(versions.current)await versions.invalidate(versions.current.version);rounds.cancelForRevert();rounds.externalResult(await runner.rollback("system",true));}});
   await new Promise<void>((resolve,reject)=>{app.server.once("error",reject);app.server.listen(config.port,config.host,resolve);});
   twitch=connectTwitch({onChat:(event,authority)=>{pipeline.chat(event,{...authority,source:"twitch"});},onRaid:event=>{pipeline.raid(event);}},config.twitch);
   const timers=[setInterval(()=>{rounds.tick();reactions.tick();},250),setInterval(()=>{pipeline.prune();summons.prune();},1000)];let closing=false;

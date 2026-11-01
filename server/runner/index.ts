@@ -119,7 +119,7 @@ export class Runner {
           if(discovered.some(found=>found.hasOnChatLogic)&&!commands.length)feed("check","Module has onChat logic but no testable custom !command; built-in commands are excluded.");
           feed("check",`SwiftShader · ${CANDIDATE_THRESHOLDS.sampleSeconds}-second candidate gate · attempt ${attempt}.`);
           requireGateTime(deadline-performance.now(),firstReason);
-          check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal,commands);
+          check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal,commands,this.options.versions.renderLook??(sourceEnv.WORLD_LOOK==="classic"?"classic":"new"));
           // A background conflict copy or hostile edit stays fatal even when another gate fails.
           await auditDiff(tree,base,before,approved.files);
           if(!check.ok){if(check.category!=="candidate"||check.retryable!==true)throw new Error(check.reason);throw new RepairableRejection(check.reason);}

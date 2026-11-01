@@ -1,3 +1,4 @@
+import {pageProfile,documentLook} from "./engine/render-profile.js";
 import {historyCredits} from "./history-credits.js";
 import type {HistoryCredits} from "../server/versions/credits.js";
 import "./history.css";
@@ -5,7 +6,7 @@ import { createRenderer } from "./engine/renderer.js";
 import type { HistoryEntry } from "../server/versions/index.js";
 const byId=<T extends HTMLElement>(id:string)=>document.getElementById(id)! as T;
 const canvas=byId<HTMLCanvasElement>("history-world"),message=byId("history-message"),player=byId("player"),play=byId<HTMLButtonElement>("play"),speed=byId<HTMLSelectElement>("speed");
-const world=createRenderer(canvas,{playback:true,onReady(){canvas.dataset.ready="true";},onError(text){showError(text);}});
+const world=createRenderer(canvas,{profile:pageProfile(new URLSearchParams(location.search),documentLook()),playback:true,onReady(){canvas.dataset.ready="true";},onError(text){showError(text);}});
 const credits=historyCredits(byId("history-credits"));
 let contributors:HistoryCredits={entries:[],viewers:0};
 let entries:HistoryEntry[]=[],index=0,playing=!matchMedia("(prefers-reduced-motion: reduce)").matches,loading=false,elapsed=0,sequence=0,last=performance.now();

@@ -1,3 +1,4 @@
+import type {WorldLook} from "../../world/engine/render-profile.js";
 import {CANDIDATE_THRESHOLDS} from "../../checks/candidate-policy.js";
 import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -7,10 +8,10 @@ import {jsonWorker} from "../runtime/json-worker.js";
 import {isGateVerdict,infrastructureFailed,type GateVerdict} from "./verdict.js";
 export const CHECK_TIMEOUT_MS=CANDIDATE_THRESHOLDS.watchdogMs;
 export type CheckResult=GateVerdict&{fps?: number; rawFps?:number; baselineFps?:number;fpsDropRatio?:number;moduleP95Ms?:number;addedRenderMs?:number; avgFps?: number; samples?: number; durationMs?: number; evidence?: string};
-export async function candidateCheck(root: string, modules: { id: string; file: string; code: string }[], probeId: string, signal: AbortSignal, commands:readonly string[]=[]): Promise<CheckResult> {
+export async function candidateCheck(root: string, modules: { id: string; file: string; code: string }[], probeId: string, signal: AbortSignal, commands:readonly string[]=[],look:WorldLook=process.env.WORLD_LOOK==="classic"?"classic":"new"): Promise<CheckResult> {
   const started = performance.now(), directory = join(root, "state/checks"); await mkdir(directory, { recursive: true });
   const evidence=join(directory,randomUUID());await mkdir(evidence,{recursive:true});
-  const input = join(evidence, "input.json"); await writeFile(input, JSON.stringify({ modules, probeId, commands }), { mode: 0o600 });
+  const input = join(evidence, "input.json"); await writeFile(input, JSON.stringify({ modules, probeId, commands, look }), { mode: 0o600 });
   // Evidence is deliberately retained on success, failure, cancellation and watchdog termination.
     const raw=await jsonWorker<CheckResult>({script:fileURLToPath(new URL("../../checks/candidate.worker.ts",import.meta.url)),args:[input],signal,timeoutMs:CHECK_TIMEOUT_MS,verdict:isGateVerdict});
     const result:CheckResult=raw.verdict??infrastructureFailed(`Candidate checker ${raw.error}`);

@@ -9,3 +9,5 @@ export function pageProfile(query:URLSearchParams,defaultLook:WorldLook="new"):R
  const base=query.get("check")==="1"?CANDIDATE_PROFILE:query.get("resolution")==="4k"?CAPTURE_4K_PROFILE:PRODUCTION_PROFILE;
  return {...base,look,forceSmaa:query.get("aa")==="smaa"};
 }
+
+export function documentLook():WorldLook{return document.querySelector<HTMLMetaElement>('meta[name="world-look"]')?.content==='classic'?'classic':'new';}
