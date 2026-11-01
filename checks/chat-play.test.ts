@@ -1,3 +1,5 @@
+import {inspectModule} from "../server/runner/policy.js";
+import {BUILTIN_COMMANDS,hasPhysicalReaction} from "../server/commands.js";
 import assert from "node:assert/strict";
 import {test} from "node:test";
 import {readFile} from "node:fs/promises";
@@ -12,5 +14,14 @@ test("guard preserves commands and builder/AGENTS render the same bounded play c
 test("only explicit custom command tokens are probed, deduplicated and bounded",()=>{
  assert.deepEqual(chatCommands({description:'!Race and !dig. Not !idea, !vote, !rollback or !pause.',steps:['Typing !RACE advances a racer.'],checks:['!dig reaches a prize.']}),['!race','!dig']);
  assert.deepEqual(chatCommands({description:'A race with no command specified',steps:[],checks:[]}),[]);
- assert.throws(()=>chatCommands({description:'!one !two !three !four !five',steps:[],checks:[]}),/at most 4/);
+ assert.deepEqual(chatCommands({description:'!one !two !three !four !five',steps:[],checks:[]}),['!one','!two','!three','!four']);
+ assert.deepEqual(chatCommands({description:Object.keys(BUILTIN_COMMANDS).map(s=>'!'+s).join(' '),steps:[],checks:[]}),[]);
+ assert.equal(hasPhysicalReaction('!DANCE'),true);
+ assert.deepEqual(chatCommands({description:'Dance floor lights up on !dance',steps:[],checks:[]}),[]);
+});
+
+test("candidate literals survive guard paraphrasing and source commands take precedence",()=>{
+ const found=inspectModule('export default()=>({onChat(event: {text:string}) {if(event.text === "!race")return;},update(){}});', 'world/modules/game.ts');
+ assert.equal(found.hasOnChatLogic,true);assert.deepEqual(chatCommands({description:'A racing game',steps:[],checks:[]},found.commands),['!race']);
+ assert.equal(inspectModule('export default()=>({onChat(){}});','world/modules/game.ts').hasOnChatLogic,false);
 });

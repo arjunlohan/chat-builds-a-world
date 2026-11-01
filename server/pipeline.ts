@@ -1,3 +1,4 @@
+import {builtinCommand,BUILTIN_COMMANDS} from "./commands.js";
 import type {Reactions,ReactionCheckpoint} from "./reactions/index.js";
 import { inParade } from "../world/shared/limits.js";
 import { contentPolicy, DEFAULT_BLOCKLIST } from "./content-policy.js";
@@ -88,10 +89,11 @@ export class WorldPipeline {
     if (this.window !== second) { this.window = second; this.messages = 0; }
     if (now - (this.cooldowns.get(event.userId) ?? -Infinity) < 250 || this.messages >= 200) return { accepted: false, reason: "rate-limited" };
     this.messages++; this.cooldowns.set(event.userId, now);
-    const mod = /^!(pause|skip|veto|clear)$/i.exec(event.text.trim());
+    const builtin=builtinCommand(event.text);
+    const mod = builtin&&BUILTIN_COMMANDS[builtin]==="moderation"&&event.text.trim().toLowerCase()===`!${builtin}` ? builtin : undefined;
     if (mod) {
       if (!authority.moderator) return { accepted: false, reason: "moderator-only" };
-      const action = (mod[1]!.toLowerCase()==="veto"?"skip":mod[1]!.toLowerCase()) as "pause" | "skip" | "clear";
+      const action = (mod==="veto"?"skip":mod) as "pause" | "skip" | "clear";
       if (action === "pause") { this.paused = !this.paused; this.reactions?.setPaused(this.paused); this.rounds?.setPaused(this.paused); }
       if (action === "skip") this.rounds?.skip();
       if (action === "clear") void this.summonLane?.clearLatest();
@@ -99,17 +101,17 @@ export class WorldPipeline {
       return { accepted: true, count: this.roster.size };
     }
     if (this.paused) return { accepted: false, reason: "paused" };
-    if (!contentPolicy(event.text, /^!(summon|idea)(?:\s|$)/i.test(event.text.trim()), this.blocklist)) {
+    if (!contentPolicy(event.text, (builtin==="summon"||builtin==="idea"), this.blocklist)) {
       const message=`@${event.displayName} Please use a safe, original visual idea.`;
       this.reply(event,message,()=>this.sendRejection?.(message,authority.source??"sim"));
       return { accepted: false, reason: "blocked" };
     }
-    const roundCommand = /^!(idea|vote|rollback)(?:\s|$)/i.test(event.text.trim());
+    const roundCommand = !!builtin&&BUILTIN_COMMANDS[builtin]==="round";
     const roundResult = roundCommand ? this.rounds?.command(event) : undefined;
     if (roundResult && !roundResult.accepted) return roundResult;
     const reactionResult=this.reactions?.chat(event.userId,event.text);
     if(reactionResult&&!reactionResult.accepted)return reactionResult;
-    const summonCommand = /^!summon(?:\s|$)/i.test(event.text.trim());
+    const summonCommand = builtin==="summon";
     if (summonCommand) void this.summonLane?.submit({ ...event, timestamp: now }, { source: authority.source ?? "sim" });
     const result = this.roster.accept({ ...event, timestamp: now }, now);
     if (!result) return roundResult ?? (reactionResult?.accepted ? {accepted:true,count:this.roster.size}:undefined) ?? (summonCommand ? { accepted: true, count: this.roster.size } : { accepted: false, reason: "capacity" });

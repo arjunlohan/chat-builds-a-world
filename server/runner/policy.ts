@@ -22,7 +22,11 @@ export function inspectModule(source: string, file: string) {
     } else if (!ts.isFunctionDeclaration(statement) && !ts.isInterfaceDeclaration(statement) && !ts.isTypeAliasDeclaration(statement) && !ts.isExportAssignment(statement)) throw new CandidateCodeError(POLICY_RULES.topLevel.error);
     if (ts.isExportAssignment(statement) && !ts.isIdentifier(statement.expression) && !ts.isArrowFunction(statement.expression) && !ts.isFunctionExpression(statement.expression)) throw new CandidateCodeError("Default export must be a factory.");
   }
+  const commands:string[]=[];let hasOnChatLogic=false;
   function visit(node: ts.Node) {
+    if(ts.isStringLiteralLike(node)&&/^![a-z][a-z0-9_-]{0,23}$/i.test(node.text))commands.push(node.text);
+    if(ts.isMethodDeclaration(node)&&node.name.getText(ast)==="onChat"&&node.body?.statements.length)hasOnChatLogic=true;
+    if(ts.isPropertyAssignment(node)&&node.name.getText(ast)==="onChat"&&(ts.isArrowFunction(node.initializer)||ts.isFunctionExpression(node.initializer)))hasOnChatLogic=hasOnChatLogic||!ts.isBlock(node.initializer.body)||node.initializer.body.statements.length>0;
     if (ts.isNewExpression(node) && /Geometry$|Material$|BufferAttribute$|^(Float32|Float64|Uint8|Uint16|Uint32|Int8|Int16|Int32)Array$/.test(node.expression.getText(ast))) {
       for (let parent = node.parent; parent; parent = parent.parent) {
         if ((ts.isMethodDeclaration(parent) || ts.isPropertyAssignment(parent)) && parent.name?.getText(ast) === "update") throw new CandidateCodeError(POLICY_RULES.allocation.error);
@@ -36,6 +40,7 @@ export function inspectModule(source: string, file: string) {
     ts.forEachChild(node, visit);
   }
   visit(ast);
+  return {commands:[...new Set(commands)],hasOnChatLogic};
 }
 export async function compileModule(root: string, file: string, id: string, nodeModules: string, files: readonly string[] = [file]) {
   const path = resolve(root, file); if (!relative(root, path).startsWith("world/modules/")) throw new Error("Invalid entrypoint.");

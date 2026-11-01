@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { RAID_ENTRY } from "../../world/shared/landmarks.js";
 import { CITIZEN_CAP, IDLE_MS, FADE_MS, QUIET_MS, RAID_CAP } from "../../world/shared/limits.js";
-import { isChatCommand } from "../commands.js";
+import { isChatCommand, builtinCommand, hasPhysicalReaction } from "../commands.js";
 import type { ChatEvent, CitizenCommand, CitizenState, RaidEvent } from "../contracts.js";
 import { hash, isWalkable, terrainHeight } from "../../world/engine/land.js";
 
@@ -51,8 +51,9 @@ export class CitizenRoster {
     let command: CitizenCommand | null = existing?.command ?? null;
     let commandAt = existing?.commandAt ?? 0;
     const text = event.text.trim();
-    const simple = /^!(jump|dance|home)$/i.exec(text);
-    if (simple) { command = { kind: simple[1]!.toLowerCase() as "jump" | "dance" | "home" }; commandAt = now; }
+    const name=builtinCommand(text);
+    const simple = name&&hasPhysicalReaction(text)&&name!=="follow"&&text.toLowerCase()===`!${name}`?name:undefined;
+    if (simple) { command = { kind: simple as "jump" | "dance" | "home" }; commandAt = now; }
     const follow = /^!follow\s+@?(.{1,64})$/i.exec(text);
     if (follow) {
       const name = follow[1]!.toLocaleLowerCase();

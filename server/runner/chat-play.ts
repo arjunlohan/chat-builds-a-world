@@ -1,12 +1,12 @@
+import {isBuiltinCommand} from "../commands.js";
 import {CHAT_PLAY as P,FOCUS_LIMITS as F} from "../../world/shared/chat-play.js";
 import type {BuildSpec} from "../guard/index.js";
-const RESERVED=new Set(["idea","vote","rollback","react","summon","pause","skip","veto","clear"]);
+
 /** Guard prose is bounded, quoted data. Only explicit custom command tokens become synthetic input. */
-export function chatCommands(spec:Pick<BuildSpec,"description"|"steps"|"checks">):string[]{
- const matches=[spec.description,...spec.steps,...spec.checks].join(" ").match(/![a-z][a-z0-9_-]{0,23}\b/gi)??[];
- const commands=[...new Set(matches.map(s=>s.toLowerCase()))].filter(s=>!RESERVED.has(s.slice(1)));
- if(commands.length>P.maxCommands)throw new Error(`Chat play supports at most ${P.maxCommands} custom commands per module.`);
- return commands;
+export function chatCommands(spec:Pick<BuildSpec,"description"|"steps"|"checks">, literals:readonly string[]=[]):string[]{
+ const matches=[...literals,spec.description,...spec.steps,...spec.checks].join(" ").match(/![a-z][a-z0-9_-]{0,23}\b/gi)??[];
+ const commands=[...new Set(matches.map(s=>s.toLowerCase()))].filter(s=>!isBuiltinCommand(s));
+ return commands.slice(0,P.maxCommands);
 }
 export function chatPlayRules(){return `Chat-play readability: custom commands must have a useful no-argument action. For each command result, call services.camera.focus on the result or participating citizen; coalesce to one request per ${F.intervalMs/1000} s. Use duration ${P.focusDuration} s (allowed ${F.minDuration}..${F.maxDuration}), progress priority ${P.progressPriority}, and win priority ${P.winPriority} (allowed ${F.minPriority}..${F.maxPriority}). Prioritize/coalesce winning focus over progress so the winning citizen's name tag stays visible; focus the citizen's position, not a raised marker or a large object's center. Player-owned racers/tokens must be at least ${P.minPlayerExtent} world unit in width and height, citizen-sized or larger, with contrasting player colors. Keep a visible win marker at least ${P.winMarkerLift} units above the winning citizen's position for several seconds; leave their name tag unobstructed.
 Make at least one win reachable by normal play within about ${P.normalWinSeconds} s with ${P.players} players. Bound progress to <=${P.commandsPerPlayerToWin} valid commands/player; avoid rare-random-only wins. Citizens do not teleport or walk to a target just because a custom command was typed: use their reachable positions, advance visible progress per command, and test pickups against an accessible ground-plane region/outer edge rather than 3D distance to a raised building-sized center. Pool player objects and index by citizen ID. Preserve at most ${P.maxCommands} explicit !command tokens in the spec. The gate sends ${P.bursts} bursts from ${P.players} synthetic citizens through the normal chat pipeline, tests onChat errors/budgets and camera focus, and includes post-command results in visibility probes.`;}

@@ -1,3 +1,4 @@
+import {inspectModule} from "./policy.js";
 import {chatCommands} from "./chat-play.js";
 import {stopOrphan} from "./recovery.js";
 import { ACTIVE_MODULE_CAP } from "../../world/shared/limits.js";
@@ -77,7 +78,6 @@ export class Runner {
       if (approved.verdict !== "accept" || !approved.spec) throw new Error("Only guard-accepted specs can build.");
       const baseUsage=this.options.versions.baseUsage;
       if(!baseUsage)throw new Error("World resource baseline is unknown; open /world before building.");
-      const commands=chatCommands(approved.spec);
       const retained=(this.options.versions.current?.modules??[]).filter(m=>m.id!==approved.spec!.moduleId);
       if(retained.length+1>ACTIVE_MODULE_CAP)throw new Error(`${ACTIVE_MODULE_CAP} active modules maximum; replace or roll back an existing module first.`);
       base = await cleanMaster(this.root); await this.options.versions.baselineAt(base); version = await this.reserve();
@@ -109,6 +109,9 @@ export class Runner {
           const checked=await selfCheck(tree,input,signal);
           if(!checked.resources.ok){if(checked.resources.category!=="candidate"||checked.resources.retryable!==true)throw new Error(checked.resources.reason);throw new RepairableRejection(checked.resources.reason);}
           modules=checked.modules;
+          const discovered=await Promise.all(approved.files.map(async file=>inspectModule(await readFile(join(tree,file),"utf8"),file)));
+          const commands=chatCommands(approved.spec,discovered.flatMap(found=>found.commands));
+          if(discovered.some(found=>found.hasOnChatLogic)&&!commands.length)feed("check","Module has onChat logic but no testable custom !command; built-in commands are excluded.");
           feed("check",`SwiftShader · ${CANDIDATE_THRESHOLDS.sampleSeconds}-second candidate gate · attempt ${attempt}.`);
           check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal,commands);
           // A background conflict copy or hostile edit stays fatal even when another gate fails.
