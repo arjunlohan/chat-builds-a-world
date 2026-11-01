@@ -1,3 +1,4 @@
+import {skyPreset} from "./shared/sky-cycle.js";
 import {prepareWorldAssets} from "./engine/asset-bank.js";
 import {captureQuery,frameCapture} from "./engine/capture.js";
 import { pageProfile, documentLook } from "./engine/render-profile.js";
@@ -19,14 +20,13 @@ const query = new URLSearchParams(location.search);
 const capturing=query.get("capture")==="1";document.body.classList.toggle("frame-capture",capturing);
 document.body.classList.toggle("overlay-active", query.get("overlay") === "1");
 if (fps) fps.hidden = query.get("debug") !== "1";
-const phases: Record<string, number> = { dawn: 0.25, day: 0.5, dusk: 0.75, night: 0 };
-const phase = phases[query.get("time") ?? ""];
+const profile=pageProfile(query,documentLook());
+const phase=skyPreset(query.get("time")??"",profile.look==="classic");
 function fail(message: string) {
   if (status) { status.hidden = false; status.textContent = message; status.classList.add("error"); }
 }
 try {
   if (!canvas) throw new Error("World canvas is missing");
-  const profile=pageProfile(query,documentLook());
   await prepareWorldAssets(profile.look);
   const world = createRenderer(canvas, {
     profile,
@@ -41,7 +41,7 @@ try {
     onFrame(instant, average, time, citizens) {
       if (count) count.textContent = `${citizens} ${citizens === 1 ? "NEIGHBOR" : "NEIGHBORS"}`;
       if (fps && !fps.hidden) fps.textContent = `${instant.toFixed(0)} FPS · ${average.toFixed(1)} AVG`;
-      if (clock) clock.textContent = time < 0.24 || time > 0.8 ? "AFTER THE STARS" : time < 0.3 ? "FIRST LIGHT" : time < 0.4 ? "THE GOLDEN HOURS" : time < 0.65 ? "DAYLIGHT" : "EVENING GLOW";
+      if(clock)clock.textContent=profile.look==="classic"?(time<.24||time>.8?"AFTER THE STARS":time<.3?"FIRST LIGHT":time<.4?"THE GOLDEN HOURS":time<.65?"DAYLIGHT":"EVENING GLOW"):(time<.04||time>.94?"BLUE HOUR":time>.82?"GOLDEN HOUR":"DAYLIGHT");
     },
     onStatus(event) {
       if (!fault) return;

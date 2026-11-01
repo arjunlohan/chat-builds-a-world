@@ -7,5 +7,5 @@ export function captureUrl(query:URLSearchParams){const selected=new URLSearchPa
 export function frameCapture(world:ReturnType<typeof createRenderer>,query:URLSearchParams):FrameCapture{
  let frame=0,time=0,loaded=false;
  const ready=(async()=>{const response=await fetch(captureUrl(query));if(!response.ok)throw new Error("Saved capture version is unavailable");const snapshot=await response.json() as Extract<WorldEvent,{type:"snapshot"}>;await world.loadCapture(snapshot);if(world.stats.moduleError||world.stats.moduleVersion!==(snapshot.version?.version??0))throw new Error(world.stats.moduleError||"Saved capture version failed to activate");loaded=true;})();
- return {ready,get frame(){return frame;},get time(){return time;},step(dt){if(!loaded)throw new Error("Await __capture.ready first");world.step(dt);if(world.stats.moduleError)throw new Error(world.stats.moduleError);time+=dt;frame++;return {frame,time};}};
+ return {ready,get frame(){return frame;},get time(){return time;},async step(dt){if(!loaded)throw new Error("Await __capture.ready first");await world.step(dt);if(world.stats.moduleError)throw new Error(world.stats.moduleError);time+=dt;frame++;return {frame,time};}};
 }

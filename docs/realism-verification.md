@@ -156,3 +156,44 @@ Neither phase can wait indefinitely. This does not expand the builder sandbox.
 `checks/json-worker.test.ts`: 3/3, including delayed readiness and independent
 startup/probe timeout failures. `checks/self-check.test.ts`: 4/4, including the
 exact command under the workspace sandbox and real browser allocation probes.
+
+## Step 3: sky, light and capture completion
+
+The 2K photo HDR supplies the sky; its recorded sun direction is rotated to the
+world sun. A CC0 photographic alpha cloud layer forms the cloud sea. Sun,
+hemisphere fill, environment intensity, exposure and fog follow one lighting
+state. Daylight occupies 86% of the 600s cycle; a short moonlit blue hour retains
+lantern readability. Dark basalt and soft contact shadows retain depth.
+PMREM rebakes only past day/warmth/direction epsilons, into a stable texture
+identity; identical night states do not rebake. AO operates at half resolution
+with single-sample normals; the scene alone uses 4x MSAA, post targets stay
+single-sample. Selective bloom retains fog. Home/capture share the director pose.
+
+Capture limitation: dynamic HDR PMREM produced intermittent one-byte pixel
+variance on this GPU, even after a completion fence. Capture therefore uses
+fixed ambient fill without PMREM, as permitted, while live rendering retains
+HDR environment reflections. Sky, sun, shadows, seeded world and virtual time
+still advance. Two consecutive complete fresh-page hash runs passed for both
+/world and /capture, including active reaction video. World hash:
+`1af906f57356b4778dee1c117c32d249222fd53f007b9635a4ba06dd32f2b088`;
+composite hash `69fe82bd4a670b07a890789dacd7a3608ac0d3148d4d29425361c3c45972313d`.
+The asynchronous step now waits on a GPU fence instead of assuming gl.finish
+blocks the browser's GPU process. 4K world steps about 25-28ms; composite 35-36ms.
+
+| Phase | FPS, 150 raiders | GPU average ms | GPU p95 ms |
+| --- | ---: | ---: | ---: |
+| Day | 59.94 | 11.68 | 16.24 |
+| Dusk | 59.95 | 11.43 | 12.36 |
+| Night | 59.75 | 11.50 | 16.05 |
+
+Cold load 1.039s. `pnpm check`: 259/259 plus bundles and media/history smokes.
+Classic, new 4x MSAA and forced SMAA smoke: zero errors. Interleaved gate:
+cheap passes idle/loaded at 37.71/24.91 FPS, median paired drops -0.015%/0.012%,
+24 frames per slice, 25.686/31.806s total. Expensive rejects on the unchanged
+hook budget in 7.796/8.757s. No live provider calls.
+
+1080p set/crops: `state/visual/realism-step3-*`; six 4K frames:
+`realism-step3-{day,golden}-{orbit,push-in,flyover}-4k.png`. The native-4K still
+harness uses a fixed seed, 150 raiders, a fixture module and 18s of virtual time.
+Stills averaged 27.1-27.6ms/frame. Logs `state/asset-cache/step3-*-final.log`,
+`step3-capture-fixed-ambient-{1,2}.log`, `step3-fallback.log`, `step3-stills.log`.

@@ -1,3 +1,4 @@
+import {captureFence} from "./gpu-fence.js";
 import {measureRender} from "./render-timing.js";
 import {SimulationClock} from "./clock.js";
 import {worldPipeline} from "./render-pipeline.js";
@@ -77,7 +78,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const water = createWater();
   const motes = createMotes();
   const sky = createSky(scene, options.fixedTime,profile.look,profile.probe?SHADOW_RESOLUTION.classic:shadowResolution(profile));
-  const ibl=profile.look!=="classic"?skyEnvironment(renderer,scene,sky.sky):undefined;ibl?.update(sky.phase);
+  // Capture pins ambient fill: HDR-derived PMREM caused one-bit cross-page GPU variance.
+  canvas.dataset.captureEnvironment=options.capture?"fixed-ambient":"sky-pmrem";
+  const ibl=profile.look!=="classic"&&!options.capture?skyEnvironment(renderer,scene,sky.sky):undefined;ibl?.update(sky.lighting);
   canvas.dataset.shadow=String(sky.sunlight.shadow.mapSize.width);
   const effects = createEffects();
   const labelLayer = options.labels ?? document.createElement("div");
@@ -219,7 +222,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       stats.value.citizenCount=citizens.count;
       renderer.info.reset();
       const cpuStart = performance.now();
-      sky.update(visualTime);ibl?.update(sky.phase);if(profile.look!=="classic")renderer.toneMappingExposure=1.05+(1-sky.day)*.15;
+      if(sky.update(visualTime))shadowDirty=true;ibl?.update(sky.lighting);stats.value.environmentBakes=ibl?.bakes??0;if(profile.look!=="classic")renderer.toneMappingExposure=.92+(1-sky.day)*.2;
       water.update(visualTime, sky.day);
       motes.update(visualTime, 1 - sky.day);
       effects.update(clock.seconds);stats.value.raidPortalActive=raidPortal.update(clock.seconds,reducedMotion.matches);
@@ -306,8 +309,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   return {
     async loadCapture(snapshot:Extract<WorldEvent,{type:"snapshot"}>){clock.reset(snapshot.now);anchored=true;citizens.sync(snapshot.citizens,snapshot.now);stats.value.raidCount=snapshot.raids;
       if(snapshot.arrival)raidPortal.open(snapshot.arrival.raid.broadcasterName,snapshot.arrival.admitted,snapshot.arrival.raid.viewerCount,-(snapshot.now-snapshot.arrival.at)/1000);
-      materializer.sync(snapshot.summons);await activate(snapshot.version);frame(0,0);renderer.getContext().finish();},
-    step(dt:number){if(renderer.getContext().isContextLost())throw new Error("Capture graphics context lost");if(!options.capture)throw new Error("Use ?capture=1");if(!Number.isFinite(dt)||dt<0||dt>.05)throw new Error("Capture dt must be 0..0.05 seconds");frame((clock.seconds+dt)*1000,dt);renderer.getContext().finish();return {time:clock.seconds,frame:stats.value.frame};},
+      materializer.sync(snapshot.summons);await activate(snapshot.version);frame(0,0);await captureFence(renderer.getContext() as WebGL2RenderingContext);},
+    async step(dt:number){if(renderer.getContext().isContextLost())throw new Error("Capture graphics context lost");if(!options.capture)throw new Error("Use ?capture=1");if(!Number.isFinite(dt)||dt<0||dt>.05)throw new Error("Capture dt must be 0..0.05 seconds");frame((clock.seconds+dt)*1000,dt);await captureFence(renderer.getContext() as WebGL2RenderingContext);return {time:clock.seconds,frame:stats.value.frame};},
     measureRender(frames=30){return measureRender(renderer,()=>pipeline.render(0,false),frames);},
     renderer, scene, camera, director, setVersion: activate, get host(){return host;}, citizens, materializer, stats: stats.value, baseUsage: base,
     dispose() {

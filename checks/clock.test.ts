@@ -21,3 +21,8 @@ test('only the scene target is multisampled and post targets do not allocate dep
  const renderer={getContext:()=>gl,getPixelRatio:()=>1,getSize:(v:InstanceType<typeof Vector2>)=>v.set(1920,1080)} as unknown as import('three').WebGLRenderer;
  const pipeline=worldPipeline(renderer,new Scene(),new PerspectiveCamera(),PRODUCTION_PROFILE);assert.deepEqual(pipeline.samples,{scene:4,post:0,normal:0});assert.equal(pipeline.composer.renderTarget1.depthBuffer,false);assert.equal(pipeline.composer.renderTarget2.depthBuffer,false);assert.equal(pipeline.composer.renderTarget1.resolveDepthBuffer,false);pipeline.dispose();
 });
+
+test('offline GPU completion yields until the fence signals and always releases it',async()=>{
+ const {captureFence}=await import('../world/engine/gpu-fence.js');let polls=0,deleted=0,flushed=0;const gl={SYNC_GPU_COMMANDS_COMPLETE:1,ALREADY_SIGNALED:2,CONDITION_SATISFIED:3,WAIT_FAILED:4,fenceSync:()=>({}),flush(){flushed++;},clientWaitSync(){return ++polls<3?0:3;},isContextLost:()=>false,deleteSync(){deleted++;}} as unknown as WebGL2RenderingContext;await captureFence(gl);assert.equal(polls,3);assert.equal(deleted,1);assert.equal(flushed,1);
+ const lost={...gl,clientWaitSync:()=>4};await assert.rejects(captureFence(lost as WebGL2RenderingContext),/context lost/);assert.equal(deleted,2);
+});

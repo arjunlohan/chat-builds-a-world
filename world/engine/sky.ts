@@ -1,3 +1,5 @@
+import {createRealSky} from "./real-sky.js";
+import type {SkyLighting} from "../shared/sky-cycle.js";
 import {SHADOW_RESOLUTION} from "./render-profile.js";
 import type {WorldLook} from "./render-profile.js";
 import { indexGeometry } from "./index-geometry.js";
@@ -10,6 +12,7 @@ import { random } from "./terrain.js";
 
 /** Ten-minute day, authored in linear color; no image textures or external skybox. */
 export function createSky(scene: Scene, fixedTime?: number,look:WorldLook="new",shadowSize:number=look==="classic"?SHADOW_RESOLUTION.classic:SHADOW_RESOLUTION.new) {
+  if(look!=="classic")return createRealSky(scene,fixedTime,shadowSize);
   const root = new Group();
   const top = new Color(), horizon = new Color(), sunColor = new Color();
   const nightTop = new Color("#13223c"), dayTop = new Color("#286b9b");
@@ -91,12 +94,13 @@ export function createSky(scene: Scene, fixedTime?: number,look:WorldLook="new",
   }
   clouds.computeBoundingSphere();
   root.add(clouds);
-  let phase = 0.34, day = 1;
+  let phase = 0.34, day = 1, effectiveWarmth=0;
   function update(time: number) {
     phase = fixedTime ?? (0.34 + time / 600) % 1;
     const elevation = Math.sin((phase - 0.25) * Math.PI * 2);
     day = MathUtils.smoothstep(elevation, -0.22, 0.3);
     const warmth = 1 - MathUtils.smoothstep(Math.abs(elevation), 0.05, 0.72);
+    effectiveWarmth=warmth*day;
     top.copy(nightTop).lerp(dayTop, day);
     horizon.copy(nightHorizon).lerp(dayHorizon, day).lerp(duskHorizon, warmth * day * 0.65);
     sunColor.set("#ffdbad");
@@ -107,8 +111,8 @@ export function createSky(scene: Scene, fixedTime?: number,look:WorldLook="new",
     sunlight.color.set("#ffe2bd").lerp(warmSun, warmth * 0.5);if(look!=="classic")sunlight.color.lerp(moonColor,1-day);
     cloudUniforms.uColor.value.copy(horizon);
     cloudUniforms.uOpacity.value = 0.1 + day * 0.12;
-    fog.color.copy(horizon);
+    fog.color.copy(horizon);return false;
   }
   update(0);
-  return { root, sky, update, get day() { return day; }, get phase() { return phase; }, sunlight };
+  return { root, sky, update, get day() { return day; }, get phase() { return phase; }, get lighting():SkyLighting{return {day,warmth:effectiveWarmth,sun:[sunDir.x,sunDir.y,sunDir.z]};}, sunlight };
 }

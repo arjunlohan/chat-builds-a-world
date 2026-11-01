@@ -1,7 +1,7 @@
 {
   "format": 1,
   "budgetBytes": 120000000,
-  "bytes": 59145272,
+  "bytes": 59356417,
   "assets": [
     {
       "name": "basalt",
@@ -737,6 +737,22 @@
           "bytes": 5451493,
           "sha256": "5244534e9cf5b606f2ff513aa00ddb161b0a4826ffd88a0d3bd03ac29247d198",
           "source": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_48d_partly_cloudy_puresky_2k.hdr"
+        }
+      ]
+    },
+    {
+      "name": "clouds",
+      "type": "image",
+      "id": "cloud_layers",
+      "source": "https://polyhaven.com/a/cloud_layers",
+      "download": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/cloud_layers_2k.hdr",
+      "sourceMd5": "4f0d6e3d46dd31e8bff222ba3b9c9eed",
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "clouds.webp",
+          "bytes": 210628,
+          "sha256": "19fb58c3a3e64e76bcab239e87397fa933b051f86f2c334496663685eea8bd81"
         }
       ]
     }

@@ -18,7 +18,7 @@ Use the same query on `/world` or `/capture`:
   Authored terrain/garden seeds remain fixed to preserve the world's layout.
 - `path=fixed`, `path=orbit`, `path=push-in&module=module-id`, or `path=flyover`:
   fixed establishing shot, slow orbit, push toward owned bounds, or low flyover.
-- `time=day|dawn|dusk|night`: hold a sky phase. Omit it for the virtual day cycle.
+- `time=day|golden|dawn|dusk|night`: hold a sky phase. Omit it for the virtual day cycle.
 - `look=classic|new`: override the server's `WORLD_LOOK` default.
 
 A take stores source state and the module manifest. Modules start from their
@@ -68,3 +68,10 @@ Chromium build; different GPUs, browser versions or system-font rasterizers may
 produce different pixels. Real hook watchdogs remain active, so machine overload
 can abort a capture. Module code must use dt/the host clock and the seeded random
 stream, rather than unapproved external sources of time or entropy.
+
+Capture mode pins ambient fill to the hemisphere light and omits the dynamic
+HDR PMREM. Live pages retain sky-driven environment reflections. This deliberate
+capture fallback avoids one-byte GPU rounding differences from HDR convolution;
+it does not change the virtual sky, sun, shadows or module clock. `step()` waits
+for a WebGL fence, so it resolves only after that frame has finished on the GPU.
+The 4K capture path is offline rendering, not a 60 fps real-time promise.

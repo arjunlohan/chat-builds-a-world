@@ -6,7 +6,7 @@ import manifest from '../../assets/world/manifest.json';
 import type {WorldLook} from './render-profile.js';
 export interface PbrMaps {color:Texture;normal:Texture;arm:Texture}
 export interface ModelAsset {root:Group;low:Group;triangles:number;draws:number}
-const textures=new Map<string,PbrMaps>(),models=new Map<string,ModelAsset>();let hdr:Texture|undefined,pending:Promise<void>|undefined;
+const textures=new Map<string,PbrMaps>(),models=new Map<string,ModelAsset>();let clouds:Texture|undefined,hdr:Texture|undefined,pending:Promise<void>|undefined;
 const coreModels=new Set(['rock','moss-rock','scanned-tree','fern','grass','flowers','shrub']);
 const modelLoads=new Map<string,Promise<void>>(),gltf=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const url=(o:{file:string;sha256:string})=>`/world-assets/${o.file}?v=${o.sha256.slice(0,16)}`;
@@ -21,6 +21,7 @@ export async function prepareModuleAssets(source:string,look:WorldLook='new'){if
 export const assetMaps=(name:string)=>textures.get(name);
 export const assetModel=(name:string)=>models.get(name);
 export const assetSky=()=>hdr;
+export const assetClouds=()=>clouds;
 /** Same finite, local input set in live pages, saved-version playback and the gate. */
 export function prepareWorldAssets(look:WorldLook='new'){
  if(look==='classic')return Promise.resolve();
@@ -34,7 +35,7 @@ async function load(){
    textures.set(a.name,{color:maps[0]!,normal:maps[1]!,arm:maps[2]!});
   }else if(a.type==='model'){
    if(coreModels.has(a.name))await ensureModel(a);
-  }else hdr=await new HDRLoader().loadAsync(url(a.outputs[0]!));
+  }else if(a.type==='image'){clouds=await textureLoader.loadAsync(url(a.outputs[0]!));clouds.colorSpace=SRGBColorSpace;}else hdr=await new HDRLoader().loadAsync(url(a.outputs[0]!));
  }));
 }
 /** Clone the scene graph only. Engine instances may borrow immutable asset resources. */
