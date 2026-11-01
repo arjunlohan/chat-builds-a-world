@@ -20,7 +20,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { CameraDirector } from "./camera-director.js";
+import { CameraDirector, cameraPresentationDt } from "./camera-director.js";
 import { createTerrain } from "./terrain.js";
 import { createGarden } from "./garden.js";
 import { createWater, createMotes } from "./water.js";
@@ -246,7 +246,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       water.update(visualTime, sky.day);
       motes.update(visualTime, 1 - sky.day);
       effects.update(elapsed);stats.value.raidPortalActive=raidPortal.update(elapsed,reducedMotion.matches);
-      if(!profile.probe||!stats.value.measureCameraLocked)director.update(dt);
+      if(!profile.probe||!stats.value.measureCameraLocked)director.update(options.capture?dt:cameraPresentationDt(realDt));
       citizens.update(dt, elapsed, options.capture?captureEpoch+elapsed*1000:Date.now()+serverOffset, camera, reducedMotion.matches);
       materializer.update(dt, camera, reducedMotion.matches); moduleMaterializer.update(dt, camera, reducedMotion.matches);
       if(!options.capture)labelManager.update(Date.now() + serverOffset, camera, director.focusPoint);

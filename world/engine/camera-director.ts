@@ -3,6 +3,8 @@ import { MathUtils, Vector3, type PerspectiveCamera } from "three";
 import { clampToWorld } from "../shared/limits.js";
 import type { WorldServices } from "./api.js";
 
+/** Presentation flights keep their advertised duration even when module simulation dt is capped. */
+export const cameraPresentationDt=(seconds:number)=>Math.min(.25,Math.max(0,Number.isFinite(seconds)?seconds:0));
 const home = new Vector3(0, -0.25, 0);
 const smooth = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 

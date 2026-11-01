@@ -204,3 +204,8 @@ test("capture clocks and random streams are virtual while hook budgets keep real
  assert.equal(host.load(()=>f.module('clock',{init(s){samples.push(s.clock!.now(),Math.random());},update(){measured+=3;}})),true);assert.equal(Math.random,original);assert.deepEqual(samples,[0,.125]);
  for(let i=0;i<3;i++){virtual+=1000/60;host.update(1/60);}assert.equal(host.activeCount,0,"real CPU overruns remain enforceable under a virtual clock");assert.equal(Math.random,original);host.dispose();
 });
+
+test("camera flights keep presentation duration at low FPS while module dt remains independently capped",async()=>{
+ const {cameraPresentationDt}=await import('../world/engine/camera-director.js');const camera=new PerspectiveCamera(38,16/9,.1,300),director=new CameraDirector(camera);director.focus(new Vector3(1,2,1),{duration:1.5,priority:3});
+ for(let i=0;i<8;i++)director.update(cameraPresentationDt(.2));const arrived=camera.position.clone();director.update(cameraPresentationDt(.2));assert.ok(camera.position.distanceTo(arrived)<1e-9);assert.equal(cameraPresentationDt(5),.25);assert.equal(cameraPresentationDt(-1),0);
+});
