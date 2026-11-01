@@ -119,6 +119,10 @@ pnpm capture:frames --url 'http://127.0.0.1:3000/capture?version=v1&take=closing
 Measured frame rates, comparison images and capture hashes are recorded in the
 [visual foundation verification](docs/visual-foundation.md).
 
+The committed CC0 asset set needs no download at startup. Maintainers can rebuild
+it with `pnpm assets:fetch`; raw downloads stay in ignored `state/asset-cache/`.
+See [ASSETS.md](ASSETS.md) for sources, compression and sizes.
+
 ## Environment
 
 `.env.example` contains empty dotenv assignments and commented optional settings,
@@ -262,8 +266,10 @@ appear as raw speech bubbles. Guard rejections and failed builds retain the worl
   [operation notes](docs/operation.md); implementation rules are in [AGENTS.md](AGENTS.md).
 - The server binds to loopback. Browser connections use a same-origin CSP/SSE.
   `.env`, state/, worktrees/, node_modules/ and runtime homes are ignored. Only
-  `.codex-runtime/config.toml` is tracked. Visuals are procedural; no third-party
-  logos, downloaded fonts or audio are included. See [asset notices](ASSET_LICENSES.md).
+  `.codex-runtime/config.toml` is tracked. World surfaces, plants, props and sky include committed CC0 data from Poly Haven
+  and ambientCG, alongside authored geometry and shaders. No third-party logos,
+  downloaded fonts or audio are included. See [asset notices](ASSET_LICENSES.md)
+  and [per-asset provenance](ASSETS.md).
 
 ## How Codex was used
 

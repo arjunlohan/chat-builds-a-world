@@ -1,3 +1,4 @@
+import worldManifest from "../assets/world/manifest.json";
 import {captureStore} from "./capture.js";
 import type {WorldLook} from "../world/engine/render-profile.js";
 import {CLIPS} from "./reactions/catalog.js";
@@ -49,13 +50,14 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     ["/history", await readFile(new URL("../world/history.html", import.meta.url))],
   ]);
   const media=new Map(CLIPS.map(c=>[c.url,new URL(`../assets/reactions/${c.id}.webm`,import.meta.url)]));
+  const worldData=new Map<string,URL>(worldManifest.assets.flatMap(a=>a.outputs.map(o=>[`/world-assets/${o.file}`,new URL(`../assets/world/${o.file}`,import.meta.url)] as const)));
   const clients = new Set<ServerResponse>();
   const worlds = new Map<string, ServerResponse>();
   const primary = (clientId: unknown) => typeof clientId === "string" && worlds.keys().next().value === clientId;
   const moduleFailures = new Set<string>();
   const server = createServer((request, response) => { void (async () => {
     response.on("error", () => response.destroy());
-    response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'");
+    response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' blob:; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'");
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Cache-Control", "no-store");
     const host = request.headers.host ?? "";
@@ -112,6 +114,10 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     if (path.startsWith("/api/summons/")) { const job=summons?.status(path.slice(13));json(response,job?200:404,job??{error:"Unknown summon"});return; }
     if (request.method !== "GET" && request.method !== "HEAD") {
       response.writeHead(405, { Allow: "GET, HEAD" }).end(); return;
+    }
+    if(worldData.has(path)){
+      const bytes=await readFile(worldData.get(path)!);const type=path.endsWith(".webp")?"image/webp":path.endsWith(".glb")?"model/gltf-binary":"image/vnd.radiance";
+      response.writeHead(200,{"Content-Type":type,"Content-Length":bytes.length,"Cache-Control":"public, max-age=31536000, immutable"});response.end(request.method==="HEAD"?undefined:bytes);return;
     }
     if(media.has(path)){
       const bytes=await readFile(media.get(path)!);const range=request.headers.range;

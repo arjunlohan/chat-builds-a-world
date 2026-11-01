@@ -1,3 +1,4 @@
+import {prepareModuleAssets} from "./asset-bank.js";
 import {capturePath,type CapturePath} from "./capture-path.js";
 import {random} from "./land.js";
 import type {WorldEvent} from "../../server/contracts.js";
@@ -161,6 +162,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       const changed=(version?.modules??[]).filter(m=>oldHashes.get(m.id)!==m.hash||!host.ids.includes(m.id));
       const factories = await Promise.all(changed.map(async module => {
         if (!/^\/modules\/[a-f0-9]{64}\.js$/.test(module.url)) throw new Error("Invalid module asset");
+        if(profile.look!=="classic"){const source=await fetch(module.url);if(!source.ok)throw new Error("Module asset could not load");await prepareModuleAssets(await source.text(),profile.look);}
         const loaded = await import(/* @vite-ignore */ module.url) as { default: WorldModuleFactory };
         return { factory: loaded.default, id: module.id };
       }));

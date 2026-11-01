@@ -1,0 +1,714 @@
+{
+  "format": 1,
+  "budgetBytes": 120000000,
+  "bytes": 55011338,
+  "assets": [
+    {
+      "name": "basalt",
+      "type": "texture",
+      "id": "dark_rock",
+      "source": "https://polyhaven.com/a/dark_rock",
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "basalt-color.webp",
+          "bytes": 76612,
+          "sha256": "21f2fa3f775c9a16394e97435cca61acd6242ebe43ae7eb7daed2be21e51a3ed",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_rock/dark_rock_diff_1k.jpg"
+        },
+        {
+          "file": "basalt-normal.webp",
+          "bytes": 466960,
+          "sha256": "2f8a8926de90d177efd936b5ae150496e06e06f398a80864b4da65d682ad4195",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_rock/dark_rock_nor_gl_1k.jpg"
+        },
+        {
+          "file": "basalt-arm.webp",
+          "bytes": 246018,
+          "sha256": "e48cdc093e095090d64278a355e64780c1d1a774f1ac9afeda8dad2107c9b3a5",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_rock/dark_rock_arm_1k.jpg"
+        }
+      ]
+    },
+    {
+      "name": "moss",
+      "type": "texture",
+      "id": "mossy_rock",
+      "source": "https://polyhaven.com/a/mossy_rock",
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "moss-color.webp",
+          "bytes": 408674,
+          "sha256": "fd64cb9cb5bed862a6f3e53787b37082bcc00739395dddaa43b17f8476e780e1",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/mossy_rock/mossy_rock_diff_1k.jpg"
+        },
+        {
+          "file": "moss-normal.webp",
+          "bytes": 482154,
+          "sha256": "3e1c3d43d7aab288da68dc02b8c4dab85c9911c6b8079514a808a243c919b018",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/mossy_rock/mossy_rock_nor_gl_1k.jpg"
+        },
+        {
+          "file": "moss-arm.webp",
+          "bytes": 439366,
+          "sha256": "07462e62dd529f62a6ca6799c62d45db458d16c6bc77880a7765f8c6e51452d1",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/mossy_rock/mossy_rock_arm_1k.jpg"
+        }
+      ]
+    },
+    {
+      "name": "grass",
+      "type": "texture",
+      "id": "grass_ground",
+      "source": "https://polyhaven.com/a/grass_ground",
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "grass-color.webp",
+          "bytes": 286158,
+          "sha256": "38468a8d67692a253a767648b278062008222d2d22473f6e52e23997011a1c08",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_ground/grass_ground_diff_1k.jpg"
+        },
+        {
+          "file": "grass-normal.webp",
+          "bytes": 693550,
+          "sha256": "6089e1141fd9c20a6fef44dbad9455ecbad2581bce7fe14babfcdc6e17bb0b5c",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_ground/grass_ground_nor_gl_1k.jpg"
+        },
+        {
+          "file": "grass-arm.webp",
+          "bytes": 434582,
+          "sha256": "4a978ae95c4855ee58495ec21c4ef268a6ba85aaec861c4d53daf86254ad95fc",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_ground/grass_ground_arm_1k.jpg"
+        }
+      ]
+    },
+    {
+      "name": "forest",
+      "type": "texture",
+      "id": "forest_floor",
+      "source": "https://polyhaven.com/a/forest_floor",
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "forest-color.webp",
+          "bytes": 514216,
+          "sha256": "9f30f9846df7fae123b10ddec5090576fa90352d554c623db39ea6fd5977acd8",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_floor/forest_floor_diff_1k.jpg"
+        },
+        {
+          "file": "forest-normal.webp",
+          "bytes": 689272,
+          "sha256": "199cbcc428146f5f1b3e72c87a0a7843a9ebfcf077572819807c1fb635772f83",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_floor/forest_floor_nor_gl_1k.jpg"
+        },
+        {
+          "file": "forest-arm.webp",
+          "bytes": 443362,
+          "sha256": "e533d34bc40bfad312e639c6159036020277ad2d2c2488a7453ef2250f08ebe8",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_floor/forest_floor_arm_1k.jpg"
+        }
+      ]
+    },
+    {
+      "name": "wood",
+      "type": "texture",
+      "id": "brown_planks_03",
+      "source": "https://polyhaven.com/a/brown_planks_03",
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "wood-color.webp",
+          "bytes": 314070,
+          "sha256": "80819cb22888bbef04f91cd78f80b679c52e90cab21af31917a6f97150525497",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brown_planks_03/brown_planks_03_diff_1k.jpg"
+        },
+        {
+          "file": "wood-normal.webp",
+          "bytes": 265770,
+          "sha256": "0d421443dc3a9be7a5a94e9da2ccb3dc7e8aebe400e37826f313011a77556571",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brown_planks_03/brown_planks_03_nor_gl_1k.jpg"
+        },
+        {
+          "file": "wood-arm.webp",
+          "bytes": 156104,
+          "sha256": "7741ad31411eaabeafb470d1aff0f80f9e2f20cc9f70802be21ab17cdb945eaa",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brown_planks_03/brown_planks_03_arm_1k.jpg"
+        }
+      ]
+    },
+    {
+      "name": "bark",
+      "type": "texture",
+      "id": "bark_brown_02",
+      "source": "https://polyhaven.com/a/bark_brown_02",
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "bark-color.webp",
+          "bytes": 356126,
+          "sha256": "4a14c8a089d6e282ac8da186054193c0b1f37f93c9bc616846a03a81e1e15934",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_diff_1k.jpg"
+        },
+        {
+          "file": "bark-normal.webp",
+          "bytes": 538282,
+          "sha256": "fa5abf4922f78734265a53bf60e39595daf2e2cf6697a6a5e953cb274fe99152",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_nor_gl_1k.jpg"
+        },
+        {
+          "file": "bark-arm.webp",
+          "bytes": 287052,
+          "sha256": "6aab35069b1c190de433b966b2ee0c08193aaeb97993f8e2f00cd0b7d2a742b7",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_arm_1k.jpg"
+        }
+      ]
+    },
+    {
+      "name": "brick",
+      "type": "texture",
+      "id": "Bricks056",
+      "source": "https://ambientcg.com/a/Bricks056",
+      "download": "https://ambientcg.com/get?file=Bricks056_1K-JPG.zip",
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "brick-color.webp",
+          "bytes": 248132,
+          "sha256": "1c5b5d5c2085193c0aa1780a9cfcd558a8a118f296bedf7b402f6bd6df58a12b"
+        },
+        {
+          "file": "brick-normal.webp",
+          "bytes": 404638,
+          "sha256": "2d0ef7a3ffd4db7b0c32e3baa250f30c02b2abb4b4351c3664ee8331bac11dc6"
+        },
+        {
+          "file": "brick-arm.webp",
+          "bytes": 324938,
+          "sha256": "47e3e8690a80c4f8ca6e554a40ec7d9d9c5f083c3ca7d8df58c608ccc2c2b1d8"
+        }
+      ]
+    },
+    {
+      "name": "canvas",
+      "type": "texture",
+      "id": "Fabric026",
+      "source": "https://ambientcg.com/a/Fabric026",
+      "download": "https://ambientcg.com/get?file=Fabric026_1K-JPG.zip",
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "canvas-color.webp",
+          "bytes": 294620,
+          "sha256": "43059c48aee323618e148a61753f94eee09d0829cac249b3e4b697dacd92cc2d"
+        },
+        {
+          "file": "canvas-normal.webp",
+          "bytes": 519990,
+          "sha256": "bd2cab039446ccf0bde8e1e8d6e059bb0d2867087cec3f0a004db0c5eed7a142"
+        },
+        {
+          "file": "canvas-arm.webp",
+          "bytes": 256258,
+          "sha256": "72c063e030c7f0f386e39b1e60d4b83059e0b5cdab0941b83df6915ed33cd639"
+        }
+      ]
+    },
+    {
+      "name": "lantern",
+      "type": "model",
+      "id": "wooden_lantern_01",
+      "source": "https://polyhaven.com/a/wooden_lantern_01",
+      "license": "CC0-1.0",
+      "triangles": 1136,
+      "lowTriangles": 820,
+      "draws": 5,
+      "outputs": [
+        {
+          "file": "lantern.glb",
+          "bytes": 832088,
+          "sha256": "6ba99018b9972af8a0a9bb71b2145a419fd2b486caaa6744647d5d8cfebf3518"
+        },
+        {
+          "file": "lantern-lod.glb",
+          "bytes": 828492,
+          "sha256": "4424328a5c1d16e78338af5a2249936c5cc4b78483236fb16819a107bc2a1601"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_lantern_01/wooden_lantern_01_1k.gltf",
+      "sourceMd5": "e31edca6461023e076183cb74721b0b9"
+    },
+    {
+      "name": "bench",
+      "type": "model",
+      "id": "painted_wooden_bench",
+      "source": "https://polyhaven.com/a/painted_wooden_bench",
+      "license": "CC0-1.0",
+      "triangles": 630,
+      "lowTriangles": 200,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "bench.glb",
+          "bytes": 504944,
+          "sha256": "7686c4860319c79cfdfff8c94ce9070521c711a58a8032336e533b822993be1e"
+        },
+        {
+          "file": "bench-lod.glb",
+          "bytes": 501100,
+          "sha256": "e7f025db7cd2bc1e8799933893f39df02b49744bff5d3ad9d34db2fa974b6184"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/painted_wooden_bench/painted_wooden_bench_1k.gltf",
+      "sourceMd5": "784a49250144aa5299a93c1f3b6968d7"
+    },
+    {
+      "name": "crate",
+      "type": "model",
+      "id": "wooden_crate_01",
+      "source": "https://polyhaven.com/a/wooden_crate_01",
+      "license": "CC0-1.0",
+      "triangles": 652,
+      "lowTriangles": 390,
+      "draws": 3,
+      "outputs": [
+        {
+          "file": "crate.glb",
+          "bytes": 546244,
+          "sha256": "a4e448836450ecca1a369ee369102ffb7035d1d81a0282ed237c134768f1f983"
+        },
+        {
+          "file": "crate-lod.glb",
+          "bytes": 543696,
+          "sha256": "4c74631b813d850533b029cc05410db4208e30a533d5f2d4e8629528d9c901e5"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_crate_01/wooden_crate_01_1k.gltf",
+      "sourceMd5": "33df4d2ae00186d4b64e878466c9e22e"
+    },
+    {
+      "name": "barrel",
+      "type": "model",
+      "id": "barrel_03",
+      "source": "https://polyhaven.com/a/barrel_03",
+      "license": "CC0-1.0",
+      "triangles": 500,
+      "lowTriangles": 194,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "barrel.glb",
+          "bytes": 461900,
+          "sha256": "252485420ed586f56485075a49e49a8da5b8132f271b5859cc6e8dd23bc38be5"
+        },
+        {
+          "file": "barrel-lod.glb",
+          "bytes": 458880,
+          "sha256": "5577c40d928bcd028b59fb1008bee62660a5fdf46513b418a811c14c6a785158"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/barrel_03/barrel_03_1k.gltf",
+      "sourceMd5": "204eec2159a38a1dc4b826ef255f9468"
+    },
+    {
+      "name": "bridge-planks",
+      "type": "model",
+      "id": "modular_wooden_pier",
+      "source": "https://polyhaven.com/a/modular_wooden_pier",
+      "license": "CC0-1.0",
+      "triangles": 900,
+      "lowTriangles": 288,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "bridge-planks.glb",
+          "bytes": 861628,
+          "sha256": "ede3c66757d309d72fedae5e8fdc7a74375b725377a47381a30b6033800afd30"
+        },
+        {
+          "file": "bridge-planks-lod.glb",
+          "bytes": 855916,
+          "sha256": "80b5c7a7acf70132af1820ee362f7b2b758f60fa868c2636f420934d8bb698cc"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/modular_wooden_pier/modular_wooden_pier_1k.gltf",
+      "sourceMd5": "5a5c75c7711b8804c680970a60bd382f"
+    },
+    {
+      "name": "plinth",
+      "type": "model",
+      "id": "folding_wooden_stool",
+      "source": "https://polyhaven.com/a/folding_wooden_stool",
+      "license": "CC0-1.0",
+      "triangles": 498,
+      "lowTriangles": 286,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "plinth.glb",
+          "bytes": 582732,
+          "sha256": "d2dfca2b39edb76d785b00003e7ea0ce2a6d3c9ec95c9e849a07c1272539444b"
+        },
+        {
+          "file": "plinth-lod.glb",
+          "bytes": 579856,
+          "sha256": "16e897ab773f09cf01ac7576e21c2516a299051bdc13949d88058f151e4004c7"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/folding_wooden_stool/folding_wooden_stool_1k.gltf",
+      "sourceMd5": "a19174156f8a643c4f2cb14345beb204"
+    },
+    {
+      "name": "campfire",
+      "type": "model",
+      "id": "stone_fire_pit",
+      "source": "https://polyhaven.com/a/stone_fire_pit",
+      "license": "CC0-1.0",
+      "triangles": 697,
+      "lowTriangles": 223,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "campfire.glb",
+          "bytes": 797600,
+          "sha256": "3444368ea64eaf0a96a3524ffe818616f44a1ba8286435105277fa0323f613e2"
+        },
+        {
+          "file": "campfire-lod.glb",
+          "bytes": 793584,
+          "sha256": "9b323521cf5f907604ab45464e8c67abef1b05cc8abbde36b2b3f51edfd8ac65"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/stone_fire_pit/stone_fire_pit_1k.gltf",
+      "sourceMd5": "f3a23e45ee66802ccc7a5462a9371ae3"
+    },
+    {
+      "name": "bucket",
+      "type": "model",
+      "id": "wooden_bucket_01",
+      "source": "https://polyhaven.com/a/wooden_bucket_01",
+      "license": "CC0-1.0",
+      "triangles": 709,
+      "lowTriangles": 472,
+      "draws": 2,
+      "outputs": [
+        {
+          "file": "bucket.glb",
+          "bytes": 564528,
+          "sha256": "0a7533602a1aca0377a311a372ad088d0865df2a8e96fd9ebe323c47eac1a37b"
+        },
+        {
+          "file": "bucket-lod.glb",
+          "bytes": 561532,
+          "sha256": "fa2a3a9f6347074a9c795589a9727e8d79833f0a7feae333ddcc0fcb5cac60c6"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_bucket_01/wooden_bucket_01_1k.gltf",
+      "sourceMd5": "d3a6ff00895b69406b203dc417113d9a"
+    },
+    {
+      "name": "pot",
+      "type": "model",
+      "id": "planter_pot_clay",
+      "source": "https://polyhaven.com/a/planter_pot_clay",
+      "license": "CC0-1.0",
+      "triangles": 450,
+      "lowTriangles": 144,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "pot.glb",
+          "bytes": 391536,
+          "sha256": "6a54039fb342d661bedce2df1b8ee89a91812ef5df3c15aa54ce12e1dce7b3ab"
+        },
+        {
+          "file": "pot-lod.glb",
+          "bytes": 388868,
+          "sha256": "7f2326c6ffeec41306b292e08cfbd93ae09d1739ebfdd26d5705e24524f39693"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/planter_pot_clay/planter_pot_clay_1k.gltf",
+      "sourceMd5": "1c78fcfd6144747c97e2b822a6229c0d"
+    },
+    {
+      "name": "flowers",
+      "type": "model",
+      "id": "flower_ursinia",
+      "source": "https://polyhaven.com/a/flower_ursinia",
+      "license": "CC0-1.0",
+      "triangles": 446,
+      "lowTriangles": 142,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "flowers.glb",
+          "bytes": 324288,
+          "sha256": "d11fe7a3d1be02ef1141a23ebdd207f95402712a7cfae156974b6125db987c05"
+        },
+        {
+          "file": "flowers-lod.glb",
+          "bytes": 319608,
+          "sha256": "b82e1939b77788cbec8202e25fd1911ba1cc1f51ead51ebe275f32342839ad0c"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/flower_ursinia/flower_ursinia_1k.gltf",
+      "sourceMd5": "53045f0f07450a5d5b5bb55d6805fbe1"
+    },
+    {
+      "name": "fern",
+      "type": "model",
+      "id": "fern_02",
+      "source": "https://polyhaven.com/a/fern_02",
+      "license": "CC0-1.0",
+      "triangles": 449,
+      "lowTriangles": 143,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "fern.glb",
+          "bytes": 231136,
+          "sha256": "a91aaedeb474bf85c5ccb166254e96d2ff15c64b91fb3ae04e0f95e348519742"
+        },
+        {
+          "file": "fern-lod.glb",
+          "bytes": 228508,
+          "sha256": "01cbee52fa268e46e81196688d64e3cff12c4a63b2e8601f2dfdf7c0e559d548"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fern_02/fern_02_1k.gltf",
+      "sourceMd5": "cf276874d37bfb73c299504a6b355b77"
+    },
+    {
+      "name": "grass",
+      "type": "model",
+      "id": "grass_medium_01",
+      "source": "https://polyhaven.com/a/grass_medium_01",
+      "license": "CC0-1.0",
+      "triangles": 253,
+      "lowTriangles": 80,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "grass.glb",
+          "bytes": 653052,
+          "sha256": "7f5dac80ba6c05dd168fa9ff443049bf948f2249b59727ca8a4dd0bbd9e94759"
+        },
+        {
+          "file": "grass-lod.glb",
+          "bytes": 650436,
+          "sha256": "7f26be2ceaf29b664e1cc4682f255e5cab25fb85dd9c09e8b6793debb3162a73"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/grass_medium_01/grass_medium_01_1k.gltf",
+      "sourceMd5": "28dd8247f3faa749bf87a0b84be01e7e"
+    },
+    {
+      "name": "scanned-tree",
+      "type": "model",
+      "id": "island_tree_01",
+      "source": "https://polyhaven.com/a/island_tree_01",
+      "license": "CC0-1.0",
+      "triangles": 2763,
+      "lowTriangles": 914,
+      "draws": 3,
+      "outputs": [
+        {
+          "file": "scanned-tree.glb",
+          "bytes": 1697016,
+          "sha256": "34ced9e883362257d13b1d7d623a4f4be5c2b79469adf5ae56d4689384df68ca"
+        },
+        {
+          "file": "scanned-tree-lod.glb",
+          "bytes": 1655428,
+          "sha256": "d6106fef210379f3b3c592e8f2a57d1ec71bb65fbba888153d13c128a339d790"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/island_tree_01/island_tree_01_1k.gltf",
+      "sourceMd5": "fbc0c570ebd71ea88cedc1f9d5edb835"
+    },
+    {
+      "name": "rock",
+      "type": "model",
+      "id": "rock_09",
+      "source": "https://polyhaven.com/a/rock_09",
+      "license": "CC0-1.0",
+      "triangles": 240,
+      "lowTriangles": 76,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "rock.glb",
+          "bytes": 462560,
+          "sha256": "b670fb8ea975e39eaff531137b748c7a0f461b93af498fcfd2d492615f4fbebb"
+        },
+        {
+          "file": "rock-lod.glb",
+          "bytes": 461080,
+          "sha256": "5abee1cc2b7eaa8626076e6c66ef2fbdc3198361a1c15879691dfc88230ec66c"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/rock_09/rock_09_1k.gltf",
+      "sourceMd5": "d12ac6e8433fe1346fe6945154269f66"
+    },
+    {
+      "name": "moss-rock",
+      "type": "model",
+      "id": "rock_moss_set_01",
+      "source": "https://polyhaven.com/a/rock_moss_set_01",
+      "license": "CC0-1.0",
+      "triangles": 452,
+      "lowTriangles": 144,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "moss-rock.glb",
+          "bytes": 450028,
+          "sha256": "eef8d0233ab4c7c7d76faddd82c0b0324ea3902eebf2d57e91a327b56c860357"
+        },
+        {
+          "file": "moss-rock-lod.glb",
+          "bytes": 447508,
+          "sha256": "3e6bd9b52627288df12cc205b8cf36fce40e059b1ca06707131acd2b41814f34"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/rock_moss_set_01/rock_moss_set_01_1k.gltf",
+      "sourceMd5": "75113cc1c21806cca5d8badad4737af7"
+    },
+    {
+      "name": "shrub",
+      "type": "model",
+      "id": "shrub_01",
+      "source": "https://polyhaven.com/a/shrub_01",
+      "license": "CC0-1.0",
+      "triangles": 499,
+      "lowTriangles": 159,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "shrub.glb",
+          "bytes": 424896,
+          "sha256": "09fbfd6882c1c82e3b292d530ddfa33e920a6deccf0bba75ccb82ce0496b417e"
+        },
+        {
+          "file": "shrub-lod.glb",
+          "bytes": 419124,
+          "sha256": "12e9ec67a87dbbf2d6d972504df959db037e518bbe318a91604076ca3ed01bd3"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/shrub_01/shrub_01_1k.gltf",
+      "sourceMd5": "4ac1312e5ea687b321b78382f5f209c8"
+    },
+    {
+      "name": "log",
+      "type": "model",
+      "id": "tree_stump_01",
+      "source": "https://polyhaven.com/a/tree_stump_01",
+      "license": "CC0-1.0",
+      "triangles": 620,
+      "lowTriangles": 198,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "log.glb",
+          "bytes": 1056968,
+          "sha256": "cd95cc34f992055f3ee7653f26d88906524f8f40e8e0b14737b1866b1031f9b9"
+        },
+        {
+          "file": "log-lod.glb",
+          "bytes": 1052760,
+          "sha256": "d34cb60f8059886f655a96824553509300ded61906d73207fde75c38dd297609"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/tree_stump_01/tree_stump_01_1k.gltf",
+      "sourceMd5": "fedfc620634a8dbaf6345413b13abe1a"
+    },
+    {
+      "name": "ladder",
+      "type": "model",
+      "id": "wooden_ladder",
+      "source": "https://polyhaven.com/a/wooden_ladder",
+      "license": "CC0-1.0",
+      "triangles": 1450,
+      "lowTriangles": 1450,
+      "draws": 2,
+      "outputs": [
+        {
+          "file": "ladder.glb",
+          "bytes": 747240,
+          "sha256": "5b35edc0ddab77add3ba409bbaf95ab9ef090710ba2aaf32168f0c37bf1c2e9f"
+        },
+        {
+          "file": "ladder-lod.glb",
+          "bytes": 747264,
+          "sha256": "a82184e70727c64259457917d8511fd1c67fddf00214d3ffc55d48c03bf0433c"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_ladder/wooden_ladder_1k.gltf",
+      "sourceMd5": "d50e132958f033f0600b286aafb72a8e"
+    },
+    {
+      "name": "chair",
+      "type": "model",
+      "id": "painted_wooden_chair_01",
+      "source": "https://polyhaven.com/a/painted_wooden_chair_01",
+      "license": "CC0-1.0",
+      "triangles": 700,
+      "lowTriangles": 346,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "chair.glb",
+          "bytes": 325636,
+          "sha256": "f2fb528c2315f3a3b57ade53daef96cba1d8e949d8515a593c5990335f0e4a22"
+        },
+        {
+          "file": "chair-lod.glb",
+          "bytes": 322152,
+          "sha256": "099f9fa2571bd3de6742282ddfbb314a1b206d0c03d46d5d83a55637551b175a"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/painted_wooden_chair_01/painted_wooden_chair_01_1k.gltf",
+      "sourceMd5": "28e739db9799cdadf820ead2b486d463"
+    },
+    {
+      "name": "table",
+      "type": "model",
+      "id": "small_wooden_table_01",
+      "source": "https://polyhaven.com/a/small_wooden_table_01",
+      "license": "CC0-1.0",
+      "triangles": 649,
+      "lowTriangles": 207,
+      "draws": 1,
+      "outputs": [
+        {
+          "file": "table.glb",
+          "bytes": 240932,
+          "sha256": "f6fe7a5b73e153923b342990801f9d07f83917cf71dfbb00df5e111c55ac0966"
+        },
+        {
+          "file": "table-lod.glb",
+          "bytes": 237584,
+          "sha256": "8582f882649e131fc27b368a4a55ec8d4ef9df09409a545485f2a41942c255b8"
+        }
+      ],
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/small_wooden_table_01/small_wooden_table_01_1k.gltf",
+      "sourceMd5": "716b66952dc473d09a3ac5f48ef50a68"
+    },
+    {
+      "name": "sky",
+      "type": "hdri",
+      "id": "kloofendal_48d_partly_cloudy_puresky",
+      "source": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "sky.hdr",
+          "bytes": 5451493,
+          "sha256": "5244534e9cf5b606f2ff513aa00ddb161b0a4826ffd88a0d3bd03ac29247d198",
+          "source": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_48d_partly_cloudy_puresky_2k.hdr"
+        }
+      ]
+    }
+  ]
+}

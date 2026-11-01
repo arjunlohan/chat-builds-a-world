@@ -1,7 +1,9 @@
 # Assets and third-party notices
 
-The world, creatures, portal, water, sky and effects are authored procedural
-geometry/shaders; page decoration is CSS. Committed video assets under
+World layout, creatures, portal and effects are authored geometry/shaders; page
+decoration is CSS. World surface, model and sky data in `assets/world/` are CC0
+assets from Poly Haven and ambientCG. [ASSETS.md](ASSETS.md) records sources,
+licenses, transformations and sizes. Powered by [Poly Haven](https://polyhaven.com). Committed video assets under
 `assets/reactions/` are original procedural Blender animations, authored by
 Codex from the scripts in `assets/blender/`, with no third-party models,
 textures, HDRIs, fonts, logos, emote likenesses or audio. Trigger names identify
@@ -11,7 +13,7 @@ The UI uses OS-provided system fonts and Georgia with generic fallbacks. No font
 software is copied or redistributed. No copyrighted music/audio is included.
 
 `pnpm licenses list --json` reports the installed dependency inventory under
-MIT, Apache-2.0, BSD-2-Clause and BSD-3-Clause (26 packages total); their upstream
+MIT, Apache-2.0, BSD-2-Clause and BSD-3-Clause ; their upstream
 licences remain in `node_modules`. Development/type packages are included in this
 inventory, not all in browser output. The browser bundles Three.js and its addons,
 and AJV-generated validation helpers. Retain the following notices with

@@ -22,8 +22,8 @@ if (!process.env.AWS_BEARER_TOKEN_BEDROCK?.trim()) {
   let reloads=0;const {browser,page}=await launchWorldPage(base,"",{onPage(page){page.on("framenavigated",frame=>{if(frame===page.mainFrame())reloads++;});}});reloads=0;
   try {
     // Benchmark orchestration owns suspension; production renderer needs no test-only mode.
-    await page.waitForFunction(()=>window.__worldStats.moduleSwaps>0);
-    const initialVersion=await page.evaluate(()=>window.__worldStats.moduleVersion);
+    await page.waitForFunction(()=>window.__worldStats?.moduleSwaps>0);
+    const initialVersion=await page.evaluate(()=>window.__worldStats?.moduleVersion);
     const cdp=await page.context().newCDPSession(page);await cdp.send("Page.setWebLifecycleState",{state:"frozen"});
     const response = await fetch(`${base}/runner/live`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idea: process.argv.slice(2).join(" ") || "Add one original amber crystal that gently floats above the ridge." }) });
     if (!response.ok) throw new Error("Live round refused. Restart dev with the key, clean master and an empty idea round.");

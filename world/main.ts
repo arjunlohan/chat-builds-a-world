@@ -1,3 +1,4 @@
+import {prepareWorldAssets} from "./engine/asset-bank.js";
 import {captureQuery,frameCapture} from "./engine/capture.js";
 import { pageProfile, documentLook } from "./engine/render-profile.js";
 import "./style.css";
@@ -25,8 +26,10 @@ function fail(message: string) {
 }
 try {
   if (!canvas) throw new Error("World canvas is missing");
+  const profile=pageProfile(query,documentLook());
+  await prepareWorldAssets(profile.look);
   const world = createRenderer(canvas, {
-    profile: pageProfile(query,documentLook()),
+    profile,
     ...(capturing?{capture:captureQuery(query),playback:true}:{}),
     probeId: query.get("probe") ?? "",
     ...(labels ? { labels } : {}),

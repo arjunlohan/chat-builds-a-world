@@ -53,7 +53,7 @@ try{
  browserServer=await chromium.launchServer({timeout:8000,headless:true,args:["--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});console.log(JSON.stringify({browserPid:browserServer.process().pid}));browser=await chromium.connect(browserServer.wsEndpoint());page=await browser.newPage({viewport:{width:1920,height:1080}});
  page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});
  evidence.status="loading";await save();await page.goto(`http://127.0.0.1:${port}/world?check=1&overlay=1&time=day&probe=${encodeURIComponent(input.probeId)}`);
- await page.waitForFunction(()=>window.__worldStats?.moduleVersion===1,undefined,{timeout:8000});await page.waitForSelector('canvas[data-ready="true"]');
+ await page.waitForFunction(()=>window.__worldStats?.moduleVersion===1,undefined,{timeout:8000,polling:100});await page.waitForSelector('canvas[data-ready="true"]');
  const rendererName=await page.evaluate(()=>{const gl=document.querySelector("canvas")!.getContext("webgl2")!,info=gl.getExtension("WEBGL_debug_renderer_info");return info?String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)):"";});if(!/swiftshader/i.test(rendererName))throw new Error("Candidate did not use SwiftShader.");evidence.renderer=rendererName;evidence.shadowMap=await page.locator("canvas").getAttribute("data-shadow");
  await warm(page,C.warmupFrames,"baseline");
  // Same page, citizen roster, renderer and retained instances. Only the candidate is added.
