@@ -241,7 +241,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       effects.update(clock.seconds);stats.value.raidPortalActive=raidPortal.update(clock.seconds,reducedMotion.matches);
       if(!profile.probe||!stats.value.measureCameraLocked)director.update(dt);
       citizens.update(dt, clock.seconds, clock.now(), camera, reducedMotion.matches);
-      materializer.update(dt, camera, reducedMotion.matches); moduleMaterializer.update(dt, camera, reducedMotion.matches);
+      materializer.update(dt, camera, reducedMotion.matches,sky.day); moduleMaterializer.update(dt, camera, reducedMotion.matches,sky.day);
 
       stats.value.cameraFocuses = director.automaticFocuses;
       stats.value.moduleMs=0;host.update(dt);

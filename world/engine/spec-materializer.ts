@@ -1,7 +1,7 @@
 import {kitMaterial} from "./materials.js";
 import {isModelKind} from "../shared/model-kit.js";
 import {modelTemplate} from "./model-template.js";
-import {cloneModelMaterial} from "./pbr-kit.js";
+import {cloneModelMaterial,updateKitLamp} from "./pbr-kit.js";
 import {Texture} from "three";
 import type {WorldLook} from "./render-profile.js";
 import { SUMMON_COUNT, clampToWorld, RenderFailure } from "../shared/limits.js";
@@ -21,7 +21,7 @@ import { hash, random } from "./land.js";
 interface NodeState { mesh: Mesh; base: Vector3; scale: Vector3; extent: Vector3; drift: Vector3; offset: Vector3; pulse: number }
 interface Entry {
   id: string; root: Group; owner: ResourceOwner; usage: Usage; spec: SceneSpec; nodes: Map<string, NodeState>;
-  center: Vector3; anchor: Vector3; born: number; emitters: { uTime: { value: number } }[];
+  center: Vector3; anchor: Vector3; born: number; emitters: { uTime: { value: number } }[]; lamps:MeshStandardMaterial[];
   metadata?: SummonState; label?: HTMLElement; removeLabel?: () => void; needsAck: boolean; spawnPending: boolean;
 }
 export interface MaterializerOptions {
@@ -59,7 +59,7 @@ export class SpecMaterializer {
         const geometry=spec.geometries.find(g=>g.id===n.geometryId)!,request=spec.materials.find(m=>m.id===n.materialId)!;
         let material:MeshStandardMaterial|MeshStandardMaterial[]=materials.get(n.materialId)!;
         if(this.options.look!=="classic"&&isModelKind(geometry.kind)){
-          const key=geometry.id+":"+request.id;let native=models.get(key);if(!native){native=modelTemplate(geometry.kind,geometry.detail===0).materials.map(source=>{const m=cloneModelMaterial(source,request.color,request.opacity,request.emissive,request.emissiveIntensity,textureCopies);owner.ownMaterial(m);return m;});models.set(key,native);}material=native;
+          const key=geometry.id+":"+request.id;let native=models.get(key);if(!native){native=modelTemplate(geometry.kind,geometry.detail===0).materials.map(source=>{const m=cloneModelMaterial(source,request.color,request.opacity,request.emissive,request.emissiveIntensity,textureCopies,geometry.kind);owner.ownMaterial(m);return m;});models.set(key,native);}material=native;
         }
         const mesh = new Mesh(geometries.get(n.geometryId)!,material);
         mesh.position.set(...n.position); mesh.rotation.set(...n.rotation); mesh.scale.set(...n.scale);
@@ -94,7 +94,7 @@ export class SpecMaterializer {
       const usage = owner.audit(root);
       this.options.ledger.reserve(`spec:${id}`, usage);
       const center = new Vector3(); for (const node of nodes.values()) center.add(node.base); center.divideScalar(nodes.size);
-      const entry: Entry = { id, root, owner, usage, spec, nodes, center, anchor: center.clone(), born: this.time, emitters, needsAck: !!metadata, spawnPending: !!metadata && !restore, ...(metadata ? { metadata } : {}) };
+      const entry: Entry = { id, root, owner, usage, spec, nodes, center, anchor: center.clone(), born: this.time, emitters, lamps:[...owner.materials].filter((m):m is MeshStandardMaterial=>m instanceof MeshStandardMaterial&&typeof m.userData.kitLamp==='number'), needsAck: !!metadata, spawnPending: !!metadata && !restore, ...(metadata ? { metadata } : {}) };
       this.entries.set(id, entry); this.options.root.add(root); this.options.onSceneChange?.();
       if (metadata) {
         const label = document.createElement("div"); label.className = "summon-label"; label.hidden = true;
@@ -116,9 +116,10 @@ export class SpecMaterializer {
       throw error instanceof RenderFailure ? error : new RenderFailure("allocation");
     }
   }
-  update(dt: number, camera: PerspectiveCamera, reducedMotion: boolean) {
+  update(dt: number, camera: PerspectiveCamera, reducedMotion: boolean, daylight=1) {
     this.time += dt;
     for (const entry of this.entries.values()) {
+      for(const lamp of entry.lamps)updateKitLamp(lamp,daylight);
       const time = reducedMotion ? 0 : this.time - entry.born;
       for (const node of entry.nodes.values()) { node.offset.set(0, 0, 0); node.pulse = 1; }
       for (const b of entry.spec.behaviors) {

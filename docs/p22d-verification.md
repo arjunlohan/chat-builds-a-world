@@ -66,3 +66,21 @@ The UV regression and full check pass. Final 150-raider day/dusk/night FPS:
 59.95/60.14/59.96; GPU means 14.06/13.96/13.80ms; cold load 2.282s.
 Fixed stills/crops: `state/visual/p22d-stone-*`. Final logs end in
 `p22d-stone-{hardware,stills}-grad.log`.
+
+## Citizen-scale kit lanterns
+
+Scanned glass now honors the preset opacity and disables opaque depth writing.
+Named wood wins over generic glTF metalness factors when choosing a surface.
+The lantern's wood stays non-emissive; its glass has a warm light that strengthens
+at dusk/night without adding lights or draw calls. This applies to every named
+kit lantern. The fixture uses five 0.8m lanterns near the ground, using count and
+contrast rather than building-sized props.
+
+The material regression passes. All 57 kit parity cases pass. The smaller orchard
+passes the real candidate gate in 39.243s: 10,200 contrasted pixel-equivalents,
+230x160 footprint, three qualifying probes, 24 frames/slice and 2.13% median
+paired drop. No threshold changed. Evidence
+`state/checks/c9170787-3b8c-42da-96b2-8aa38a3cedf4/`.
+Production 150-raider day/dusk/night FPS: 59.94/59.77/59.97; GPU means
+13.37/13.43/12.82ms; cold readiness including the kit module 3.204s.
+Images `state/visual/p22d-lantern-*`; logs `state/asset-cache/p22d-lantern-*`.

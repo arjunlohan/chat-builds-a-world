@@ -4,10 +4,10 @@ import {MATERIAL_KIT,type MaterialPreset} from '../shared/material-kit.js';impor
 export function materialPreset(parameters:MeshStandardMaterialParameters):MaterialPreset{
  const name=parameters.name?.toLowerCase()??'';if(Object.hasOwn(MATERIAL_KIT,name))return name as MaterialPreset;
  if(/glass/.test(name)||(parameters.opacity??1)<.65)return 'glass';if(/canvas|cloth/.test(name))return 'canvas';if(/paper/.test(name))return 'paper';if(/rope/.test(name))return 'rope';
+ if(/wood|bark|branch|stump/.test(name))return 'wood';if(/stone|rock|concrete/.test(name))return 'stone';
  const color=new Color(parameters.color??'#ffffff'),emissive=new Color(parameters.emissive??0),metal=parameters.metalness??0;
  if(emissive.getHex()!==0&&(parameters.emissiveIntensity??1)>0)return 'glow';
  if(metal>.6){if(color.r>color.b*1.5)return color.g>color.r*.7?'gold':color.g>color.r*.4?'brass':'copper';return 'iron';}
- if(/wood|bark|branch|stump/.test(name))return 'wood';if(/stone|rock|concrete/.test(name))return 'stone';
  if(color.g>color.r*1.18&&color.g>color.b*1.15)return 'foliage';if(color.r>color.b*1.5&&color.r>color.g&&color.g>color.b*1.2&&Math.max(color.r,color.g,color.b)<.65)return 'wood';
  if((parameters.roughness??.8)>.8&&Math.max(color.r,color.g,color.b)-Math.min(color.r,color.g,color.b)<.1)return Math.max(color.r,color.g,color.b)>.75?'paper':'stone';return 'painted';
 }
@@ -23,12 +23,14 @@ export function presetMaterial(parameters:MeshStandardMaterialParameters,preset:
  if('texture' in recipe){const maps=assetMaps(recipe.texture);if(maps){const color=ownedTexture(maps.color),normal=ownedTexture(maps.normal),arm=ownedTexture(maps.arm);m.map=color;m.normalMap=normal;m.aoMap=m.roughnessMap=m.metalnessMap=arm;m.normalScale.setScalar(preset==='paper'?.25:.5);}}
  m.userData.kitPreset=preset;return m;
 }
-export function cloneModelMaterial(source:MeshStandardMaterial,tint:string,opacity:number,emissive:string,intensity:number,cache:Map<Texture,Texture>){
- const m=source.clone(),preset=materialPreset({name:source.name,color:source.color,roughness:source.roughness,metalness:source.metalness,opacity:source.opacity}),recipe=MATERIAL_KIT[preset];m.roughness=recipe.roughness;m.metalness=recipe.metalness;m.flatShading=false;m.forceSinglePass=true;m.color.multiply(new Color(tint));m.opacity*=opacity;m.alphaTest*=opacity;m.transparent=m.opacity<1;m.userData.kitPreset=preset;
+export function cloneModelMaterial(source:MeshStandardMaterial,tint:string,opacity:number,emissive:string,intensity:number,cache:Map<Texture,Texture>,kind?:string){
+ const m=source.clone(),preset=materialPreset({name:source.name,color:source.color,roughness:source.roughness,metalness:source.metalness,opacity:source.opacity}),recipe=MATERIAL_KIT[preset];m.roughness=recipe.roughness;m.metalness=recipe.metalness;m.flatShading=false;m.forceSinglePass=true;m.color.multiply(new Color(tint));m.opacity=Math.min(source.opacity*opacity,'opacity' in recipe?recipe.opacity:1);m.alphaTest*=m.opacity/Math.max(.001,source.opacity);m.transparent=m.opacity<1;if(m.transparent)m.depthWrite=false;m.userData.kitPreset=preset;
  if(intensity>0){m.emissive.set(emissive);m.emissiveIntensity=intensity;}
+ if(kind==='lantern'){m.emissiveIntensity=0;if(preset==='glass'){m.color.set('#fff1d2').multiply(new Color(tint));m.emissive.set(intensity>0?emissive:'#ffc77e');m.emissiveMap=null;m.userData.kitLamp=Math.max(1.5,intensity);updateKitLamp(m,1);}}
  for(const key of Object.keys(m)){const object=m as unknown as Record<string,unknown>,value=object[key];if(value instanceof Texture){let copy=cache.get(value);if(!copy){copy=ownedTexture(value);cache.set(value,copy);}object[key]=copy;}}
  return m;
 }
+export function updateKitLamp(material:MeshStandardMaterial,day:number){if(typeof material.userData.kitLamp==='number')material.emissiveIntensity=material.userData.kitLamp*(1+(1-Math.max(0,Math.min(1,day)))*1.5);}
 /** Keep captured material/geometry references working when normalizing plain runtime meshes. */
 export function moduleMaterialKit(){
  const prepared=new WeakSet<Material>(),converted=new WeakMap<Material,Material>(),smooth=new WeakSet<object>();
