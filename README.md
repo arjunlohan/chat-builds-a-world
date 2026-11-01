@@ -92,7 +92,7 @@ Create two Browser Sources at **1920x1080**, in this order:
 
 The overlay is transparent and keeps panels at the edges. `?overlay=1` hides the
 world's title/hint. `?debug=1` adds an FPS readout; `window.__worldStats` exposes
-fps, avgFps, frame and citizenCount regardless of that flag. `/world` keeps a fixed
+fps, avgFps, frame and citizenCount regardless of that flag. `/world` defaults to a
 1920x1080 framebuffer. Portrait pages retain the scene with readable page text.
 
 ## Rendering and frame capture
@@ -115,6 +115,9 @@ limits and determinism. The provided driver is:
 ```sh
 pnpm capture:frames --url 'http://127.0.0.1:3000/capture?version=v1&take=closing&seed=42&path=orbit' --frames 600 --fps 60 --out state/closing
 ```
+
+Measured frame rates, comparison images and capture hashes are recorded in the
+[visual foundation verification](docs/visual-foundation.md).
 
 ## Environment
 
