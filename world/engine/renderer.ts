@@ -327,7 +327,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     async loadCapture(snapshot:Extract<WorldEvent,{type:"snapshot"}>){captureEpoch=snapshot.now;citizens.sync(snapshot.citizens,snapshot.now);stats.value.raidCount=snapshot.raids;
       if(snapshot.arrival)raidPortal.open(snapshot.arrival.raid.broadcasterName,snapshot.arrival.admitted,snapshot.arrival.raid.viewerCount,-(snapshot.now-snapshot.arrival.at)/1000);
       materializer.sync(snapshot.summons);await activate(snapshot.version);frame(0,0);renderer.getContext().finish();},
-    step(dt:number){if(!options.capture)throw new Error("Use ?capture=1");if(!Number.isFinite(dt)||dt<0||dt>.05)throw new Error("Capture dt must be 0..0.05 seconds");frame((elapsed+dt)*1000,dt);renderer.getContext().finish();return {time:elapsed,frame:stats.value.frame};},
+    step(dt:number){if(renderer.getContext().isContextLost())throw new Error("Capture graphics context lost");if(!options.capture)throw new Error("Use ?capture=1");if(!Number.isFinite(dt)||dt<0||dt>.05)throw new Error("Capture dt must be 0..0.05 seconds");frame((elapsed+dt)*1000,dt);renderer.getContext().finish();return {time:elapsed,frame:stats.value.frame};},
     renderer, scene, camera, director, setVersion: activate, get host(){return host;}, citizens, materializer, stats: stats.value, baseUsage: base,
     dispose() {
       if (disposed) return;

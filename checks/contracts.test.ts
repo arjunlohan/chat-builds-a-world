@@ -51,7 +51,7 @@ test("citizen behaviors require an ID, and every behavior targets an existing no
 });
 test("environment template is parseable with empty values and documented optional names", () => {
   const template=readFileSync(".env.example","utf8"),assignments=template.split("\n").filter(line=>/^(?:# )?[A-Z][A-Z0-9_]*=/.test(line));
-  assert.equal(assignments.length,14);assert.ok(assignments.every(line=>/^(?:# )?[A-Z][A-Z0-9_]*=$/.test(line)));
+  assert.equal(assignments.length,15);assert.ok(assignments.includes("# WORLD_LOOK="));assert.ok(assignments.every(line=>/^(?:# )?[A-Z][A-Z0-9_]*=$/.test(line)));
   assert.ok(assignments.includes("# CODEX_BIN="));assert.ok(assignments.includes("# DEMO_MODE="));
   assert.equal(parseEnv(template).TWITCH_CLIENT_ID,"");assert.ok(Object.values(parseEnv(template)).every(value=>value===""));
 });

@@ -95,6 +95,27 @@ world's title/hint. `?debug=1` adds an FPS readout; `window.__worldStats` expose
 fps, avgFps, frame and citizenCount regardless of that flag. `/world` keeps a fixed
 1920x1080 framebuffer. Portrait pages retain the scene with readable page text.
 
+## Rendering and frame capture
+
+The new look is the default: 4x MSAA (SMAA fallback), smooth procedural surfaces,
+sky environment lighting, contact AO and emissive-only bloom. OBS stays at
+1920x1080. `?resolution=4k` selects a native 3840x2160 framebuffer independently of
+CSS size; use a 1920x1080 viewport and deviceScaleFactor 2 for a 4K screenshot.
+
+Sunday's fallback is `WORLD_LOOK=classic`: restart the server and refresh the OBS
+sources. `?look=classic` also overrides a page, including `/capture`; the primary
+live world's reported look selects the candidate gate. Capture pages do not
+change that report.
+
+For offline PNG sequences, add `capture=1`, select a shipped version, seed and
+camera path, and drive `window.__capture.step(1/60)`. The
+[frame capture guide](docs/capture.md) documents pinned takes, Playwright flags,
+limits and determinism. The provided driver is:
+
+```sh
+pnpm capture:frames --url 'http://127.0.0.1:3000/capture?version=v1&take=closing&seed=42&path=orbit' --frames 600 --fps 60 --out state/closing
+```
+
 ## Environment
 
 `.env.example` contains empty dotenv assignments and commented optional settings,
@@ -118,6 +139,7 @@ No `.env` is needed for the fixture demo above.
 | `TWITCH_BROADCASTER_ID` | Numeric ID of that same broadcaster |
 | `AWS_BEARER_TOKEN_BEDROCK` | Bedrock bearer API key, server-only |
 | `PORT` | Local port, default 3000 |
+| `WORLD_LOOK` | `new` by default; `classic` restores the prior rendering pipeline |
 | `SUMMON_MODEL` | Default `openai.gpt-6.1-sol` |
 | `SUMMON_REASONING_EFFORT` | Default **max** |
 | `SUMMON_SERVICE_TIER` | Default `ultrafast` |
