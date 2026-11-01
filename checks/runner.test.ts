@@ -297,7 +297,7 @@ test("runner forwards only approved spec command names into the candidate gate",
 
 test("builder time reserves the full self-check and gate; gate cannot start late",async()=>{
  const {builderAllowance,requireGateTime,BUILD_CHECK_RESERVE_MS}=await import('../server/runner/index.js');
- assert.equal(builderAllowance(180000),180000-BUILD_CHECK_RESERVE_MS);assert.equal(builderAllowance(BUILD_CHECK_RESERVE_MS-1),0);
+ assert.equal(builderAllowance(240000),240000-BUILD_CHECK_RESERVE_MS);assert.ok(builderAllowance(240000)>=110000);assert.equal(BUILD_CHECK_RESERVE_MS,30000+12000+70000+2000);assert.equal(builderAllowance(BUILD_CHECK_RESERVE_MS-1),0);
  assert.throws(()=>requireGateTime(1,'Original visibility rejection'),{message:'Original visibility rejection'});
  assert.throws(()=>requireGateTime(1),/complete candidate gate/);
 });

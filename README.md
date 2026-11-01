@@ -67,8 +67,9 @@ The full simulator sends **184 events**, produces **80 named chatters plus 24
 representative raiders**, adds three fixture summons, and runs a 15x round:
 seven proposals become four ideas, three candidates and twelve voters with totals
 **[1,9,2]**. The fixture builder still passes the real path, policy, type, Chromium,
-Git and browser-receipt checks. A passing run ships v1 for Comet04. Allow about a
-minute. The follow-up raid admits 150 into the 104-citizen world, giving 254 total.
+Git and browser-receipt checks. A passing run ships v1 for Comet04. Allow about 90
+seconds; a live build may use up to four minutes. The follow-up raid admits 150
+into the 104-citizen world, giving 254 total.
 It uses the same incoming `channel.raid` decoder as Twitch and saves a screenshot.
 Reopen `/history` to play v1. After the last chapter, contributor credits roll
 over the world and hold the closing line. Reduced motion shows a static credits
@@ -163,7 +164,7 @@ No `.env` is needed for the fixture demo above.
 | `CODEX_BIN` | Codex executable, default `codex` |
 | `SIMULATION_ALLOWED` | `1` enables local simulation/admin routes; `0` disables. Default enabled without complete Twitch configuration, disabled with it |
 | `SIMULATION_MODE` | `fixture` injects offline providers/CLI; otherwise live providers |
-| `DEMO_MODE` | `1`: ideas 20s, vote 10s, rollback vote 10s; normal 120s/45s/30s. Guard/build stay 45s/180s |
+| `DEMO_MODE` | `1`: ideas 20s, vote 10s, rollback vote 10s; normal 120s/45s/30s. Guard/build stay 45s/240s |
 
 `PATH` and `HOME` come from the operating system. Runtime `CODEX_HOME` is assigned
 internally to a private invocation directory, not supplied through this file.
@@ -262,7 +263,9 @@ appear as raw speech bubbles. Guard rejections and failed builds retain the worl
   the host enforces its hook budget. Errors, frozen/black output, sustained collapse,
   unreadable geometry and props taller than the world tree envelope reject a build.
   Two early visibility misses reject immediately; a final probe must still pass.
-  The gate has a 45-second watchdog; the builder reserves time for it and self-checks.
+  The gate has a 70-second watchdog and a fresh page per candidate in a
+  server-owned Chromium browser with a retained profile. The 240-second build
+  deadline reserves the full resource startup and check time.
   Custom commands from the spec and candidate source are exercised by ten synthetic
   players; built-in commands are excluded. Camera focus, player objects, win markers
   and reachable wins follow the [rendered rules](AGENTS.md#world-module-api-v1).

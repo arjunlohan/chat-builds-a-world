@@ -36,8 +36,12 @@ Chromium page with WebGL disabled, not in Node. This probe simulates bounded
 updates but creates no renderer and samples no FPS or visibility. Its process and
 browser are killed on cancellation/timeout. The runner calls the same selfCheck
 function independently before the existing candidate gate. A valid terminal verdict
-received before a check's deadline is final: the checker and its browser are killed
-immediately, so graceful cleanup cannot replace a passing verdict with a timeout.
+received before a check's deadline is final: the worker is killed immediately.
+The candidate browser belongs to the server and retains its profile; every
+candidate gets a new page, world and module instances. Pages close after each
+verdict; a hung checker resets the browser. Cold full-look shader startup supplies
+the first of the same three visibility probes, rather than adding a discarded
+render. Cleanup cannot replace a passing verdict with a timeout.
 Checker scratch artifacts live under the retained evidence directory.
 
 The primary world's snapshot handshake reports the engine's allocated base usage.
@@ -49,10 +53,12 @@ is known, including after restart. A standalone probe without base facts still
 reserves the summon pool via modulePool(emptyUsage()).
 
 Each accepted build gets at most two builder attempts in the same worktree, under
-one original 180-second deadline. A policy/type/resource or candidate-gate rejection
+one original 240-second deadline. A policy/type/resource or candidate-gate rejection
 may trigger the second attempt if enough time remains for independent checks. The
-builder process deadline reserves the resource self-check, complete candidate
-watchdog and a small handoff margin. Never start a gate without its full reserve;
+builder process deadline reserves 30 seconds of resource startup, the 12-second
+resource self-check, the complete 70-second candidate watchdog and a 2-second
+handoff margin. This leaves 126 seconds before preflight work. Never start a gate
+without its full reserve;
 a repair that exhausts its allowance retains the first rejection reason. The
 repair prompt carries the exact redacted rejection, the locked self-check command
 and the same resource context. The overlay shows Retry 2/2; runner metrics record
@@ -99,5 +105,5 @@ range per frame; labels share projection/collision packing. History retains unch
 module instances and caches serialized chapters until a version save.
 
 DEMO_MODE changes ideas/vote/rollback to 20/10/10 seconds. Guard/build retain their
-45/180-second deadlines. The simulator's explicit 15x rehearsal uses normal timers;
+45/240-second deadlines. The simulator's explicit 15x rehearsal uses normal timers;
 run it without DEMO_MODE. Summon reasoning defaults to max.

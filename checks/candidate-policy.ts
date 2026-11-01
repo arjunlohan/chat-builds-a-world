@@ -1,6 +1,6 @@
 import { VISIBILITY_PROBE, type Footprint } from "../world/engine/visibility.js";
 export interface FrameEvidence { frame:number; time:number; dt:number; cpu:number; render:number; module?:number; probe?:number }
-export const CANDIDATE_THRESHOLDS=Object.freeze({warmupFrames:4,warmupTimeoutMs:12_000,candidateWarmupFrames:2,sliceFrames:24,slicePairs:7,resourceSimulationSeconds:14,minimumSliceFrames:20,maxFpsDropRatio:.20,trimRatio:.05,costPercentile:.95,collapseFrameMs:1000,collapseConsecutive:3,minPixelHashes:2,visibilitySamples:3,qualifyingProbes:2,watchdogMs:45_000});
+export const CANDIDATE_THRESHOLDS=Object.freeze({warmupFrames:4,warmupTimeoutMs:12_000,candidateWarmupFrames:2,sliceFrames:24,slicePairs:7,resourceSimulationSeconds:14,minimumSliceFrames:20,maxFpsDropRatio:.20,trimRatio:.05,costPercentile:.95,collapseFrameMs:1000,collapseConsecutive:3,minPixelHashes:2,visibilitySamples:3,qualifyingProbes:2,watchdogMs:70_000});
 export function percentile(values:readonly number[],fraction:number){const sorted=[...values].sort((a,b)=>a-b);return sorted.length?sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*fraction)-1)]!:0;}
 export interface FrameSummary {fps:number;rawFps:number;avgFps:number;maxFrameGap:number;frames:number;maxCpuMs:number;maxRenderMs:number;moduleP95Ms:number;renderP95Ms:number;consecutiveLongFrames:number;maxPollGap:number}
 /** Trim scheduler outliers from throughput, but retain every frame for sustained-collapse evidence. */

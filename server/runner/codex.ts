@@ -6,7 +6,7 @@ import { readableEvent, type Usage } from "./events.js";
 import { randomUUID } from "node:crypto";
 import { atomicJson } from "../persistence/atomic.js";
 import {builderRules} from "./rules.js";
-export const BUILD_TIMEOUT_MS = 180_000;
+export const BUILD_TIMEOUT_MS = 240_000;
 export async function runnerPrompt(root: string, decision: GuardDecision, context?:{command:string;resources:unknown;rejection?:string}) {
   const contract = await readFile(join(root, "AGENTS.md"), "utf8");
   const apiContract=contract.slice(contract.indexOf("## World Module API v1"),contract.indexOf("## Scene Spec v1")).replace(/<!-- runtime-imports:start -->[\s\S]*?<!-- runtime-imports:end -->\s*/,"");

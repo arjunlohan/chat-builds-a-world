@@ -13,14 +13,15 @@ import { Versions, type WorldVersion } from "../versions/index.js";
 import { auditDiff, discardUnshippedTag, cleanMaster, commitTree, createTree, git, inventory, promote, removeTree, validateTree } from "./git.js";
 import { runCodex, runnerPrompt, BUILD_TIMEOUT_MS } from "./codex.js";
 import { candidateCheck, CHECK_TIMEOUT_MS, type CheckResult } from "./check.js";
-import {selfCheck,selfCheckCommand,selfCheckManifest,resourceCheck,SELF_CHECK_TIMEOUT_MS,type ResourceContext} from "./self-check.js";
+import {selfCheck,selfCheckCommand,selfCheckManifest,resourceCheck,SELF_CHECK_TIMEOUT_MS,RESOURCE_STARTUP_TIMEOUT_MS,type ResourceContext} from "./self-check.js";
+import {GateBrowser} from './gate-browser.js';import type {WorldLook} from '../../world/engine/render-profile.js';
 import {CANDIDATE_THRESHOLDS} from "../../checks/candidate-policy.js";
 import type { Usage } from "./events.js";
 export interface BuildRequest { decision: GuardResult; requester: string; signal: AbortSignal }
 export interface RunResult { ok: boolean; outcome: "SHIPPED" | "REVERTED" | "ROLLED BACK"; reason: string; durationMs: number; builderMs?: number; attempts?:number;firstReason?:string;tokens: Usage; version?: number; tag?: string; check?: CheckResult }
 class RepairableRejection extends Error {}
 export const BUILD_ATTEMPTS=2;
-export const BUILD_CHECK_RESERVE_MS=SELF_CHECK_TIMEOUT_MS+CHECK_TIMEOUT_MS+2000;
+export const BUILD_CHECK_RESERVE_MS=RESOURCE_STARTUP_TIMEOUT_MS+SELF_CHECK_TIMEOUT_MS+CHECK_TIMEOUT_MS+2000;
 export function builderAllowance(remainingMs:number){return Math.max(0,remainingMs-BUILD_CHECK_RESERVE_MS);}
 export function requireGateTime(remainingMs:number,firstReason?:string){if(remainingMs<CHECK_TIMEOUT_MS)throw new Error(firstReason??"Insufficient time remaining for the complete candidate gate.");}
 interface Options {
@@ -32,11 +33,13 @@ interface Options {
   record?: (record: unknown) => Promise<void> | void;
 }
 export class Runner {
+  private readonly gateBrowser=new GateBrowser();
   private readonly queue = new OperationQueue();
   private readonly record: NonNullable<Options["record"]>;
   readonly root: string;
   constructor(private options: Options) { this.root = resolve(options.root); this.record = options.record ?? metricWriter(join(this.root, "state"), "runner-metrics.jsonl"); }
-  async close(){await this.queue.close();}
+  async prepareChecks(look:WorldLook){await this.gateBrowser.prepare(look);}
+  async close(){await this.queue.close();await this.gateBrowser.close();}
   async recover() {
 
       const pending=this.options.versions.pending,current=this.options.versions.current;
@@ -119,7 +122,7 @@ export class Runner {
           if(discovered.some(found=>found.hasOnChatLogic)&&!commands.length)feed("check","Module has onChat logic but no testable custom !command; built-in commands are excluded.");
           feed("check",`SwiftShader · ${CANDIDATE_THRESHOLDS.slicePairs} paired ${CANDIDATE_THRESHOLDS.sliceFrames}-frame cost slices and full-look probes · attempt ${attempt}.`);
           requireGateTime(deadline-performance.now(),firstReason);
-          check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal,commands,this.options.versions.renderLook??(sourceEnv.WORLD_LOOK==="classic"?"classic":"new"));
+          check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal,commands,this.options.versions.renderLook??(sourceEnv.WORLD_LOOK==="classic"?"classic":"new"),this.gateBrowser);
           // A background conflict copy or hostile edit stays fatal even when another gate fails.
           await auditDiff(tree,base,before,approved.files);
           if(!check.ok){if(check.category!=="candidate"||check.retryable!==true)throw new Error(check.reason);throw new RepairableRejection(check.reason);}

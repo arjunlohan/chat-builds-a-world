@@ -1,3 +1,4 @@
+import {BUILD_TIMEOUT_MS} from '../server/runner/codex.js';
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { GuardResult } from "../server/guard/index.js";
@@ -25,7 +26,7 @@ test("production rounds use exact windows and finish only when the runner report
   assert.equal(r.snapshot().endsAt, 120_000); h.advance(119_999); assert.equal(r.snapshot().phase, "ideas");
   h.advance(1); assert.equal(r.snapshot().phase, "voting"); assert.equal(r.snapshot().endsAt, 165_000);
   r.command(chat("voter", "!vote 2")); h.advance(45_000);
-  assert.equal(r.snapshot().phase, "building"); assert.equal(r.snapshot().endsAt - r.snapshot().startedAt, 180_000);
+  assert.equal(r.snapshot().phase, "building"); assert.equal(r.snapshot().endsAt - r.snapshot().startedAt, BUILD_TIMEOUT_MS);
   assert.equal(r.snapshot().winner?.requester, "Fern"); r.feed("edit", "Edited world/modules/unit.ts"); r.feed("check", "Independent checks running");
   assert.equal(r.snapshot().build.lines.length, 2);
   await h.complete(true); const s = r.snapshot(); assert.equal(s.phase, "ideas"); assert.equal(s.timeline[0]?.version, 1);
@@ -78,10 +79,10 @@ test("rehearsals accelerate collection/voting but use real-time runner deadlines
   assert.equal(r.snapshot().timeline.at(-1)?.kind,"revert"); assert.equal(r.snapshot().timeline.at(-1)?.version,1);
   assert.equal(harness().rounds.startSimulation("ship").reason,"simulation-disabled");
 });
-test("runner is cancelled at its 180-second deadline and moderator skip fails safely", () => {
+test("runner is cancelled at its configured build deadline and moderator skip fails safely", () => {
   const h = harness(true), r = h.rounds; r.startSimulation("timeout"); choices(r); h.advance(8000); h.advance(3000);
-  h.advance(179_999); assert.equal(r.snapshot().phase,"building"); h.advance(1); assert.equal(r.snapshot().phase,"ideas");
-  assert.match(r.snapshot().timeline[0]!.reason,/180-second/); choices(r); r.skip(); r.skip(); r.skip(); assert.match(r.snapshot().timeline.at(-1)!.reason,/moderator/);
+  h.advance(BUILD_TIMEOUT_MS-1); assert.equal(r.snapshot().phase,"building"); h.advance(1); assert.equal(r.snapshot().phase,"ideas");
+  assert.ok(r.snapshot().timeline[0]!.reason.includes(`${BUILD_TIMEOUT_MS/1000}-second`)); choices(r); r.skip(); r.skip(); r.skip(); assert.match(r.snapshot().timeline.at(-1)!.reason,/moderator/);
 });
 test("idea, vote, timeline and toast buffers are bounded", () => {
   const r = harness().rounds;

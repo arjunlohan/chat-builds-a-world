@@ -31,7 +31,7 @@ test("veto works mid-build, refuses viewer authority and restart never replays p
 test("summon state restores scenes and original receipts without provider calls",async()=>{
  const options={config:{model:"fixture",effort:"max",tier:"ultrafast"},provider:fixtureProvider,mode:"fixture" as const,publish(){},reply(){},record(){}};const first=new SummonService(options);await first.submit(chat("summoner","!summon a jellyfish"));const saved=first.checkpoint(),restored=new SummonService({...options,provider:{async generate(){throw new Error("must not call provider");}}});restored.restore(saved);assert.deepEqual(restored.active(),first.active());assert.equal(await restored.acknowledge(saved.scenes[0]!.id,saved.scenes[0]!.receipt),true);
 });
-test("demo mode shortens voting without weakening guard or builder deadlines",()=>{assert.deepEqual(DEMO_MS,{ideas:20000,voting:10000,guarding:45000,building:180000,rollback:10000});assert.equal(DEMO_MS.guarding,ROUND_MS.guarding);assert.equal(DEMO_MS.building,ROUND_MS.building);});
+test("demo mode shortens voting without weakening guard or builder deadlines",()=>{assert.deepEqual(DEMO_MS,{ideas:20000,voting:10000,guarding:45000,building:240000,rollback:10000});assert.equal(DEMO_MS.guarding,ROUND_MS.guarding);assert.equal(DEMO_MS.building,ROUND_MS.building);});
 
 test("crash recovery discards an unpromoted worktree and forward-restores an unacknowledged ship",async()=>{
  const {mkdir}=await import("node:fs/promises"),{git,createTree,commitTree,promote}=await import("../server/runner/git.js"),{Versions}=await import("../server/versions/index.js"),{Runner}=await import("../server/runner/index.js");

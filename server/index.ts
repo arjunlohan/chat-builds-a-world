@@ -44,6 +44,7 @@ async function start(){
   async function stop(){if(closing)return;closing=true;for(const timer of timers)clearInterval(timer);twitch?.stop();rounds.dispose();versions.close();app.closeStreams();const closed=new Promise<void>(r=>app.server.close(()=>r()));app.server.closeIdleConnections();await runner.close();await closed;checkpoint.changed();await checkpoint.flush();unsubscribe();await release();}
   for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{void stop().catch(()=>{console.error("Shutdown could not finish; recovery will run on restart.");process.exitCode=1;});});
   console.log(`World: http://${config.host}:${config.port}/world${config.demoMode?" (DEMO_MODE)":""}`);
+  void runner.prepareChecks(config.worldLook).catch(()=>console.warn('Candidate browser could not start; the next check will retry startup.'));
  }catch(error){await release();throw error;}
 }
 void start().catch(error=>{console.error(redact(error instanceof Error?error.message:"Server startup failed.",protectedValues(process.env)));process.exitCode=1;});

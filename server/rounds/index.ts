@@ -253,7 +253,7 @@ export class Rounds {
       else if (this.phase === "guarding" && now >= this.endsAt) {
         this.cancelReview(); this.applyReview(rejected("Guard timed out after 45 seconds.",this.guard.mode,ROUND_MS.guarding,"Review timeout"));
       } else if (this.phase === "rollback" && now >= this.endsAt) this.endRollback();
-      else if (this.phase === "building" && now >= this.endsAt) { this.abortRun(); this.finishRun(reverted("180-second build timeout.",ROUND_MS.building));
+      else if (this.phase === "building" && now >= this.endsAt) { this.abortRun(); this.finishRun(reverted(`${ROUND_MS.building/1000}-second build timeout.`,ROUND_MS.building));
       } else break;
       this.dirty = true;
     }
