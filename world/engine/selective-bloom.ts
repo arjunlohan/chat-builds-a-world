@@ -17,7 +17,7 @@ export class SelectiveBloomPass extends Pass{
  override setSize(width:number,height:number){this.composer.setSize(Math.max(1,Math.round(width/2)),Math.max(1,Math.round(height/2)));}
  override render(renderer:WebGLRenderer,write:WebGLRenderTarget,read:WebGLRenderTarget,dt:number){
   const saved:{mesh:Mesh|Points;material:Material|Material[]}[]=[],hidden:Points[]=[],fog=this.scene.fog;
-  try{this.scene.fog=null;this.scene.traverseVisible(object=>{if(!(object instanceof Mesh||object instanceof Points))return;const materials=Array.isArray(object.material)?object.material:[object.material];if(materials.some(emitsBloom))return;if(object instanceof Points){object.visible=false;hidden.push(object);}else{saved.push({mesh:object,material:object.material});object.material=this.black;}});this.composer.render(dt);}
+  try{this.scene.fog=null;this.scene.traverseVisible(object=>{if(!(object instanceof Mesh||object instanceof Points))return;const materials=Array.isArray(object.material)?object.material:[object.material];if(materials.every(emitsBloom))return;if(object instanceof Points){object.visible=false;hidden.push(object);}else{saved.push({mesh:object,material:object.material});object.material=Array.isArray(object.material)?materials.map(material=>emitsBloom(material)?material:this.black):this.black;}});this.composer.render(dt);}
   finally{this.scene.fog=fog;for(const item of saved)item.mesh.material=item.material;for(const point of hidden)point.visible=true;}
   this.material.uniforms.base!.value=read.texture;this.material.uniforms.glow!.value=this.bloom.renderTargetsHorizontal[0]!.texture;renderer.setRenderTarget(this.renderToScreen?null:write);this.quad.render(renderer);
  }

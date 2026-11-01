@@ -1,3 +1,4 @@
+import {captureQuery,frameCapture} from "./engine/capture.js";
 import { pageProfile, documentLook } from "./engine/render-profile.js";
 import "./style.css";
 import { createRenderer } from "./engine/renderer.js";
@@ -14,6 +15,7 @@ const labels = document.querySelector<HTMLElement>("#citizen-labels");
 const count = document.querySelector<HTMLElement>("#citizen-count");
 const connection = document.querySelector<HTMLElement>("#connection-status");
 const query = new URLSearchParams(location.search);
+const capturing=query.get("capture")==="1";document.body.classList.toggle("frame-capture",capturing);
 document.body.classList.toggle("overlay-active", query.get("overlay") === "1");
 if (fps) fps.hidden = query.get("debug") !== "1";
 const phases: Record<string, number> = { dawn: 0.25, day: 0.5, dusk: 0.75, night: 0 };
@@ -25,6 +27,7 @@ try {
   if (!canvas) throw new Error("World canvas is missing");
   const world = createRenderer(canvas, {
     profile: pageProfile(query,documentLook()),
+    ...(capturing?{capture:captureQuery(query),playback:true}:{}),
     probeId: query.get("probe") ?? "",
     ...(labels ? { labels } : {}),
     onReply(message) { if (fault) { fault.hidden = false; fault.textContent = message; } },
@@ -45,6 +48,7 @@ try {
       }
     },
   });
+  if(capturing){window.__capture=frameCapture(world,query);void window.__capture.ready.catch(()=>fail("The saved capture could not load."));}
   window.addEventListener("pagehide", () => world.dispose(), { once: true });
 } catch {
   fail("This world needs WebGL 2. Enable graphics acceleration, then reload.");

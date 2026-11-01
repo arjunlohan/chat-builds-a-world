@@ -14,5 +14,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["server/**/*.ts", "world/**/*.ts", "overlay/**/*.ts", "checks/**/*.ts"]
+  "include": ["server/**/*.ts", "world/**/*.ts", "overlay/**/*.ts", "checks/**/*.ts", "tools/**/*.ts"]
 }

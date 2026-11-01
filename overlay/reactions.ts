@@ -2,11 +2,12 @@ import {clip} from "../server/reactions/catalog.js";
 import type {ReactionState} from "../server/reactions/index.js";
 import {el,panel} from "./dom.js";
 /** One video element, bounded by the authoritative clock as well as its native ended event. */
-export function reactionOverlay(){
+export function reactionOverlay(options:{now?:()=>number;frameExact?:boolean}={}){
+ const nowClock=options.now??(()=>performance.now());
  const root=panel("Chat reactions","reaction-panel"),meters=el("div","reaction-meters"),vote=el("div","reaction-vote"),title=el("p","eyebrow","CHAT REACTIONS"),status=el("p","reaction-status"),video=el("video","reaction-takeover");
  root.append(title,meters,vote,status);root.hidden=true;video.hidden=true;video.muted=true;video.playsInline=true;video.preload="auto";video.setAttribute("aria-label","Prerendered chat reaction");
  let state:ReactionState|null=null,received=0,currentId=0,finishedId=0,layout="",disposed=false;
- const time=()=>state?state.now+(state.paused?0:performance.now()-received):0;
+ const time=()=>state?state.now+(state.paused?0:nowClock()-received):0;
  function clear(){video.pause();video.hidden=true;video.removeAttribute("src");video.load();delete video.dataset.clip;}
  function finish(){finishedId=currentId;clear();}
  video.addEventListener("ended",finish);video.addEventListener("error",()=>{if(video.getAttribute("src"))finish();});
@@ -15,6 +16,7 @@ export function reactionOverlay(){
   if(!current||current.endsAt<=now){if(!video.hidden)finish();return;}
   if(current.id===finishedId)return;
   if(current.id!==currentId){currentId=current.id;clear();video.dataset.clip=current.clip;video.src=clip(current.clip).url;video.hidden=false;video.load();}
+  if(options.frameExact){video.pause();if(video.readyState>=1){const target=Math.min(Math.max(0,(now-current.startedAt)/1000),Math.max(0,video.duration-.02));if(Math.abs(video.currentTime-target)>1e-7)video.currentTime=target;}return;}
   if(state!.paused)video.pause();else if(video.readyState>=1){
    const target=Math.max(0,(now-current.startedAt)/1000);
    if(Math.abs(video.currentTime-target)>.5)video.currentTime=Math.min(target,Number.isFinite(video.duration)?Math.max(0,video.duration-.02):target);
@@ -32,5 +34,9 @@ export function reactionOverlay(){
   root.hidden=!rows.length&&!state.vote&&!state.current&&!state.queued;
   status.textContent=state.paused?"PAUSED":state.vote?`${Math.max(0,Math.ceil((state.vote.endsAt-now)/1000))}s · ${state.vote.voters} voters`:state.queued?`Next: ${clip(state.queued.clip).label}`:state.current&&state.current.endsAt>now?`${clip(state.current.clip).label} · prerendered`:"20s chat window · distinct viewers";
  }
- return {root,video,clock,update(value:ReactionState){state=value;received=performance.now();clock();},dispose(){disposed=true;clear();}};
+ async function renderFrame(){clock();if(video.hidden||video.readyState>=2&&!video.seeking)return;
+  await new Promise<void>((resolve,reject)=>{const events=['loadeddata','seeked','canplay'];const done=()=>{if(video.readyState<2||video.seeking)return;cleanup();resolve();};const cleanup=()=>{clearTimeout(timer);for(const event of events)video.removeEventListener(event,done);};const timer=setTimeout(()=>{cleanup();reject(new Error("Capture reaction seek timed out"));},5000);for(const event of events)video.addEventListener(event,done);done();});
+ }
+
+ return {root,video,clock,renderFrame,update(value:ReactionState){state=value;received=nowClock();clock();},dispose(){disposed=true;clear();}};
 }

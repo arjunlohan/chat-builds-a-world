@@ -1,3 +1,6 @@
+import {capturePath,type CapturePath} from "./capture-path.js";
+import {random} from "./land.js";
+import type {WorldEvent} from "../../server/contracts.js";
 import {skyEnvironment} from "./environment.js";
 import {SelectiveBloomPass} from "./selective-bloom.js";
 import {ambientOcclusion} from "./ambient-occlusion.js";
@@ -35,6 +38,7 @@ import { log } from "./log.js";
 
 export interface RendererOptions {
   playback?: boolean;
+  capture?:{seed:number;path:CapturePath;moduleId?:string};
   profile?: Readonly<RenderProfile>;
   probeId?: string;
   fixedTime?: number;
@@ -53,8 +57,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   let shadowDirty = true;
   const clientId = crypto.randomUUID();
   const post = (url: string, data: object) => { if(options.playback)return;void fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, clientId }) }).catch(() => {}); };
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
+  const reducedMotion = options.capture?{matches:false}:window.matchMedia("(prefers-reduced-motion: reduce)");
+  const renderer = new WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer:!!options.capture, powerPreference: "high-performance" });
   renderer.setPixelRatio(1);
   renderer.info.autoReset = false;
   renderer.setSize(profile.width, profile.height, false);
@@ -119,8 +123,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     effects: { play: effects.play }, camera: { focus: director.focus }, citizens: citizens.services };
   const materializer = new SpecMaterializer({ ...materializerOptions, ledger: summonLedger, onVisible: state => ack(state) });
   const moduleMaterializer = new SpecMaterializer({ ...materializerOptions, ledger });
+  let captureEpoch=0;const captureRandom=options.capture?random(options.capture.seed):undefined;
   const hostOptions: ConstructorParameters<typeof ModuleHost>[0] = {
     ...(profile.probe?{onWork:(id:string,ms:number)=>{if(id===options.probeId)stats.value.moduleMs=ms;},onHook:(id:string,hook:string)=>{if(id===options.probeId&&hook==="onChat")stats.value.moduleChats++;},onFocus:(id:string)=>{if(id===options.probeId)stats.value.moduleFocuses++;}}:{}),
+    ...(options.capture?{clock:()=>elapsed*1000,random:captureRandom!}:{}),
     root: moduleRoot, ledger, onSceneChange: () => { shadowDirty = true; }, protectedResources: engineResources,
     services: { citizens: citizens.services, spawnSpec: spec => moduleMaterializer.spawn(spec), camera: { focus: director.focus }, effects: { play: effects.play }, log },
     onStatus: (event: ModuleStatus) => {
@@ -177,7 +183,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   window.__worldStats = stats.value;
   let elapsed = 0, disposed = false, ready = false, frameId = 0, uiTime = 0;
   let serverOffset = 0;
-  const disconnect = options.playback ? () => {} : connectWorld(event => {
+  const onEvent=(event:WorldEvent)=>{
     serverOffset = event.now - Date.now();
     switch (event.type) {
     case "snapshot": {
@@ -221,11 +227,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     stats.value.summonCount = materializer.count;
     // Pause/skip/clear controls are broadcast for later lanes, not arbitrary module code.
     stats.value.citizenCount = citizens.count;
-  }, connected => options.onConnection?.(connected), clientId);
+  };
+  const disconnect=options.playback||options.capture?()=>{}:connectWorld(onEvent,connected=>options.onConnection?.(connected),clientId);
 
-  function frame(now: number) {
-    if (disposed || document.hidden) return;
-    const realDt = stats.sample(now);
+  function frame(now: number,forcedDt?:number) {
+    if (disposed || !options.capture&&document.hidden) return;
+    const sampled=stats.sample(now),realDt=forcedDt??sampled;
     const dt = Math.min(0.05, realDt);
     elapsed += dt;
     // Reduced motion keeps composition still but retains rendered, measurable frames.
@@ -239,11 +246,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       motes.update(visualTime, 1 - sky.day);
       effects.update(elapsed);stats.value.raidPortalActive=raidPortal.update(elapsed,reducedMotion.matches);
       if(!profile.probe||!stats.value.measureCameraLocked)director.update(dt);
-      citizens.update(dt, elapsed, Date.now() + serverOffset, camera, reducedMotion.matches);
+      citizens.update(dt, elapsed, options.capture?captureEpoch+elapsed*1000:Date.now()+serverOffset, camera, reducedMotion.matches);
       materializer.update(dt, camera, reducedMotion.matches); moduleMaterializer.update(dt, camera, reducedMotion.matches);
-      labelManager.update(Date.now() + serverOffset, camera, director.focusPoint);
+      if(!options.capture)labelManager.update(Date.now() + serverOffset, camera, director.focusPoint);
       stats.value.cameraFocuses = director.automaticFocuses;
       stats.value.moduleMs=0;host.update(dt);
+      if(options.capture){const id=options.capture.moduleId??host.ids[0];capturePath(camera,options.capture.path,elapsed,moduleBounds(id?host.visualRoots(id):[]));labelManager.update(captureEpoch+elapsed*1000,camera,director.focusPoint);}
       if (pendingAck) {
         if (stats.value.moduleError) { moduleReceipt(pendingAck.version, false); pendingAck = null; }
         else if (++pendingAck.frames >= 8) { moduleReceipt(pendingAck.version, true); if(pendingAck.celebrate&&!reducedMotion.matches)effects.celebrate(); pendingAck = null; }
@@ -279,14 +287,16 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         uiTime = now;
         options.onFrame?.(stats.value.fps, stats.value.avgFps, sky.phase, citizens.count);
       }
-    } catch {
+    } catch(error) {
+      if(options.capture)throw error;
       options.onError?.("The world paused after a rendering error. Reload to try again.");
       return;
     }
-    frameId = requestAnimationFrame(frame);
+    if(!options.capture)frameId = requestAnimationFrame(frame);
   }
   function visibility() {
-    host.setPaused(document.hidden);
+    if(options.capture)return;
+    host.setPaused(options.capture?false:document.hidden);
     stats.resetClock();
     cancelAnimationFrame(frameId);
     if (!document.hidden && !disposed) frameId = requestAnimationFrame(frame);
@@ -310,10 +320,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   document.addEventListener("visibilitychange", visibility);
   canvas.addEventListener("pointerup", explore);
   canvas.addEventListener("webglcontextlost", contextLost);
-  host.setPaused(document.hidden);
-  if (!document.hidden) frameId = requestAnimationFrame(frame);
+  host.setPaused(options.capture?false:document.hidden);
+  if (!document.hidden&&!options.capture) frameId = requestAnimationFrame(frame);
 
   return {
+    async loadCapture(snapshot:Extract<WorldEvent,{type:"snapshot"}>){captureEpoch=snapshot.now;citizens.sync(snapshot.citizens,snapshot.now);stats.value.raidCount=snapshot.raids;
+      if(snapshot.arrival)raidPortal.open(snapshot.arrival.raid.broadcasterName,snapshot.arrival.admitted,snapshot.arrival.raid.viewerCount,-(snapshot.now-snapshot.arrival.at)/1000);
+      materializer.sync(snapshot.summons);await activate(snapshot.version);frame(0,0);renderer.getContext().finish();},
+    step(dt:number){if(!options.capture)throw new Error("Use ?capture=1");if(!Number.isFinite(dt)||dt<0||dt>.05)throw new Error("Capture dt must be 0..0.05 seconds");frame((elapsed+dt)*1000,dt);renderer.getContext().finish();return {time:elapsed,frame:stats.value.frame};},
     renderer, scene, camera, director, setVersion: activate, get host(){return host;}, citizens, materializer, stats: stats.value, baseUsage: base,
     dispose() {
       if (disposed) return;

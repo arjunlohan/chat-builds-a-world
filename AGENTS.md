@@ -399,6 +399,7 @@ World services injected into init:
 
 | Service | Signature and authority |
 | --- | --- |
+| `clock` | Optional read-only `now(): number`, monotonic milliseconds. Capture uses virtual elapsed time; hook CPU measurement remains real. |
 | `scene` | A module-owned Three.js `Group`, not the engine root. Only attach/detach own objects; never traverse parents or alter engine state. |
 | `citizens` | `get(id): Citizen | undefined`, `list(): readonly Citizen[]`. Frozen snapshots with id, displayName, color, position; no mutable roster. |
 | `spawnSpec` | `(spec: SceneSpec): SpawnHandle`. Host validates again, reserves global resources atomically and records ownership; handle has `id` and idempotent `dispose()`. |

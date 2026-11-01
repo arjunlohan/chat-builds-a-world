@@ -1,3 +1,4 @@
+import {captureStore} from "./capture.js";
 import type {WorldLook} from "../world/engine/render-profile.js";
 import {CLIPS} from "./reactions/catalog.js";
 import { incomingRaid } from "./twitch/raid.js";
@@ -39,6 +40,7 @@ async function post(request: IncomingMessage, response: ServerResponse, handler:
 }
 
 export async function createWorldServer(pipeline: WorldPipeline, summons?: SummonService, rounds?: Rounds, versions?: Versions, automation?: { worldLook?:WorldLook; durable?:()=>Promise<void>; broadcasterId?:string; simulationAllowed?: boolean; setOutcome?(outcome: string): void; live: boolean; fault(): Promise<void> }) {
+  const capture=captureStore(pipeline,versions);
   const assets = await buildClient();
   const pages = new Map([
     ["/world", await readFile(new URL("../world/index.html", import.meta.url))],
@@ -120,6 +122,7 @@ export async function createWorldServer(pipeline: WorldPipeline, summons?: Summo
     }
     if (path === "/api/rounds") { json(response, rounds ? 200 : 503, rounds?.snapshot() ?? { error: "Rounds unavailable" }); return; }
     if (path === "/api/history") { response.writeHead(200,{"Content-Type":"application/json; charset=utf-8"}).end(versions?.serializedHistory()??'{"versions":[]}');return; }
+    if(path==="/api/capture"){try{json(response,200,await capture(url.searchParams.get("version")??"latest",url.searchParams.get("take")??"default"));}catch{json(response,400,{error:"Choose a shipped vN version and a take name of 1-48 letters, digits, underscore or hyphen."});}return;}
     if (path === "/api/world") { json(response, 200, pipeline.snapshot()); return; }
     if (path === "/events") {
       if (request.method === "HEAD") { response.writeHead(200).end(); return; }

@@ -198,3 +198,9 @@ test("module transitions retain unchanged instances and adopt only checked delta
  host.load(()=>f.module("a",{init(){initA++;},dispose(){disposeA++;}}));candidate.load(()=>f.module("b"));host.adopt(candidate,["a","b"]);candidate.dispose();assert.equal(initA,1);assert.equal(disposeA,0);assert.equal(host.activeCount,2);host.update(1/60);
  const empty=new ModuleHost({root:new Group(),ledger,services});host.adopt(empty,["a"]);assert.equal(initA,1);assert.equal(disposeA,0);host.dispose();assert.equal(disposeA,1);
 });
+
+test("capture clocks and random streams are virtual while hook budgets keep real measurements",()=>{
+ const f=fixture();let virtual=0,measured=0;const samples:number[]=[],host=new ModuleHost({root:new Group(),services:f.services,clock:()=>virtual,now:()=>measured,random:()=>.125});const original=Math.random;
+ assert.equal(host.load(()=>f.module('clock',{init(s){samples.push(s.clock!.now(),Math.random());},update(){measured+=3;}})),true);assert.equal(Math.random,original);assert.deepEqual(samples,[0,.125]);
+ for(let i=0;i<3;i++){virtual+=1000/60;host.update(1/60);}assert.equal(host.activeCount,0,"real CPU overruns remain enforceable under a virtual clock");assert.equal(Math.random,original);host.dispose();
+});

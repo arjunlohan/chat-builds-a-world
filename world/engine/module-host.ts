@@ -25,6 +25,8 @@ interface HostOptions {
   ledger?: ResourceLedger;
   protectedResources?: ResourceOwner;
   now?: () => number;
+  clock?:()=>number;
+  random?:()=>number;
   onStatus?: (status: ModuleStatus) => void;
   onSceneChange?: () => void;
   onWork?: (id:string,ms:number) => void;
@@ -57,6 +59,8 @@ export class ModuleHost {
     this.ledger = options.ledger ?? new ResourceLedger(emptyUsage());
   }
 
+  private clock(){return this.options.clock?.()??this.now();}
+  private run<T>(callback:()=>T):T{if(!this.options.random)return callback();const saved=Math.random;try{Math.random=this.options.random;return callback();}finally{Math.random=saved;}}
   private status(id: string, state: ModuleStatus["state"], reason: string) {
     this.options.onStatus?.({ id, state, reason });
   }
@@ -64,7 +68,7 @@ export class ModuleHost {
   private invoke(record: RecordState, hook: keyof Omit<WorldModule, "id">, callback: () => unknown): number {
     const start = this.now();
     let result: unknown;
-    try { result = callback(); } catch { throw new Error(`${hook} threw`); }
+    try { result = this.run(callback); } catch { throw new Error(`${hook} threw`); }
     if (result && typeof (result as { then?: unknown }).then === "function") {
       // Consume a rejected async hook so it cannot create an unhandled rejection.
       void Promise.resolve(result).catch(() => {});
@@ -77,10 +81,11 @@ export class ModuleHost {
     const allow = () => { if (record.cleaned) throw new Error("module has been disposed"); };
     const limits = () => {
       allow();
-      const second = Math.floor(this.now() / 1000);
+      const second = Math.floor(this.clock() / 1000);
       if (record.window !== second) { record.window = second; record.effects = 0; record.logs = 0; }
     };
     return Object.freeze({
+      clock:Object.freeze({now:()=>this.clock()}),
       scene: record.root,
       citizens: Object.freeze({
         get: (id: string) => { allow(); const citizen = this.options.services.citizens.get(id); return citizen ? snapshot(citizen) : undefined; },
@@ -102,8 +107,8 @@ export class ModuleHost {
       },
       camera: Object.freeze({ focus: (target: Readonly<Vector3>, opts: { duration?: number; priority?: number } = {}) => {
         allow();
-        if (this.now() - record.lastFocus < F.intervalMs) return;
-        record.lastFocus = this.now();
+        if (this.clock() - record.lastFocus < F.intervalMs) return;
+        record.lastFocus = this.clock();
         this.options.services.camera.focus(position(target), {
           duration: Number.isFinite(opts.duration) ? Math.max(F.minDuration, Math.min(F.maxDuration, opts.duration!)) : 2.5,
           priority: Number.isFinite(opts.priority) ? Math.max(F.minPriority, Math.min(F.maxPriority, Math.round(opts.priority!))) : 1,
@@ -130,14 +135,14 @@ export class ModuleHost {
       if (total > MODULE_CAP[key]) throw new Error(`${key} module limit exceeded`);
     }
     // Materializer reservations already charge global usage; only raw scene resources go here.
-    this.ledger.reserve(record.key, raw); record.auditDirty = false; record.lastAudit = this.now();
+    this.ledger.reserve(record.key, raw); record.auditDirty = false; record.lastAudit = this.clock();
   }
 
   /** Init and audit candidate before retiring a previous instance with the same ID. */
   load(factory: WorldModuleFactory): boolean {
     let module: WorldModule;
     const start = this.now();
-    try { module = factory(); } catch { this.status("candidate", "rejected", "factory threw"); return false; }
+    try { module = this.run(factory); } catch { this.status("candidate", "rejected", "factory threw"); return false; }
     const hooks = ["init", "update", "onChat", "onCitizenSpawn", "onRaid", "dispose"] as const;
     if (!module || typeof module.id !== "string" || !/^[a-zA-Z][a-zA-Z0-9_-]{0,47}$/.test(module.id) || hooks.some(hook => typeof module[hook] !== "function")) {
       this.status("candidate", "rejected", "invalid World Module API"); return false;
@@ -212,8 +217,8 @@ export class ModuleHost {
     for (const record of this.records.values()) {
       if (record.queue.length >= MODULE_BUDGET.maxEvents) {
         record.queue.shift();
-        if (this.now() - record.lastQueueWarning >= 1000) {
-          record.lastQueueWarning = this.now();
+        if (this.clock() - record.lastQueueWarning >= 1000) {
+          record.lastQueueWarning = this.clock();
           this.options.services.log("warn", `[${record.id}] event queue full; oldest dropped`);
         }
       }
@@ -249,7 +254,7 @@ export class ModuleHost {
           elapsed += this.invoke(record, "update", () => record.module.update(seconds));
         }
         if (record.root.parent !== this.options.root) throw new Error("module group escaped ownership");
-        if (record.auditDirty || this.now() - record.lastAudit >= 1000) this.audit(record);
+        if (record.auditDirty || this.clock() - record.lastAudit >= 1000) this.audit(record);
         record.overruns = record.overruns.filter(frame => frame > this.frame - MODULE_BUDGET.overrunWindow);
         if (elapsed > MODULE_BUDGET.perModuleMs) record.overruns.push(this.frame);
         if (record.overruns.length >= MODULE_BUDGET.disableAfterOverruns) throw new Error("three 2 ms overruns in 60 frames");

@@ -15,6 +15,8 @@ export interface SpawnHandle {
 }
 
 export interface WorldServices {
+  /** Milliseconds from the host clock; virtual during offline capture. Never wall time. */
+  readonly clock?: {now():number};
   /** Module-owned group only; the engine's root Scene is never exposed. */
   readonly scene: Group;
   readonly citizens: {

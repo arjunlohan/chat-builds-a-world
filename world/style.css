@@ -66,3 +66,5 @@ body { margin: 0; min-height: 100vh; }
  .connection-status { top: -42px; left: 20px; right: auto; font-size: 12px; }
  .module-status { top: auto; bottom: -210px; left: 20px; right: 20px; font-size: 14px; }
 }
+
+.frame-capture *, .frame-capture *::before, .frame-capture *::after { animation: none !important; transition: none !important; }
