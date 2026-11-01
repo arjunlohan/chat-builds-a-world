@@ -38,3 +38,19 @@ all 14 timing slices, then faulted during the last focus wait. It rejected with
 no passing verdict. Evidence `state/checks/d8eb3814-4e74-4cad-9e2f-573808beeed6/`.
 `pnpm check` passed again. The unchanged visuals were recaptured as
 `state/visual/p22d-gate-*`; 150-raider FPS 59.97, GPU means 12.43-13.36ms.
+
+## Sunny sky and alpha-aware bloom
+
+The camera's downward view previously landed almost entirely inside the gray
+horizon blend. The displayed panorama now lifts that horizon independently of
+the physical environment, retains the scanned sky's blue/cloud detail, and uses
+lighter distance fog. Golden-hour tint and low sun remain visibly distinct.
+The cloud sea keeps its alpha and stays below the emissive bloom threshold.
+Bloom occluders now borrow cutout maps, opacity, sidedness and wind deformation;
+source disposal releases the cached mask without disposing borrowed textures.
+
+`pnpm check`: 270 tests plus browser checks passed. Fixed stills at
+`state/visual/p22d-sky-*-4k.png` show day and golden-hour frames from all paths.
+Fresh-page world/composite capture hashes match; zero browser errors.
+150-raider day/dusk/night FPS: 59.96/59.94/59.75; GPU means 14.35/13.98/13.80ms.
+Cold load 2.167s. Logs `state/asset-cache/p22d-sky-*`.

@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {MeshStandardMaterial,DataTexture,DoubleSide} from 'three';import {bloomOccluder} from '../world/engine/bloom-occluder.js';
+test('bloom cutout masks borrow alpha and preserve foliage vertex deformation without owning textures',()=>{
+ const texture=new DataTexture(new Uint8Array([255,255,255,0,255,255,255,255]),2,1),source=new MeshStandardMaterial({map:texture,alphaTest:.35,alphaToCoverage:true,side:DoubleSide});let deformed=false,disposed=false;texture.addEventListener('dispose',()=>disposed=true);source.onBeforeCompile=()=>{deformed=true;};source.customProgramCacheKey=()=> 'wind';const mask=bloomOccluder(source);
+ assert.equal(mask.map,texture);assert.equal(mask.alphaTest,.35);assert.equal(mask.alphaToCoverage,true);assert.equal(mask.side,DoubleSide);assert.equal(mask.fog,true);assert.equal(mask.color.getHex(),0);mask.onBeforeCompile({} as never,{} as never);assert.equal(deformed,true);assert.match(mask.customProgramCacheKey(),/wind/);mask.dispose();assert.equal(disposed,false);source.dispose();texture.dispose();
+});
