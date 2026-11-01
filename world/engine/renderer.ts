@@ -145,7 +145,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const moduleReceipt = (version: WorldVersion, ok: boolean) => post("/modules/ack", { version: version.version, receipt: version.receipt, ok });
   const probe = profile.probe ? {
     target: new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height),
-    hdr: new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,{type:HalfFloatType}),
+    hdr: new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,{type:HalfFloatType,samples:aa.samples}),
     withPixels: new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),
     withoutPixels: new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),
     capture(pixels: Uint8Array) {
