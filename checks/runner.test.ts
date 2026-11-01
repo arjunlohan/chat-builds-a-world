@@ -32,6 +32,13 @@ async function repository() {
   await writeFile(join(root, "world/modules/a.ts"), "export default () => ({});\n");
   await git(root, "init", "-b", "master"); await git(root, "add", "."); await git(root, "-c", "user.name=Test", "-c", "user.email=test@localhost", "commit", "--no-gpg-sign", "-m", "Base"); return root;
 }
+test('the real fake builder rewrites kit fixture API paths independent of quote style',async()=>{
+ const root=await repository();try{for(const kind of ['orchard','race-track']){
+  const decision={verdict:'accept' as const,title:'Kit visual',reason:'Safe fixture',spec:{moduleId:kind,description:kind,steps:['Create visual'],checks:['Dispose'],estimatedSeconds:60},files:[`world/modules/${kind}.ts`],mode:'fixture' as const,latencyMs:0};
+  await runCodex({root,tree:root,bin:resolve('checks/fixtures/fake-builder.cjs'),env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:'offline-fixture'},decision,signal:new AbortController().signal,feed(){}});
+  const source=await readFile(join(root,decision.files[0]!), 'utf8');assert.ok(!source.includes('../../../world/engine/api.js'));assert.doesNotThrow(()=>inspectModule(source,decision.files[0]!));
+ }}finally{await rm(root,{recursive:true,force:true});}
+});
 test("temporary worktrees are unique, repository-owned, symlink-safe and fully cleaned",async()=>{
  const root=await repository(),other=await repository();let tree="",second="";try{
   const base=await cleanMaster(root);tree=await createTree(root,1,base);second=await createTree(root,1,base);assert.notEqual(tree,second);assert.equal(dirname(dirname(tree)),await realpath(tmpdir()));assert.ok(!tree.startsWith(root+"/"));assert.equal(await validateTree(root,tree,1),true);
