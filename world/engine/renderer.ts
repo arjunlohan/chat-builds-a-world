@@ -223,6 +223,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       renderer.info.reset();
       const cpuStart = performance.now();
       if(sky.update(visualTime))shadowDirty=true;ibl?.update(sky.lighting);stats.value.environmentBakes=ibl?.bakes??0;if(profile.look!=="classic")renderer.toneMappingExposure=.92+(1-sky.day)*.2;
+      garden.update(visualTime,camera);
       water.update(visualTime, sky.day);
       motes.update(visualTime, 1 - sky.day);
       effects.update(clock.seconds);stats.value.raidPortalActive=raidPortal.update(clock.seconds,reducedMotion.matches);

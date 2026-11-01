@@ -2,9 +2,9 @@
 
 Powered by [Poly Haven](https://polyhaven.com). Prepared with `pnpm assets:fetch`; runtime pages fetch only committed same-origin data. [Poly Haven license](https://polyhaven.com/license), [ambientCG license](https://docs.ambientcg.com/license/): CC0 1.0.
 
-All source models are simplified, meshopt-compressed glTF with 1K WebP textures and a second LOD. Materials use 1K WebP color, OpenGL normals and packed AO/roughness/metalness. The terrain packs four sets into a padded 2K atlas. The sky is 2K HDR; photographic cloud cutouts are derived as 1K alpha WebP. Only data files survive the offline conversion. Raw sources and ZIPs stay in ignored state/. Collection assets select one named variant before simplification. No source scripts, Blender files or executable extensions are copied.
+All source models are simplified, meshopt-compressed glTF with 1K WebP textures and a second LOD. Materials use 1K WebP color, OpenGL normals and packed AO/roughness/metalness. The terrain packs four sets into a padded 2K atlas. The sky is 2K HDR; photographic cloud cutouts are derived as 1K alpha WebP. Only data files survive the offline conversion. Raw sources and ZIPs stay in ignored state/. Collection assets select one named variant before simplification. Tree canopies and grass preserve the source scan coverage as offline-baked alpha cards; only continuous woody geometry is decimated for the tree LODs. Rebuilding these two assets also requires Blender (BLENDER_BIN may override it). No source scripts, Blender files or executable extensions are copied.
 
-Compressed world outputs: 43,149,049 bytes. All committed asset sources and media: 59,356,417 bytes; limit 120,000,000. Manifest records exact download URLs, checksums and per-file sizes in [manifest.json](assets/world/manifest.json).
+Compressed world outputs: 43,235,305 bytes. All committed asset sources and media: 59,442,673 bytes; limit 120,000,000. Manifest records exact download URLs, checksums and per-file sizes in [manifest.json](assets/world/manifest.json).
 
 | Name | Type | Source | License | Bytes | Outputs |
 | --- | --- | --- | --- | ---: | --- |
@@ -27,8 +27,6 @@ Compressed world outputs: 43,149,049 bytes. All committed asset sources and medi
 | pot | model | [planter_pot_clay](https://polyhaven.com/a/planter_pot_clay) | CC0-1.0 | 780,404 | [pot.glb](assets/world/pot.glb), [pot-lod.glb](assets/world/pot-lod.glb) |
 | flowers | model | [flower_ursinia](https://polyhaven.com/a/flower_ursinia) | CC0-1.0 | 643,896 | [flowers.glb](assets/world/flowers.glb), [flowers-lod.glb](assets/world/flowers-lod.glb) |
 | fern | model | [fern_02](https://polyhaven.com/a/fern_02) | CC0-1.0 | 459,644 | [fern.glb](assets/world/fern.glb), [fern-lod.glb](assets/world/fern-lod.glb) |
-| grass | model | [grass_medium_01](https://polyhaven.com/a/grass_medium_01) | CC0-1.0 | 1,303,488 | [grass.glb](assets/world/grass.glb), [grass-lod.glb](assets/world/grass-lod.glb) |
-| scanned-tree | model | [island_tree_01](https://polyhaven.com/a/island_tree_01) | CC0-1.0 | 3,352,444 | [scanned-tree.glb](assets/world/scanned-tree.glb), [scanned-tree-lod.glb](assets/world/scanned-tree-lod.glb) |
 | rock | model | [rock_09](https://polyhaven.com/a/rock_09) | CC0-1.0 | 923,640 | [rock.glb](assets/world/rock.glb), [rock-lod.glb](assets/world/rock-lod.glb) |
 | moss-rock | model | [rock_moss_set_01](https://polyhaven.com/a/rock_moss_set_01) | CC0-1.0 | 897,536 | [moss-rock.glb](assets/world/moss-rock.glb), [moss-rock-lod.glb](assets/world/moss-rock-lod.glb) |
 | shrub | model | [shrub_01](https://polyhaven.com/a/shrub_01) | CC0-1.0 | 844,020 | [shrub.glb](assets/world/shrub.glb), [shrub-lod.glb](assets/world/shrub-lod.glb) |
@@ -38,6 +36,8 @@ Compressed world outputs: 43,149,049 bytes. All committed asset sources and medi
 | table | model | [small_wooden_table_01](https://polyhaven.com/a/small_wooden_table_01) | CC0-1.0 | 478,516 | [table.glb](assets/world/table.glb), [table-lod.glb](assets/world/table-lod.glb) |
 | ground | atlas | [dark_rock](https://polyhaven.com/a/dark_rock) | CC0-1.0 | 4,129,696 | [ground-color.webp](assets/world/ground-color.webp), [ground-normal.webp](assets/world/ground-normal.webp), [ground-arm.webp](assets/world/ground-arm.webp) |
 | sky | hdri | [kloofendal_48d_partly_cloudy_puresky](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky) | CC0-1.0 | 5,451,493 | [sky.hdr](assets/world/sky.hdr) |
+| grass | model | [grass_medium_01](https://polyhaven.com/a/grass_medium_01) | CC0-1.0 | 422,984 | [grass.glb](assets/world/grass.glb), [grass-lod.glb](assets/world/grass-lod.glb) |
+| scanned-tree | model | [island_tree_01](https://polyhaven.com/a/island_tree_01) | CC0-1.0 | 4,319,204 | [scanned-tree.glb](assets/world/scanned-tree.glb), [scanned-tree-lod.glb](assets/world/scanned-tree-lod.glb) |
 | clouds | image | [cloud_layers](https://polyhaven.com/a/cloud_layers) | CC0-1.0 | 210,628 | [clouds.webp](assets/world/clouds.webp) |
 
 Kit names refer to these sources, not exact replicas of missing props: bridge-planks uses a modular pier, plinth a wooden stool, campfire a stone fire pit, log a stump. No trademarked props or third-party emote likenesses are included.

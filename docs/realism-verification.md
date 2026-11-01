@@ -197,3 +197,40 @@ hook budget in 7.796/8.757s. No live provider calls.
 harness uses a fixed seed, 150 raiders, a fixture module and 18s of virtual time.
 Stills averaged 27.1-27.6ms/frame. Logs `state/asset-cache/step3-*-final.log`,
 `step3-capture-fixed-ambient-{1,2}.log`, `step3-fallback.log`, `step3-stills.log`.
+
+## Step 5: scanned vegetation
+
+The seven tree anchors now use scanned woody geometry and cutout canopies;
+cone grass is replaced by 320 crossed photographic grass clumps. Fixed near/far
+instance pools retain tree LODs, plus scanned ferns, shrubs and flowers. Paths
+stay clear. Leaves use alpha-to-coverage under scene MSAA, bounded wind and
+alpha-aware GTAO normals. Classic keeps the procedural garden unchanged.
+
+Visual QA found and fixed quantized glTF conversion: transforms must decode
+integer positions first; material splitting must read normalized UV getters.
+The float conversion regression covers both. Generic whole-tree decimation
+also destroyed leaf coverage, so the offline Blender helper now bakes the full
+CC0 scan's canopy/grass into alpha cards and simplifies only continuous wood.
+It commits only data, never raw source files. Tree LODs: 1,581/507 triangles;
+grass: four triangles. Blender is needed only to regenerate those assets.
+
+| Phase | FPS, 150 raiders | GPU average ms | GPU p95 ms |
+| --- | ---: | ---: | ---: |
+| Day | 59.95 | 13.79 | 15.64 |
+| Dusk | 59.96 | 13.61 | 14.94 |
+| Night | 59.76 | 13.68 | 15.86 |
+
+Cold load 1.679s; base reserves 119,835 triangles at all 300 citizen slots,
+leaving 10,165 for modules after the unchanged 70,000-triangle summon pool.
+Asset total at preparation: 59,442,673 bytes. `pnpm check`: 260/260 plus bundles
+and media/history smokes. The classic triangle-budget test remains; new-world
+admission is checked with actual loaded assets in the hardware smoke.
+Fresh-page 4K hashes match for both world and composite; no browser errors.
+Six native-4K stills took 28.4-30.1ms per virtual frame.
+
+Gate, cheap idle/loaded: 24.91/17.84 FPS, 24 frames in every slice,
+35.512/42.574s total, median paired drops -0.012%/-0.023%. Expensive rejects on
+hook overruns in 10.355/11.030s. The loaded check passes, but its 2.4s watchdog
+margin is narrow and remains a performance constraint for subsequent steps.
+Images: `state/visual/realism-step5-*`, including day/golden orbit, push-in and
+flyover 4K stills. Logs: `state/asset-cache/step5-*`, `vegetation-prepare.log`.

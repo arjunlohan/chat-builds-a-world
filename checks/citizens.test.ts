@@ -118,7 +118,8 @@ test("blocked messages consume admission rate and rejection replies are bounded"
 });
 test("immutable garden batching preserves its authored triangle budget and finite bounds", async () => {
  const {createGarden}=await import("../world/engine/garden.js"),{ResourceOwner}=await import("../world/engine/resources.js"),{Box3}=await import("three");
- for(const [look,triangles] of [["classic",14696],["new",17464]] as const){const garden=createGarden(look),owner=new ResourceOwner(),used=owner.audit(garden);assert.equal(used.triangles,triangles);assert.ok(used.draws<12);assert.ok(new Box3().setFromObject(garden).min.toArray().every(Number.isFinite));owner.dispose(garden);}
+ for(const [look,triangles] of [["classic",14696]] as const){const garden=createGarden(look),owner=new ResourceOwner(),used=owner.audit(garden);assert.equal(used.triangles,triangles);assert.ok(used.draws<12);assert.ok(new Box3().setFromObject(garden).min.toArray().every(Number.isFinite));owner.dispose(garden);}
+ assert.throws(()=>createGarden("new"),/Model not prepared/,"New look requires the prepared scans; it must not silently fall back to puff trees.");
 });
 test("label transforms remain stable even when the browser normalizes style strings", async()=>{
  const {LabelManager}=await import("../world/engine/labels.js");let reads=0,writes=0;

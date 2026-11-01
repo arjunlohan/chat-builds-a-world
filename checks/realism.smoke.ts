@@ -1,5 +1,6 @@
 /** Hardware scene acceptance, credential-free and separate from the software candidate gate. */
 import assert from 'node:assert/strict';
+import {GLOBAL_CAP,SUMMON_POOL,modulePool} from '../world/shared/limits.js';
 import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
@@ -19,5 +20,5 @@ try{
  const results=[];for(const phase of ['day','dusk','night']){await world.page.goto(base+`/world?overlay=1&time=${phase}&benchmark=1`);await world.page.waitForSelector('canvas[data-ready="true"]');await world.page.waitForTimeout(2000);
  await world.page.screenshot({path:out+`/${stage}-${phase}.png`});if(phase==='day'){for(const [name,x,y] of [['edge',1160,400],['citizens',680,480]] as const)await world.page.screenshot({path:out+`/${stage}-${name}-crop.png`,clip:{x,y,width:400,height:360}});}
  const timing=await measureFps(world.page,5000),render=await world.page.evaluate(()=>window.__worldBenchmark!(30));results.push({phase,...timing,gpuMs:render.frameMs,gpuP95Ms:render.p95Ms,cpuSubmitMs:render.cpuSubmitMs});}
- assert.equal(results[0]!.stats.citizenCount,150);assert.ok(results.every(r=>r.fps>=58),JSON.stringify(results));assert.deepEqual(world.errors,[]);const report={stage,coldMs,gpu:world.gpu,results,errors:world.errors};await writeFile(out+`/${stage}-metrics.json`,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));
+ assert.equal(results[0]!.stats.citizenCount,150);assert.ok(versions.baseUsage&&versions.baseUsage.triangles<GLOBAL_CAP.triangles-SUMMON_POOL.triangles-5000,"Base world must retain module headroom at all 300 citizen slots.");assert.ok(results.every(r=>r.fps>=58),JSON.stringify(results));assert.deepEqual(world.errors,[]);const report={stage,coldMs,gpu:world.gpu,baseUsage:versions.baseUsage,modulePool:versions.baseUsage?modulePool(versions.baseUsage):undefined,results,errors:world.errors};await writeFile(out+`/${stage}-metrics.json`,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));
 }finally{await world?.browser.close();versions.close();app.closeStreams();app.server.closeAllConnections();await new Promise<void>(r=>app.server.close(()=>r()));await rm(directory,{recursive:true,force:true});}

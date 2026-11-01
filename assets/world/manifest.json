@@ -1,7 +1,7 @@
 {
   "format": 1,
   "budgetBytes": 120000000,
-  "bytes": 59356417,
+  "bytes": 59442673,
   "assets": [
     {
       "name": "basalt",
@@ -480,54 +480,6 @@
       ]
     },
     {
-      "name": "grass",
-      "type": "model",
-      "id": "grass_medium_01",
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/grass_medium_01/grass_medium_01_1k.gltf",
-      "sourceMd5": "28dd8247f3faa749bf87a0b84be01e7e",
-      "source": "https://polyhaven.com/a/grass_medium_01",
-      "license": "CC0-1.0",
-      "triangles": 253,
-      "lowTriangles": 80,
-      "draws": 1,
-      "outputs": [
-        {
-          "file": "grass.glb",
-          "bytes": 653052,
-          "sha256": "7f5dac80ba6c05dd168fa9ff443049bf948f2249b59727ca8a4dd0bbd9e94759"
-        },
-        {
-          "file": "grass-lod.glb",
-          "bytes": 650436,
-          "sha256": "7f26be2ceaf29b664e1cc4682f255e5cab25fb85dd9c09e8b6793debb3162a73"
-        }
-      ]
-    },
-    {
-      "name": "scanned-tree",
-      "type": "model",
-      "id": "island_tree_01",
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/island_tree_01/island_tree_01_1k.gltf",
-      "sourceMd5": "fbc0c570ebd71ea88cedc1f9d5edb835",
-      "source": "https://polyhaven.com/a/island_tree_01",
-      "license": "CC0-1.0",
-      "triangles": 2763,
-      "lowTriangles": 914,
-      "draws": 3,
-      "outputs": [
-        {
-          "file": "scanned-tree.glb",
-          "bytes": 1697016,
-          "sha256": "34ced9e883362257d13b1d7d623a4f4be5c2b79469adf5ae56d4689384df68ca"
-        },
-        {
-          "file": "scanned-tree-lod.glb",
-          "bytes": 1655428,
-          "sha256": "d6106fef210379f3b3c592e8f2a57d1ec71bb65fbba888153d13c128a339d790"
-        }
-      ]
-    },
-    {
       "name": "rock",
       "type": "model",
       "id": "rock_09",
@@ -737,6 +689,54 @@
           "bytes": 5451493,
           "sha256": "5244534e9cf5b606f2ff513aa00ddb161b0a4826ffd88a0d3bd03ac29247d198",
           "source": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_48d_partly_cloudy_puresky_2k.hdr"
+        }
+      ]
+    },
+    {
+      "name": "grass",
+      "type": "model",
+      "id": "grass_medium_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/grass_medium_01/grass_medium_01_1k.gltf",
+      "sourceMd5": "28dd8247f3faa749bf87a0b84be01e7e",
+      "source": "https://polyhaven.com/a/grass_medium_01",
+      "license": "CC0-1.0",
+      "triangles": 4,
+      "lowTriangles": 4,
+      "draws": 2,
+      "outputs": [
+        {
+          "file": "grass.glb",
+          "bytes": 211492,
+          "sha256": "44bc71917158aa92f66db03e35eb1757837fa93b2e80201fa327eca962e2a760"
+        },
+        {
+          "file": "grass-lod.glb",
+          "bytes": 211492,
+          "sha256": "44bc71917158aa92f66db03e35eb1757837fa93b2e80201fa327eca962e2a760"
+        }
+      ]
+    },
+    {
+      "name": "scanned-tree",
+      "type": "model",
+      "id": "island_tree_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/island_tree_01/island_tree_01_1k.gltf",
+      "sourceMd5": "fbc0c570ebd71ea88cedc1f9d5edb835",
+      "source": "https://polyhaven.com/a/island_tree_01",
+      "license": "CC0-1.0",
+      "triangles": 1581,
+      "lowTriangles": 507,
+      "draws": 4,
+      "outputs": [
+        {
+          "file": "scanned-tree.glb",
+          "bytes": 2168876,
+          "sha256": "13815409fec3eda917ae09e8ca24b10b75dd4a47d18171188ba26d44b4394fb6"
+        },
+        {
+          "file": "scanned-tree-lod.glb",
+          "bytes": 2150328,
+          "sha256": "30934ccb9543dbeb930dc206d63eea6c3bb0b47958b408681729815901f15c4b"
         }
       ]
     },

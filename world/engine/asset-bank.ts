@@ -12,7 +12,7 @@ const modelLoads=new Map<string,Promise<void>>(),gltf=new GLTFLoader().setMeshop
 const url=(o:{file:string;sha256:string})=>`/world-assets/${o.file}?v=${o.sha256.slice(0,16)}`;
 async function loadModel(a:typeof manifest.assets[number]){
  const [high,low]=await Promise.all(a.outputs.map(o=>gltf.loadAsync(url(o))));
- for(const scene of [high!.scene,low!.scene])scene.traverse(o=>{if(o instanceof Mesh){o.castShadow=true;o.receiveShadow=true;for(const m of (Array.isArray(o.material)?o.material:[o.material]) as MeshStandardMaterial[]){m.flatShading=false;if(m.alphaTest>0){m.alphaToCoverage=true;m.transparent=false;m.depthWrite=true;}if(m.map)m.map.anisotropy=8;}}});
+ for(const scene of [high!.scene,low!.scene])scene.traverse(o=>{if(o instanceof Mesh){o.castShadow=true;o.receiveShadow=true;for(const m of (Array.isArray(o.material)?o.material:[o.material]) as MeshStandardMaterial[]){m.flatShading=false;if(m.alphaTest>0||["scanned-tree","grass","fern","shrub","flowers"].includes(a.name)&&m.transparent){m.alphaTest=m.alphaTest||.35;m.alphaToCoverage=true;m.transparent=false;m.depthWrite=true;}if(m.map)m.map.anisotropy=8;}}});
  models.set(a.name,{root:high!.scene,low:low!.scene,triangles:('triangles' in a?a.triangles:0)??0,draws:('draws' in a?a.draws:0)??0});
 }
 function ensureModel(a:typeof manifest.assets[number]){let load=modelLoads.get(a.name);if(!load){load=loadModel(a);modelLoads.set(a.name,load);}return load;}

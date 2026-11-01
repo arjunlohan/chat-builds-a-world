@@ -1,3 +1,4 @@
+import {scannedVegetation} from "./vegetation.js";
 import {surfaceMaterial,surfaceNormals} from "./materials.js";
 import type {WorldLook} from "./render-profile.js";
 import {GARDEN_TREE as TREE} from "../shared/scale.js";
@@ -154,5 +155,8 @@ export function createGarden(look:WorldLook="new") {
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
   }
-  return batchStaticGarden(root);
+  if(look!=="classic")for(const mesh of [trunks,crowns,grass]){mesh.removeFromParent();mesh.geometry.dispose();}
+  const batched=batchStaticGarden(root),vegetation=look!=="classic"?scannedVegetation(trees,path):undefined;
+  if(vegetation)batched.add(vegetation.root);
+  return Object.assign(batched,{update:(time:number,camera:import("three").PerspectiveCamera)=>vegetation?.update(time,camera)});
 }
