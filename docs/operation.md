@@ -51,6 +51,9 @@ reserves the summon pool via modulePool(emptyUsage()).
 Each accepted build gets at most two builder attempts in the same worktree, under
 one original 180-second deadline. A policy/type/resource or candidate-gate rejection
 may trigger the second attempt if enough time remains for independent checks. The
+builder process deadline reserves the resource self-check, complete candidate
+watchdog and a small handoff margin. Never start a gate without its full reserve;
+a repair that exhausts its allowance retains the first rejection reason. The
 repair prompt carries the exact redacted rejection, the locked self-check command
 and the same resource context. The overlay shows Retry 2/2; runner metrics record
 attempts and firstReason, with summed duration and token usage across attempts.

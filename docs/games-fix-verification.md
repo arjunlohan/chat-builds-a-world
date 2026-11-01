@@ -56,9 +56,9 @@ Comparison FPS below uses the trimmed interval mean described above.
 | Fixture | CPU-load processes | Baseline FPS | Candidate FPS | Raw candidate FPS | Max owned hook work | Outcome |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | Cheap | 0 | 53.49 | 55.55 | 51.28 | 0.10 ms | PASS |
-| Expensive | 0 | 51.53 | — | — | 90.40 ms | REJECT: three 2 ms overruns |
+| Expensive | 0 | 51.53 | · | · | 90.40 ms | REJECT: three 2 ms overruns |
 | Cheap | 6 | 36.46 | 41.25 | 37.65 | 0.10 ms | PASS |
-| Expensive | 6 | 39.60 | — | — | 91.50 ms | REJECT: three 2 ms overruns |
+| Expensive | 6 | 39.60 | · | · | 91.50 ms | REJECT: three 2 ms overruns |
 
 The loaded cheap fixture's raw FPS is below the former 40 FPS floor, and it still
 passes the cost comparison. The expensive fixture fails its own hook budget in

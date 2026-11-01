@@ -143,7 +143,7 @@ export class Runner {
       if (!active) throw new Error("Live activation did not acknowledge; restoring the previous world.");
       const result: RunResult = { ok: true, outcome: "SHIPPED", reason: "Checks passed and live module swap acknowledged.", attempts,...(firstReason?{firstReason}:{}),builderMs, durationMs: Math.round(performance.now() - start), tokens, version, tag: `v${version}`, ...(check?{check}:{}) };
       await this.log(result, request.decision.mode);
-      try { await this.options.announce(`Shipped v${version}: ${approved.title} — requested by @${requester}`); } catch { feed("check", "Shipped; Twitch announcement unavailable."); } return result;
+      try { await this.options.announce(`Shipped v${version}: ${approved.title} · requested by @${requester}`); } catch { feed("check", "Shipped; Twitch announcement unavailable."); } return result;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Build failed.";
       const reason = signal.aborted ? (request.signal.aborted?"Build timed out or was cancelled.":firstReason??"Build timed out or was cancelled.") : redact(detail, protectedValues(this.options.env ?? process.env));

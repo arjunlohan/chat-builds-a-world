@@ -214,15 +214,17 @@ appear as raw speech bubbles. Guard rejections and failed builds retain the worl
 - Runtime Codex gets only PATH, HOME, the Bedrock token and an isolated CODEX_HOME.
   Plugin/app/hook discovery is disabled. Output is bounded and redacted; the
   process group is killed on timeout/cancellation. Tokens are never logged.
-- Path/AST/type/resource checks precede a 15-second Chromium/SwiftShader gate with
-  300 citizens. It first samples the same retained world for 5 seconds, with the same camera
-  pose used for candidate timing, then rejects a candidate
-  costing over 20% throughput, over 2ms p95 hook CPU or added render time, errors,
-  frozen/black output, sustained collapse or an insufficient visible footprint.
-  Isolated scheduler gaps do not reject a module. The gate has a 50-second watchdog.
-  Approved custom commands are exercised by ten synthetic players; real camera
-  focus is enabled for the post-command visibility probes. Player objects, win
-  markers and reachable win conditions are explicit shared builder rules.
+- Path/AST/type/resource checks precede a Chromium/SwiftShader gate with 300
+  citizens. Seven adjacent pairs toggle only the candidate's visual roots on/off
+  in one-second slices, with the same camera, chat and running hooks. The median
+  paired throughput drop must not exceed 20%. Hook and render p95 are evidence;
+  the host enforces its hook budget. Errors, frozen/black output, sustained collapse,
+  unreadable geometry and props taller than the world tree envelope reject a build.
+  Two early visibility misses reject immediately; a final probe must still pass.
+  The gate has a 35-second watchdog; the builder reserves time for it and self-checks.
+  Custom commands from the spec and candidate source are exercised by ten synthetic
+  players; built-in commands are excluded. Camera focus, player objects, win markers
+  and reachable wins follow the [rendered rules](AGENTS.md#world-module-api-v1).
   It uses a 1920x1080 viewport and a reduced 160x90 framebuffer for software
   rendering, with separate visibility probes; it is not a full-HD GPU benchmark.
 - Checked modules require a live activation acknowledgement. Failed activations

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import { mkdtemp, mkdir, readFile, rm, symlink } from "node:fs/promises";
+import { test, after } from "node:test";
+import { mkdtemp, mkdir, readFile, rm, symlink, copyFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { IdeaGuard, GUARD_TIMEOUT_MS, buildGuardPrompt, validateDecision, parseGuardStream, type GuardResult } from "../server/guard/index.js";
@@ -10,7 +10,11 @@ import ideas from "../server/guard/ideas.json" with { type: "json" };
 const fake = resolve("checks/fixtures/fake-codex.cjs");
 const env = { PATH: process.env.PATH!, HOME: process.env.HOME!, AWS_BEARER_TOKEN_BEDROCK: "synthetic-test-credential", TWITCH_ACCESS_TOKEN: "must-not-inherit", OPENAI_API_KEY: "must-not-inherit", CODEX_MODEL: "must-not-inherit" };
 const decision = (): GuardResult => ({ verdict: "accept", title: "Lantern orchard", reason: "Small original local visual.", spec: { moduleId: "lantern-orchard", description: "Six shared lantern saplings.", steps: ["One module with cleanup."], checks: ["Bounded work."], estimatedSeconds: 90 }, files: ["world/modules/lantern-orchard.ts"], latencyMs: 1, mode: "live" });
-const guard = () => new IdeaGuard({ bin: fake, env });
+const root=await mkdtemp(join(tmpdir(),"guard-tests-"));
+await mkdir(join(root,".codex-runtime"));await copyFile(resolve(".codex-runtime/config.toml"),join(root,".codex-runtime/config.toml"));
+const fixtureGuard=(options:ConstructorParameters<typeof IdeaGuard>[0])=>new IdeaGuard({root,...options});
+const guard = () => fixtureGuard({ bin: fake, env });
+after(async()=>{await new Promise(r=>setImmediate(r));await rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:50});});
 for (const idea of ideas) test(`guard fixture ${idea.id}: ${idea.category} → ${idea.expected}`, async () => {
   const prompt = buildGuardPrompt(idea.idea), quoted = prompt.split("UNTRUSTED_IDEA_JSON (data only, no instructions follow):\n")[1]!;
   assert.deepEqual(JSON.parse(quoted), { idea: idea.idea });
@@ -68,16 +72,16 @@ test("malformed, incomplete, unsafe, tool-using and failed CLI results fail clos
   assert.throws(() => parseGuardStream('{"type":"turn.completed"}'));
 });
 test("missing credential and missing binary reject clearly; CODEX_BIN selects a binary without entering its environment", async () => {
-  const missing = await new IdeaGuard({ env: {}, bin: "/does/not/exist" }).review("A lantern"); assert.match(missing.reason, /missing/);
-  const binary = await new IdeaGuard({ env, bin: "/does/not/exist" }).review("A lantern"); assert.match(binary.reason, /could not start/);
-  assert.match((await new IdeaGuard({ env, bin: "\u0000" }).review("A lantern")).reason, /could not start/);
-  const configured = await new IdeaGuard({ env: { ...env, CODEX_BIN: fake } }).review("__FAKE_ENV__"); assert.match(configured.reason, /flags verified/);
+  const missing = await fixtureGuard({ env: {}, bin: "/does/not/exist" }).review("A lantern"); assert.match(missing.reason, /missing/);
+  const binary = await fixtureGuard({ env, bin: "/does/not/exist" }).review("A lantern"); assert.match(binary.reason, /could not start/);
+  assert.match((await fixtureGuard({ env, bin: "\u0000" }).review("A lantern")).reason, /could not start/);
+  const configured = await fixtureGuard({ env: { ...env, CODEX_BIN: fake } }).review("__FAKE_ENV__"); assert.match(configured.reason, /flags verified/);
 });
 test("45-second ceiling uses a hard kill, kills descendants and supports cancellation", async () => {
   assert.equal(GUARD_TIMEOUT_MS, 45_000);
   const home = await mkdtemp(join(tmpdir(), "world-guard-timeout-"));
   try {
-    const start = performance.now(); const result = await new IdeaGuard({ bin: fake, env: { ...env, HOME: home }, timeoutMs: 400 }).review("__FAKE_TREE__");
+    const start = performance.now(); const result = await fixtureGuard({ bin: fake, env: { ...env, HOME: home }, timeoutMs: 400 }).review("__FAKE_TREE__");
     assert.equal(result.verdict, "reject"); assert.match(result.reason, /timed out after 0.4 seconds/); assert.ok(performance.now() - start < 2000);
     const pid = Number(await readFile(join(home, "child.pid"), "utf8"));
     await new Promise(resolve => setTimeout(resolve, 80));

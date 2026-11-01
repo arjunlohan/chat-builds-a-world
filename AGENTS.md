@@ -1,4 +1,4 @@
-# Chat Builds a World — engineering contract
+# Chat Builds a World · engineering contract
 
 ## Product and delivery
 
@@ -442,14 +442,11 @@ failed activation disposes the candidate and keeps the previous version active.
   caps: 1,024 mesh nodes, 200,000 triangles, 256 draw calls, eight local lights,
   2,048 particles and 300 citizens. The engine reserves headroom for its base world;
   reject an allocation atomically if capacity is unavailable. Dispose releases it.
-- The Phase 7 gate uses Chromium/SwiftShader in a 1920×1080 viewport with a reduced
-  160×90 framebuffer, fixed seed and 300 citizens. Measure a 5-second retained-world
-  baseline immediately before 15 seconds with the candidate in the same page and
-  camera pose. Unlock the camera for the post-command visibility probes.
-  Judge relative throughput and candidate hook/added-render cost from the rendered
-  rules above, not host FPS or isolated scheduler gaps. Reject console/hook errors,
-  frozen/black pixels, sustained collapse or insufficient visible contribution.
-  The external checker watchdog is 50 seconds, including startup and cleanup.
+- Candidate evaluation follows the rendered gate rules above. Chromium/SwiftShader
+  uses a 1920×1080 viewport, reduced 160×90 framebuffer, fixed seed and 300 citizens.
+  Interleave candidate visual roots on/off in the same window while hooks and chat
+  continue. Judge median paired throughput; hook/render p95 remain evidence.
+  Keep errors, frozen/black pixels, sustained collapse, visibility and scale checks.
 - `?check=1` passes a production render profile with only reduced resolution and
   an owned-geometry visibility probe. Materials, full citizen geometry, lighting,
   shadows and bloom match normal /world. No cached island, simple materials or
@@ -975,11 +972,9 @@ Full JSON schema (keep identical to the canonical file):
   PIDs. Never delete a live invocation's home. Discovery controls are pinned in argv even without config; read config once per
   invocation. Generic process code has no Codex-home policy.
 - The gate measures actual RAF frame intervals, not Playwright polling gaps. Its
-  check-only trace records frame timestamps and CPU/render/probe work. Visibility
-  probes happen outside the 15-second production-performance window. Use the paired same-page baseline to judge module cost; isolated scheduler
-  gaps are diagnostics. Keep the
-  50-second external watchdog and retain candidate source, incremental evidence,
-  result and a responsive-page screenshot under ignored state/checks/.
+  check-only trace records timestamps and CPU/render/probe work. Visibility probes
+  stay outside timing slices. Isolated scheduler gaps are diagnostics; retain source,
+  incremental evidence, result and a responsive screenshot under ignored state/checks/.
 - Visibility uses paired normal HDR renders with/without candidate ownership,
   retaining world occlusion. A ship needs at least 4096 contrasted full-HD
   pixel-equivalents spanning at least 64x64px in two of three observations,

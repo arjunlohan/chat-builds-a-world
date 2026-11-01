@@ -10,7 +10,7 @@ import { timeline } from "./timeline.js";
 import { toasts } from "./toasts.js";
 const root = document.querySelector<HTMLElement>("#overlay")!;
 const phase = panel("Current round", "phase-panel");
-const kicker = el("p", "eyebrow", "ROUND"), title = el("h1", "phase-title", "Connecting"), countdown = el("output", "countdown", "—:——");
+const kicker = el("p", "eyebrow", "ROUND"), title = el("h1", "phase-title", "Connecting"), countdown = el("output", "countdown", "--:--");
 const command = el("p", "command", "Waiting for state"), mode = el("span", "mode", "LIVE"), connection = el("p", "connection", "CONNECTING");
 const phaseCopy = el("div", "phase-copy"); phaseCopy.append(kicker, title, command); phase.append(phaseCopy, countdown, mode, connection);
 const ideaQueue = queue(), voteBars = votes(), feed = codexFeed(), history = timeline(), moments = toasts();
