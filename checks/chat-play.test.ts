@@ -3,12 +3,12 @@ import {BUILTIN_COMMANDS,hasPhysicalReaction} from "../server/commands.js";
 import assert from "node:assert/strict";
 import {test} from "node:test";
 import {readFile} from "node:fs/promises";
-import {chatCommands,chatPlayRules} from "../server/runner/chat-play.js";
+import {chatCommands,chatPlayRules,guardChatPlayRule} from "../server/runner/chat-play.js";
 import {CHAT_PLAY,FOCUS_LIMITS} from "../world/shared/chat-play.js";
 import {builderRules} from "../server/runner/rules.js";
 import {buildGuardPrompt} from "../server/guard/index.js";
 test("guard preserves commands and builder/AGENTS render the same bounded play contract",async()=>{
- const rules=chatPlayRules();assert.ok(builderRules().includes(rules));assert.ok(buildGuardPrompt('A tiny !race game').includes(rules));assert.ok((await readFile('AGENTS.md','utf8')).includes(rules));
+ const rules=chatPlayRules();assert.ok(builderRules().includes(rules));assert.ok(buildGuardPrompt('A tiny !race game').includes(guardChatPlayRule()));assert.ok(!buildGuardPrompt('A tiny !race game').includes(rules));assert.ok((await readFile('AGENTS.md','utf8')).includes(rules));
  assert.ok(rules.includes(`${CHAT_PLAY.players} players`));assert.ok(rules.includes(`${CHAT_PLAY.normalWinSeconds} s`));assert.ok(rules.includes(`${CHAT_PLAY.winMarkerLift} units`));assert.ok(rules.includes(`priority ${CHAT_PLAY.winPriority}`));assert.equal(CHAT_PLAY.winPriority,FOCUS_LIMITS.maxPriority);
 });
 test("only explicit custom command tokens are probed, deduplicated and bounded",()=>{
@@ -24,4 +24,9 @@ test("candidate literals survive guard paraphrasing and source commands take pre
  const found=inspectModule('export default()=>({onChat(event: {text:string}) {if(event.text === "!race")return;},update(){}});', 'world/modules/game.ts');
  assert.equal(found.hasOnChatLogic,true);assert.deepEqual(chatCommands({description:'A racing game',steps:[],checks:[]},found.commands),['!race']);
  assert.equal(inspectModule('export default()=>({onChat(){}});','world/modules/game.ts').hasOnChatLogic,false);
+});
+
+test("source discovery handles prefix literals and delegated or quoted onChat handlers",()=>{
+ const found=inspectModule('const handle=(event:{text:string})=>event.text.startsWith("!dig "); export default()=>({"onChat":handle});','world/modules/dig.ts');
+ assert.equal(found.hasOnChatLogic,true);assert.deepEqual(found.commands,['!dig']);
 });
