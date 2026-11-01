@@ -5,6 +5,9 @@ export interface LabelCandidate {
   priority: number; kind: "speech" | "tag" | "quiet" | "summon"; opacity: number;
 }
 const projected = new Vector3();
+export const RAID_LABEL_HOLD_MS=6000,RAID_LABEL_FADE_MS=2000;
+/** Anonymous parade labels yield to the raid banner; actual chatter labels keep normal priority. */
+export function raidLabelOpacity(anonymous:boolean,arrivedAge:number){return anonymous?Math.max(0,Math.min(1,1-(arrivedAge-RAID_LABEL_HOLD_MS)/RAID_LABEL_FADE_MS)):1;}
 /** Shared fixed-OBS projection; callers keep their single pooled label candidate. */
 export function projectLabel(point: Readonly<Vector3>, camera: PerspectiveCamera, target: {x:number;y:number}, lift=0) {
   projected.copy(point);projected.y+=lift;projected.project(camera);

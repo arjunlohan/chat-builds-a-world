@@ -84,3 +84,22 @@ paired drop. No threshold changed. Evidence
 Production 150-raider day/dusk/night FPS: 59.94/59.77/59.97; GPU means
 13.37/13.43/12.82ms; cold readiness including the kit module 3.204s.
 Images `state/visual/p22d-lantern-*`; logs `state/asset-cache/p22d-lantern-*`.
+
+## Raid label fade and final checks
+
+Anonymous raider labels hold for six seconds after each staggered arrival and
+fade over two seconds. The raid banner stays; actual chatter labels and speech
+retain normal handling. The pure policy regression covers individual staggering,
+expiry and named chatter preservation.
+
+`pnpm check`: 273/273 plus bundles, media/playback and history. Final 150-raider
+FPS day/dusk/night: 59.93/59.96/59.98; GPU means 13.91/13.27/13.58ms.
+Cold readiness including the lantern kit: 2.261s. Final six 4K stills have zero
+browser errors and take 29.17-31.60ms per virtual frame, excluding PNG encoding.
+`state/visual/p22d-final-*` includes the fixed 1080p/crop set and all six stills.
+World and composite fresh-page hashes match with the glass kit and reaction video
+(`state/asset-cache/p22d-final-capture.log`). Capture retains its existing fixed
+ambient-fill fallback, and classic remains the escape hatch.
+
+Optional canopy/mip filtering is deferred: no additional coverage/LOD change was
+verified within the 09:50 cutoff. Alpha-cutout bloom masking is fixed above.

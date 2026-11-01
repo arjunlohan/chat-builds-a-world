@@ -11,7 +11,7 @@ import {
 import type { Citizen, WorldServices } from "./api.js";
 import type { CitizenState } from "../../server/contracts.js";
 import { hash, terrainHeight } from "./land.js";
-import { LabelManager, citizenLabelMode, projectLabel } from "./labels.js";
+import { LabelManager, citizenLabelMode, projectLabel,raidLabelOpacity } from "./labels.js";
 import { stepOnLand } from "./navigation.js";
 
 const LIMIT = CITIZEN_CAP;
@@ -114,7 +114,8 @@ export class Citizens {
         if (ui.bubble.hidden !== !speaking) ui.bubble.hidden = !speaking;
         const nameWidth = mode === "quiet" ? ui.quietWidth : ui.fullWidth;
         candidate.width=speaking?Math.max(200,nameWidth):nameWidth;candidate.height=speaking?82:mode==="quiet"?18:26;
-        candidate.kind=mode;candidate.opacity=idleFade(time,s.lastActive)*(mode==="quiet"?0.35:1);
+        const anonymous=!!s.entry&&s.lastActive<=s.entry.at&&s.speechAt===0&&s.commandAt===0;
+        candidate.kind=mode;candidate.opacity=idleFade(time,s.lastActive)*(mode==="quiet"?0.35:1)*raidLabelOpacity(anonymous,time-c.born);
         candidate.priority=speaking?2000+Math.max(0,5500-spokeAge)/5500:focused?900:mode==="quiet"?1:100+Math.max(0,30000-spokeAge)/1000+30/Math.max(1,distance);
         return true;
       })};c.ui=ui;

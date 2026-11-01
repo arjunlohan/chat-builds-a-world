@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {raidLabelOpacity} from '../world/engine/labels.js';
+test('anonymous raiders fade individually after arrival without fading actual chatter tags',()=>{assert.equal(raidLabelOpacity(true,0),1);assert.equal(raidLabelOpacity(true,6000),1);assert.equal(raidLabelOpacity(true,7000),.5);assert.equal(raidLabelOpacity(true,8000),0);assert.equal(raidLabelOpacity(true,30000),0);assert.equal(raidLabelOpacity(false,30000),1);assert.equal(raidLabelOpacity(true,7000-5000),1);});
