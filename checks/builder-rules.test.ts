@@ -10,7 +10,7 @@ test("builder and AGENTS render the actual gate rules, including numeric indexin
  const rule=builderRules(),agents=await readFile("AGENTS.md","utf8");assert.ok(agents.includes(rule));
  const prompt=await runnerPrompt(process.cwd(),{verdict:"accept",title:"Rain",reason:"Safe",spec:{moduleId:"rain",description:"Rain",steps:["Create rain"],checks:["Dispose"],estimatedSeconds:60},files:["world/modules/rain.ts"]});assert.ok(prompt.includes(rule));
  for(const name of [...DENIED_GLOBALS,...DENIED_PROPERTIES])assert.ok(rule.includes(name));
- assert.ok(rule.includes(POLICY_RULES.typing.text));assert.equal(CANDIDATE_THRESHOLDS.maxFpsDropRatio,.20);assert.ok(rule.includes(`${CANDIDATE_THRESHOLDS.baselineSeconds} s of the same retained world`));
+ assert.ok(rule.includes(POLICY_RULES.typing.text));assert.equal(CANDIDATE_THRESHOLDS.maxFpsDropRatio,.20);assert.ok(rule.includes(`${CANDIDATE_THRESHOLDS.slicePairs} adjacent on/off pairs`));
  assert.throws(()=>inspectModule("const f = () => a[i * 3];","world/modules/test.ts"),/Unchecked types/);
  assert.doesNotThrow(()=>inspectModule("const f = () => {const j=i*3;return a[j];};","world/modules/test.ts"));
  const example=rule.split("Compliant particle indexing: ")[1]!.split("\nRun the provided")[0]!;

@@ -15,7 +15,7 @@ for(const kind of ["good","hidden","tiny"]){
  if(kind!=="good")assert.match(result.reason!,/stream-readable/);
  const directory=result.evidence!;
  assert.ok((await readFile(join(directory,"input.json"))).length);
- const evidence=JSON.parse(await readFile(join(directory,"evidence.json"),"utf8"));assert.ok(evidence.frames.length>0);assert.ok(evidence.baseline.summary.frames>0);assert.equal(evidence.status,kind==="good"?"passed":"failed");
+ const evidence=JSON.parse(await readFile(join(directory,"evidence.json"),"utf8"));if(kind==="good"){assert.ok(evidence.frames.length>0);assert.ok(evidence.baseline.summary.frames>0);}else{assert.equal(evidence.footprints.length,2);assert.equal(evidence.slices,undefined);}assert.equal(evidence.status,kind==="good"?"passed":"failed");
  assert.equal(JSON.parse(await readFile(join(directory,"result.json"),"utf8")).ok,result.ok);
 }
 await writeFile("state/candidate-smoke-results.json",JSON.stringify(results,null,2));

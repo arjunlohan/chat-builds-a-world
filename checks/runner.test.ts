@@ -276,3 +276,10 @@ test("runner forwards only approved spec command names into the candidate gate",
   const decision=repairDecision('good');decision.spec.steps=['Respond to !race and !dig'];const result=await runner.build({requester:'Player',signal:new AbortController().signal,decision});assert.equal(result.ok,true,result.reason);assert.deepEqual(seen,['!race','!dig']);await runner.close();
  }finally{versions?.close();await rm(root,{recursive:true,force:true});}
 });
+
+test("builder time reserves the full self-check and gate; gate cannot start late",async()=>{
+ const {builderAllowance,requireGateTime,BUILD_CHECK_RESERVE_MS}=await import('../server/runner/index.js');
+ assert.equal(builderAllowance(180000),180000-BUILD_CHECK_RESERVE_MS);assert.equal(builderAllowance(BUILD_CHECK_RESERVE_MS-1),0);
+ assert.throws(()=>requireGateTime(1,'Original visibility rejection'),{message:'Original visibility rejection'});
+ assert.throws(()=>requireGateTime(1),/complete candidate gate/);
+});

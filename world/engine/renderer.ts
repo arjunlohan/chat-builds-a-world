@@ -238,7 +238,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       if (shadowDirty) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; }
       materializer.beforeRender(camera);
       const renderStart = performance.now(); stats.value.updateMs = renderStart - cpuStart;
-      composer.render(dt);
+      // Checker-only A/B slices: hooks and chat keep running; only owned visual roots change.
+      const hiddenRoots=profile.probe&&options.probeId&&!stats.value.measureCandidateVisible?host.visualRoots(options.probeId):[];
+      const rootVisibility=hiddenRoots.map(root=>root.visible);
+      try{for(const root of hiddenRoots)root.visible=false;composer.render(dt);}
+      finally{for(let i=0;i<hiddenRoots.length;i++)hiddenRoots[i]!.visible=rootVisibility[i]!;}
       stats.value.renderMs = performance.now() - renderStart; stats.value.triangles = renderer.info.render.triangles;
       materializer.rendered(camera);
       const probeStart=probe?performance.now():0;

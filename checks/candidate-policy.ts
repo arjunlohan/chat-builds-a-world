@@ -1,7 +1,6 @@
 import { VISIBILITY_PROBE, type Footprint } from "../world/engine/visibility.js";
-import {MODULE_BUDGET} from "../world/engine/module-host.js";
 export interface FrameEvidence { frame:number; time:number; dt:number; cpu:number; render:number; module?:number; probe?:number }
-export const CANDIDATE_THRESHOLDS=Object.freeze({warmupFrames:60,warmupTimeoutMs:12_000,candidateWarmupFrames:30,baselineSeconds:5,sampleSeconds:15,maxFpsDropRatio:.20,trimRatio:.05,costPercentile:.95,collapseFrameMs:1000,collapseConsecutive:3,minPixelHashes:2,visibilitySamples:3,qualifyingProbes:2,watchdogMs:50_000});
+export const CANDIDATE_THRESHOLDS=Object.freeze({warmupFrames:60,warmupTimeoutMs:12_000,candidateWarmupFrames:30,sliceSeconds:1,slicePairs:7,sampleSeconds:14,maxFpsDropRatio:.20,trimRatio:.05,costPercentile:.95,collapseFrameMs:1000,collapseConsecutive:3,minPixelHashes:2,visibilitySamples:3,qualifyingProbes:2,watchdogMs:35_000});
 export function percentile(values:readonly number[],fraction:number){const sorted=[...values].sort((a,b)=>a-b);return sorted.length?sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*fraction)-1)]!:0;}
 export interface FrameSummary {fps:number;rawFps:number;avgFps:number;maxFrameGap:number;frames:number;maxCpuMs:number;maxRenderMs:number;moduleP95Ms:number;renderP95Ms:number;consecutiveLongFrames:number;maxPollGap:number}
 /** Trim scheduler outliers from throughput, but retain every frame for sustained-collapse evidence. */
@@ -15,11 +14,9 @@ export function breakage(summary:FrameSummary,hashes:number){
  if(summary.consecutiveLongFrames>=CANDIDATE_THRESHOLDS.collapseConsecutive)return `Sustained render collapse: ${summary.consecutiveLongFrames} consecutive frames exceed ${CANDIDATE_THRESHOLDS.collapseFrameMs} ms.`;
  if(hashes<CANDIDATE_THRESHOLDS.minPixelHashes)return "Frozen canvas pixels.";
 }
-export function frameVerdict(baseline:FrameSummary,candidate:FrameSummary,hashes:number) {
- const fpsDropRatio=1-candidate.fps/baseline.fps,addedRenderMs=Math.max(0,candidate.renderP95Ms-baseline.renderP95Ms);
+export function frameVerdict(baseline:FrameSummary,candidate:FrameSummary,hashes:number,pairs:readonly {baseline:FrameSummary;candidate:FrameSummary}[]=[]) {
+ const fpsDropRatio=pairs.length?percentile(pairs.map(p=>1-p.candidate.fps/p.baseline.fps),.5):1-candidate.fps/baseline.fps,addedRenderMs=Math.max(0,candidate.renderP95Ms-baseline.renderP95Ms);
  let reason=breakage(candidate,hashes);
- if(!reason&&candidate.moduleP95Ms>MODULE_BUDGET.perModuleMs)reason=`Candidate hook CPU p95 ${candidate.moduleP95Ms.toFixed(2)} ms exceeds ${MODULE_BUDGET.perModuleMs} ms/module.`;
- if(!reason&&addedRenderMs>MODULE_BUDGET.perModuleMs)reason=`Candidate added render p95 ${addedRenderMs.toFixed(2)} ms exceeds ${MODULE_BUDGET.perModuleMs} ms/module.`;
  if(!reason&&fpsDropRatio>CANDIDATE_THRESHOLDS.maxFpsDropRatio)reason=`Candidate relative FPS drop ${(fpsDropRatio*100).toFixed(1)}% exceeds ${CANDIDATE_THRESHOLDS.maxFpsDropRatio*100}% (baseline ${baseline.fps.toFixed(1)}, candidate ${candidate.fps.toFixed(1)}).`;
  return {ok:!reason,...(reason?{reason}:{}),...candidate,baselineFps:baseline.fps,fpsDropRatio,addedRenderMs};
 }

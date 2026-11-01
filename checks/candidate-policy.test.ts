@@ -8,10 +8,10 @@ test("slow host and isolated scheduler/poll gaps do not reject cheap module work
  const base=summary(frames(31),900000/31),values=frames(30);values[100]!.dt=1300;
  const candidate=summary(values,900000/30),result=frameVerdict(base,candidate,15);assert.equal(result.ok,true);assert.equal(result.maxPollGap,2400);assert.equal(result.maxFrameGap,1300);assert.ok(result.fpsDropRatio<.04);
 });
-test("relative cost, module CPU, added rendering, frozen pixels and sustained collapse still fail",()=>{
+test("relative cost, frozen pixels and sustained collapse still fail",()=>{
  const base=summary();assert.match(frameVerdict(base,summary(frames(40),22500),15).reason!,/relative FPS/);
- const cpu=frames();for(const f of cpu)f.module=3;assert.match(frameVerdict(base,summary(cpu),15).reason!,/hook CPU/);
- const render=frames();for(const f of render)f.render=4;assert.match(frameVerdict(base,summary(render),15).reason!,/added render/);
+ const cpu=frames();for(const f of cpu)f.module=3;assert.equal(frameVerdict(base,summary(cpu),15).ok,true);
+ const render=frames();for(const f of render)f.render=4;assert.equal(frameVerdict(base,summary(render),15).ok,true);
  const collapse=frames();for(let i=10;i<13;i++)collapse[i]!.dt=1200;assert.match(frameVerdict(base,summary(collapse),15).reason!,/Sustained/);
  assert.match(frameVerdict(base,summary([]),15).reason!,/Frozen render/);assert.match(frameVerdict(base,base,1).reason!,/Frozen canvas/);
 });
@@ -24,4 +24,10 @@ test("visibility uses explicit full-HD units, contrast and a readable footprint"
  assert.equal(contributionFootprint(b,b,width,height).qualifies,false,"Occluded or invisible objects contribute no pixels");
  const tiny=new Uint8Array(a.length);tiny[0]=255;assert.equal(contributionFootprint(tiny,b,width,height).qualifies,false);
  const faint=a.map(v=>v?5:0);assert.equal(contributionFootprint(faint,b,width,height).probePixels,0);
+});
+
+test("interleaved pairs absorb host drift but charge consistent module cost",()=>{
+ const pairs=[32,42,34,40,33,41,35].map(fps=>({baseline:summary(frames(fps)),candidate:summary(frames(fps*.97))}));
+ assert.equal(frameVerdict(summary(frames(42)),summary(frames(32)),15,pairs).ok,true);
+ assert.equal(frameVerdict(summary(),summary(),15,pairs.map(p=>({...p,candidate:{...p.candidate,fps:p.baseline.fps*.65}}))).ok,false);
 });

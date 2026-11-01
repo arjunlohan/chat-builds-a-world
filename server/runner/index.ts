@@ -20,6 +20,9 @@ export interface BuildRequest { decision: GuardResult; requester: string; signal
 export interface RunResult { ok: boolean; outcome: "SHIPPED" | "REVERTED" | "ROLLED BACK"; reason: string; durationMs: number; builderMs?: number; attempts?:number;firstReason?:string;tokens: Usage; version?: number; tag?: string; check?: CheckResult }
 class RepairableRejection extends Error {}
 export const BUILD_ATTEMPTS=2;
+export const BUILD_CHECK_RESERVE_MS=SELF_CHECK_TIMEOUT_MS+CHECK_TIMEOUT_MS+2000;
+export function builderAllowance(remainingMs:number){return Math.max(0,remainingMs-BUILD_CHECK_RESERVE_MS);}
+export function requireGateTime(remainingMs:number,firstReason?:string){if(remainingMs<CHECK_TIMEOUT_MS)throw new Error(firstReason??"Insufficient time remaining for the complete candidate gate.");}
 interface Options {
   root: string; versions: Versions; bin?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number;
   feed(kind: "plan" | "edit" | "check" | "ship" | "error", text: string): void;
@@ -94,11 +97,13 @@ export class Runner {
       const addTokens=(next:Usage)=>{for(const key of ["input","output","total"] as const)tokens[key]=attempts===1?next[key]:tokens[key]===null||next[key]===null?null:tokens[key]!+next[key]!;};
       for(let attempt=1;attempt<=BUILD_ATTEMPTS;attempt++){
         if(signal.aborted||performance.now()>=deadline)throw new Error("Build timed out or was cancelled.");
+        const allowance=builderAllowance(deadline-performance.now());
+        if(allowance<1000)throw new Error(firstReason??"Insufficient time remaining for builder, self-check and candidate gate.");
         check=undefined;
         const prompt=await runnerPrompt(this.root,approved,{command,resources:{base:baseUsage,...existing},...(firstReason?{rejection:firstReason}:{})});
         const builderStart=performance.now();let diagnostic:string|undefined;attempts=attempt;
-        try{const built=await (this.options.builder??runCodex)({root:this.root,tree,bin:this.options.bin??sourceEnv.CODEX_BIN??"codex",env:sourceEnv,decision:approved,signal,feed,prompt,attempt,timeoutMs:Math.max(1,deadline-performance.now()),onSpawn:async pid=>{await this.options.versions.setPending({path:tree,base,version,process:pid,owner:process.pid});}});addTokens(built);diagnostic=built.diagnostic;}
-        catch(error){const used=(error as {tokens?:Usage})?.tokens;addTokens(used??{input:null,output:null,total:null});throw error;}
+        try{const built=await (this.options.builder??runCodex)({root:this.root,tree,bin:this.options.bin??sourceEnv.CODEX_BIN??"codex",env:sourceEnv,decision:approved,signal,feed,prompt,attempt,timeoutMs:builderAllowance(deadline-performance.now()),onSpawn:async pid=>{await this.options.versions.setPending({path:tree,base,version,process:pid,owner:process.pid});}});addTokens(built);diagnostic=built.diagnostic;}
+        catch(error){const used=(error as {tokens?:Usage})?.tokens;addTokens(used??{input:null,output:null,total:null});if(firstReason&&!request.signal.aborted&&builderAllowance(deadline-performance.now())<1000)throw new Error(firstReason);throw error;}
         finally{builderMs+=Math.round(performance.now()-builderStart);}
         // Path and protected-data violations are never repairable. Always compare to the original inventory.
         try{await auditDiff(tree,base,before,approved.files);}catch(error){if(error instanceof Error&&error.message==="Builder produced no module changes.")throw new Error(`${error.message} ${diagnostic??"Builder returned no explanation."}`);throw error;}
@@ -113,13 +118,14 @@ export class Runner {
           const commands=chatCommands(approved.spec,discovered.flatMap(found=>found.commands));
           if(discovered.some(found=>found.hasOnChatLogic)&&!commands.length)feed("check","Module has onChat logic but no testable custom !command; built-in commands are excluded.");
           feed("check",`SwiftShader · ${CANDIDATE_THRESHOLDS.sampleSeconds}-second candidate gate · attempt ${attempt}.`);
+          requireGateTime(deadline-performance.now(),firstReason);
           check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal,commands);
           // A background conflict copy or hostile edit stays fatal even when another gate fails.
           await auditDiff(tree,base,before,approved.files);
           if(!check.ok){if(check.category!=="candidate"||check.retryable!==true)throw new Error(check.reason);throw new RepairableRejection(check.reason);}
           break;
         }catch(error){
-          if(!(error instanceof RepairableRejection)||attempt===BUILD_ATTEMPTS||signal.aborted||deadline-performance.now()<=SELF_CHECK_TIMEOUT_MS+CHECK_TIMEOUT_MS)throw error;
+          if(!(error instanceof RepairableRejection)||attempt===BUILD_ATTEMPTS||signal.aborted||builderAllowance(deadline-performance.now())<1000)throw error;
           await auditDiff(tree,base,before,approved.files);
           firstReason=redact(error.message,protectedValues(sourceEnv));
           feed("plan",`Retry ${attempt+1}/${BUILD_ATTEMPTS} · ${firstReason}`);
@@ -140,7 +146,7 @@ export class Runner {
       try { await this.options.announce(`Shipped v${version}: ${approved.title} — requested by @${requester}`); } catch { feed("check", "Shipped; Twitch announcement unavailable."); } return result;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Build failed.";
-      const reason = signal.aborted ? "Build timed out or was cancelled." : redact(detail, protectedValues(this.options.env ?? process.env));
+      const reason = signal.aborted ? (request.signal.aborted?"Build timed out or was cancelled.":firstReason??"Build timed out or was cancelled.") : redact(detail, protectedValues(this.options.env ?? process.env));
       if (merged && tree) {
         const head=await git(this.root,"rev-parse","master"),target=this.options.versions.fallbackTarget({excludingCommit:head,allowBaseline:true});if(!target)throw new Error("No healthy world is available for restoration.");
         await this.restoreForward(head,target,"Automatic revert",requester,false);
