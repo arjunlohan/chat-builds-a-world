@@ -68,18 +68,18 @@ export async function drainGroup(pid: number) {
   for(let attempt=0;attempt<40;attempt++){try{process.kill(-pid,0);}catch{return;}await new Promise<void>(done=>setTimeout(done,10));}
   // An unreaped zombie cannot write. SIGKILL has stopped every live group member.
 }
-export interface BoundedOptions { bin: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv; secrets?: readonly string[]; input?: string; signal?: AbortSignal | undefined; timeoutMs: number; maxBytes: number; onSpawn?(pid: number): void | Promise<void>; onLine?(line: string): void; isComplete?(line:string):boolean; onKill?(): void | Promise<void> }
+export interface BoundedOptions { bin: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv; secrets?: readonly string[]; input?: string; signal?: AbortSignal | undefined; timeoutMs: number; startup?: {timeoutMs:number; ready(line:string):boolean}; maxBytes: number; onSpawn?(pid: number): void | Promise<void>; onLine?(line: string): void; isComplete?(line:string):boolean; onKill?(): void | Promise<void> }
 export async function runBounded(o: BoundedOptions): Promise<{ output: string; code: number | null; error?: string; completed?:boolean }> {
   if(o.signal?.aborted)return {output:"",code:null,error:"cancelled."};
   const secrets=o.secrets??protectedValues(o.env);
   return new Promise(resolveRun => {
-    const output:string[]=[];let buffer="",bytes=0,reason:BoundedReason|undefined,closed=false,completed=false;const deadline=performance.now()+o.timeoutMs;
+    const output:string[]=[];let buffer="",bytes=0,reason:BoundedReason|undefined,closed=false,completed=false,starting=!!o.startup;let phaseTimeout=o.startup?.timeoutMs??o.timeoutMs,deadline=performance.now()+phaseTimeout;
     let child:ReturnType<typeof spawn>,drained:Promise<unknown>|undefined,spawned=Promise.resolve();
-    const finish=(code:number|null)=>{if(closed)return;closed=true;clearTimeout(timer);o.signal?.removeEventListener("abort",abort);resolveRun({output:o.onLine?output.join(""):redactSecrets(output.join(""),secrets),code,...(reason?{error:processError(reason,o.timeoutMs)}:{}),...(completed?{completed:true}:{})});};
+    const finish=(code:number|null)=>{if(closed)return;closed=true;clearTimeout(timer);o.signal?.removeEventListener("abort",abort);resolveRun({output:o.onLine?output.join(""):redactSecrets(output.join(""),secrets),code,...(reason?{error:processError(reason,phaseTimeout)}:{}),...(completed?{completed:true}:{})});};
     const drain=()=>drained??=(child.pid?drainGroup(child.pid):Promise.resolve());
     const kill=(why:BoundedReason)=>{if(reason)return;reason=why;void Promise.resolve().then(()=>o.onKill?.()).catch(()=>{});if(process.platform==="win32")child.kill("SIGKILL");void drain();};
-    const abort=()=>kill("cancelled"),timer=setTimeout(()=>kill("timeout"),o.timeoutMs);
-    const line=(raw:string,newline=false)=>{if(completed)return;const safe=redactSecrets(raw,secrets);output.push(safe+(newline?"\n":""));try{o.onLine?.(safe);if(!reason&&performance.now()<=deadline&&o.isComplete?.(safe)){completed=true;clearTimeout(timer);o.signal?.removeEventListener("abort",abort);void Promise.resolve().then(()=>o.onKill?.()).catch(()=>{});if(process.platform==="win32")child.kill("SIGKILL");void drain();}}catch{kill("invalid-output");}};
+    const abort=()=>kill("cancelled");let timer=setTimeout(()=>kill("timeout"),phaseTimeout);
+    const line=(raw:string,newline=false)=>{if(completed)return;const safe=redactSecrets(raw,secrets);output.push(safe+(newline?"\n":""));try{if(starting&&o.startup!.ready(safe)&&!reason&&performance.now()<=deadline){starting=false;clearTimeout(timer);phaseTimeout=o.timeoutMs;deadline=performance.now()+phaseTimeout;timer=setTimeout(()=>kill("timeout"),phaseTimeout);}o.onLine?.(safe);if(!reason&&performance.now()<=deadline&&o.isComplete?.(safe)){completed=true;clearTimeout(timer);o.signal?.removeEventListener("abort",abort);void Promise.resolve().then(()=>o.onKill?.()).catch(()=>{});if(process.platform==="win32")child.kill("SIGKILL");void drain();}}catch{kill("invalid-output");}};
     try{child=spawn(o.bin,o.args,{cwd:o.cwd,env:o.env,shell:false,detached:process.platform!=="win32",stdio:["pipe","pipe","pipe"]});}
     catch{reason="start";finish(null);return;}
     if(child.pid)spawned=Promise.resolve().then(()=>o.onSpawn?.(child.pid!)).then(()=>{}).catch(()=>kill("start"));

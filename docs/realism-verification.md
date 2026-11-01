@@ -144,3 +144,15 @@ fixture server, world opened before `pnpm sim`: first attempt SHIPPED v1 for
 Comet04, 184 events, 104 citizens, three summons, zero browser errors. Simulator
 58.65s; build 31.30s; gate 26.60s. No provider calls. Screenshot:
 `state/visual/blocker-fixture-shipped.png`; log `state/asset-cache/blocker-readme.log`.
+
+## Cold resource-worker startup
+
+Resource admission now has two bounded phases. Bundling, tsx and Chromium/page
+startup have a 30s startup allowance; a ready handshake starts the unchanged
+12s allocation-probe budget. The enclosing 180s build deadline and cancellation
+still cover both phases. A cold startup cannot spend the probe's allowance.
+Neither phase can wait indefinitely. This does not expand the builder sandbox.
+
+`checks/json-worker.test.ts`: 3/3, including delayed readiness and independent
+startup/probe timeout failures. `checks/self-check.test.ts`: 4/4, including the
+exact command under the workspace sandbox and real browser allocation probes.

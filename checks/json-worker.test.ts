@@ -17,3 +17,12 @@ test("missing or late terminal output is an infrastructure failure, never a pass
   await writeFile(script,'setTimeout(()=>console.log(JSON.stringify({ok:true})),1200);');const late=await jsonWorker({script,signal:new AbortController().signal,timeoutMs:500,verdict:isVerdict});assert.equal(late.verdict,undefined);assert.match(late.error!,/timed out/);
  }finally{await rm(root,{recursive:true,force:true});}
 });
+
+test("cold worker startup has its own bounded phase before the probe budget",async()=>{
+ const root=await mkdtemp(join(tmpdir(),"cold-worker-"));try{
+  const script=join(root,"check.mjs");await writeFile(script,'setTimeout(()=>{console.log(JSON.stringify({ready:true}));setTimeout(()=>console.log(JSON.stringify({ok:true})),80);},300);');
+  const result=await jsonWorker({script,signal:new AbortController().signal,startupTimeoutMs:3000,timeoutMs:200,verdict:isVerdict});assert.deepEqual(result.verdict,{ok:true});
+  await writeFile(script,'setInterval(()=>{},1000);');const stuck=await jsonWorker({script,signal:new AbortController().signal,startupTimeoutMs:200,timeoutMs:3000,verdict:isVerdict});assert.match(stuck.error!,/timed out after 0.2 seconds/);
+  await writeFile(script,'console.log(JSON.stringify({ready:true}));setInterval(()=>{},1000);');const probe=await jsonWorker({script,signal:new AbortController().signal,startupTimeoutMs:3000,timeoutMs:200,verdict:isVerdict});assert.match(probe.error!,/timed out after 0.2 seconds/);
+ }finally{await rm(root,{recursive:true,force:true});}
+});

@@ -9,11 +9,13 @@ import {typescriptArgs} from "../runtime/typescript.js";
 import {jsonWorker} from "../runtime/json-worker.js";
 import {CandidateCodeError,isGateVerdict,candidateRejected,infrastructureFailed,type GateVerdict} from "./verdict.js";
 export const SELF_CHECK_TIMEOUT_MS=12_000;
+/** Compilation and cold Chromium startup precede the bounded allocation probe. */
+export const RESOURCE_STARTUP_TIMEOUT_MS=30_000;
 export interface ResourceContext {base?:Usage;retained:{id:string;file:string;code:string}[]}
 export interface SelfCheckInput extends ResourceContext {file:string;id:string;files:string[]}
 export type SelfCheckResult=GateVerdict&{usage?:Usage;pool?:Usage;retained?:Usage;available?:Usage};
 export async function resourceCheck(input:ResourceContext,modules:ResourceContext["retained"],signal:AbortSignal,candidateId?:string):Promise<SelfCheckResult>{
- const raw=await jsonWorker<SelfCheckResult>({script:fileURLToPath(new URL("./resources.worker.ts",import.meta.url)),signal,timeoutMs:SELF_CHECK_TIMEOUT_MS,input:JSON.stringify({...input,modules,candidateId}),verdict:isGateVerdict});
+ const raw=await jsonWorker<SelfCheckResult>({script:fileURLToPath(new URL("./resources.worker.ts",import.meta.url)),signal,timeoutMs:SELF_CHECK_TIMEOUT_MS,startupTimeoutMs:RESOURCE_STARTUP_TIMEOUT_MS,input:JSON.stringify({...input,modules,candidateId}),verdict:isGateVerdict});
  return raw.verdict??infrastructureFailed(`Resource check ${raw.error}`);
 }
 export async function staticCheck(tree:string,input:SelfCheckInput){

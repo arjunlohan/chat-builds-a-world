@@ -22,6 +22,7 @@ try{
  // Resource admission only: no WebGL context, rendering, visibility or FPS sampling.
  browserServer=await chromium.launchServer({headless:true,args:["--disable-gpu","--disable-webgl"]});console.log(JSON.stringify({browserPid:browserServer.process().pid}));
  browser=await chromium.connect(browserServer.wsEndpoint());const page=await browser.newPage();let error="";page.on("pageerror",e=>error=e.message.slice(0,300));
+ console.log(JSON.stringify({ready:true}));
  await page.goto(`http://127.0.0.1:${(server.address() as {port:number}).port}`);await page.waitForFunction(()=>!!window.__resourceResult,undefined,{timeout:8000}).catch(()=>{throw new Error(error||"Resource probe did not finish.");});
  const result=await page.evaluate(()=>window.__resourceResult);console.log(JSON.stringify(result));if(!result.ok)process.exitCode=1;
 }catch(error){console.log(JSON.stringify(infrastructureFailed(error instanceof Error?error.message:"Resource checker failed") satisfies SelfCheckResult));process.exitCode=1;}
