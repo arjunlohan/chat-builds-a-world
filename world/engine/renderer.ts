@@ -1,3 +1,4 @@
+import {antialiasTarget} from "./antialias.js";
 import {moduleBounds} from "./module-bounds.js";
 import { contributionFootprint, VISIBILITY_PROBE } from "./visibility.js";
 import { PRODUCTION_PROFILE, type RenderProfile } from "./render-profile.js";
@@ -62,6 +63,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true;
   const scene = new Scene();
+  canvas.dataset.look=profile.look??"new";canvas.dataset.resolution=`${profile.width}x${profile.height}`;
   const environment = new Group();
   scene.add(environment);
   const camera = new PerspectiveCamera(38, 16 / 9, 0.1, 300);
@@ -82,13 +84,16 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   resizeLabels.observe(canvas);
   environment.add(terrain, garden, water.root, motes.root, sky.root, effects.root, raidPortal.root, citizens.root);
 
-  const composer = new EffectComposer(renderer);
+  const aa=antialiasTarget(renderer,profile);
+  const composer = new EffectComposer(renderer,aa.target);
   const renderPass = new RenderPass(scene, camera);
   const bloom = new UnrealBloomPass(new Vector2(profile.width / 2, profile.height / 2), 0.38, 0.65, 1.05);
   const output = new OutputPass();
   composer.addPass(renderPass);
   if (profile.bloom) composer.addPass(bloom);
+  if(aa.smaa)composer.addPass(aa.smaa);
   composer.addPass(output);
+  canvas.dataset.aa=aa.samples?`msaa-${aa.samples}`:aa.smaa?"smaa":"none";
   composer.setSize(profile.width, profile.height);
   bloom.setSize(profile.width / 2, profile.height / 2);
 
@@ -314,7 +319,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       host.dispose(); materializer.dispose(); moduleMaterializer.dispose();
       engineResources.dispose(environment);
       probe?.target.dispose();probe?.hdr.dispose();
-      bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose(); renderer.dispose();
+      aa.smaa?.dispose(); bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose(); renderer.dispose();
     },
   };
 }

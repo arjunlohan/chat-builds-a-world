@@ -1,4 +1,4 @@
-import { CANDIDATE_PROFILE, PRODUCTION_PROFILE } from "./engine/render-profile.js";
+import { pageProfile } from "./engine/render-profile.js";
 import "./style.css";
 import { createRenderer } from "./engine/renderer.js";
 import type { WorldStats } from "./engine/stats.js";
@@ -24,7 +24,7 @@ function fail(message: string) {
 try {
   if (!canvas) throw new Error("World canvas is missing");
   const world = createRenderer(canvas, {
-    profile: query.get("check") === "1" ? CANDIDATE_PROFILE : PRODUCTION_PROFILE,
+    profile: pageProfile(query),
     probeId: query.get("probe") ?? "",
     ...(labels ? { labels } : {}),
     onReply(message) { if (fault) { fault.hidden = false; fault.textContent = message; } },
