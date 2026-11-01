@@ -6,6 +6,6 @@ export function moduleBounds(roots:readonly Object3D[]){
   const mesh=node as Mesh;if(!mesh.geometry)return;
   const instanced=mesh as InstancedMesh;
   if(instanced.isInstancedMesh){instanced.computeBoundingBox();if(instanced.boundingBox)bounds.union(box.copy(instanced.boundingBox).applyMatrix4(node.matrixWorld));}
-  else{if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();if(mesh.geometry.boundingBox)bounds.union(box.copy(mesh.geometry.boundingBox).applyMatrix4(node.matrixWorld));}
+  else{mesh.geometry.computeBoundingBox();if(mesh.geometry.boundingBox)bounds.union(box.copy(mesh.geometry.boundingBox).applyMatrix4(node.matrixWorld));}
  });}return bounds;
 }

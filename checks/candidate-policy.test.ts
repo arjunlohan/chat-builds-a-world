@@ -1,5 +1,5 @@
 import {moduleBounds} from "../world/engine/module-bounds.js";
-import {Group,Mesh,BoxGeometry,MeshBasicMaterial} from "three";
+import {Group,Mesh,BoxGeometry,MeshBasicMaterial,BufferGeometry,Float32BufferAttribute,Points,PointsMaterial} from "three";
 import {scaleVerdict,TALLEST_TREE_HEIGHT} from "../world/shared/scale.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -39,4 +39,9 @@ test("scale admission uses transformed world-space bounds and the tree recipe",(
  const root=new Group(),mesh=new Mesh(new BoxGeometry(1,1,1),new MeshBasicMaterial());root.add(mesh);root.position.y=20;mesh.scale.y=TALLEST_TREE_HEIGHT;root.updateWorldMatrix(true,true);
  let bounds=moduleBounds([root]);assert.equal(scaleVerdict(bounds.max.y-bounds.min.y),undefined);
  mesh.scale.y=TALLEST_TREE_HEIGHT+1;root.updateWorldMatrix(true,true);bounds=moduleBounds([root]);assert.match(scaleVerdict(bounds.max.y-bounds.min.y)!,/tallest tree/);mesh.visible=false;assert.equal(moduleBounds([root]).isEmpty(),true,"Hidden pooled props do not enlarge visible bounds");mesh.geometry.dispose();mesh.material.dispose();
+});
+
+test("scale bounds refresh animated particle positions rather than cached geometry bounds",()=>{
+ const geometry=new BufferGeometry().setAttribute('position',new Float32BufferAttribute([0,1,0,0,2,0],3)),cloud=new Points(geometry,new PointsMaterial());
+ assert.equal(moduleBounds([cloud]).max.y,2);geometry.getAttribute('position').setY(1,20);assert.equal(moduleBounds([cloud]).max.y,20);assert.match(scaleVerdict(moduleBounds([cloud]).max.y-moduleBounds([cloud]).min.y)!,/tallest tree/);geometry.dispose();cloud.material.dispose();
 });
