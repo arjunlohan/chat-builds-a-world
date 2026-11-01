@@ -231,7 +231,7 @@ export class Rounds {
     this.emit(true);
   }
   private finishRun(result: RunResult) {
-    const requester = this.build.requester, title = this.build.idea;
+    const requester = this.build.requester, title = result.ok&&result.outcome==="SHIPPED"?this.approved?.title??this.build.idea:this.build.idea;
     this.build.status = result.ok ? "shipped" : "failed"; this.build.progress = result.ok ? 100 : 0; this.build.completedAt = this.real();
     this.feed(result.ok ? "ship" : "error", `${result.outcome} · ${result.reason}`);
     if (result.version) this.version = result.version;

@@ -132,3 +132,8 @@ test("simulation timing never rewrites the guard-approved spec", async () => {
  let description="";const r=new Rounds({now:()=>now,publish(){},simulationAllowed:true,review:()=>approved,build:async request=>{description=request.decision.spec!.description;return{ok:false,outcome:"REVERTED",reason:"Unit",durationMs:0,tokens:{input:0,output:0,total:0}}}});
  r.startSimulation("fail");r.command(chat("viewer","!idea Original orchard"));now=11000;r.tick();await new Promise(r=>setImmediate(r));assert.equal(description,"A small original orchard");assert.equal(approved.spec!.description,description);r.dispose();
 });
+
+test("shipped timeline and toast use the approved title while queue/build keep the viewer's proposal",async()=>{
+ const h=harness(),r=h.rounds,raw='Race game: typing !race joins a tiny island race';r.command(chat('Racer',`!idea ${raw}`));r.skip();r.skip();assert.equal(r.snapshot().build.idea,raw);await h.complete(true);
+ assert.equal(r.snapshot().timeline.at(-1)?.title,'Small module');assert.equal(r.snapshot().timeline.at(-1)?.requester,'Racer');assert.ok(r.snapshot().toasts.at(-1)?.detail.includes('Small module'));assert.equal(r.snapshot().build.idea,raw);
+});
