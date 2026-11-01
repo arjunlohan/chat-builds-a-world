@@ -1,3 +1,4 @@
+import {historyCredits} from "./credits.js";
 import { createHash, randomUUID } from "node:crypto";
 import {atomicJson,readJson} from "../persistence/atomic.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -38,7 +39,7 @@ export class Versions {
     for(const entry of this.data.history)if(entry.version>0&&entry.healthy===true){const {version,tag,commit,title,requester,modules}=entry;shipped.set(version,{version,tag,commit,title,requester,modules});}
     return structuredClone([...shipped.values()].sort((a,b)=>a.version-b.version));
   }
-  serializedHistory(){return this.replayJson??=JSON.stringify({versions:this.replay()});}
+  serializedHistory(){return this.replayJson??=JSON.stringify({versions:this.replay(),credits:historyCredits(this.data.history)});}
   get pending() { return this.data.pending; }
   async save() {
     this.replayJson=undefined;

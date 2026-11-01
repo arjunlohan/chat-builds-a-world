@@ -1,0 +1,9 @@
+[
+ {"version":0,"tag":"v0","commit":"base","title":"Baseline","requester":"system","modules":[],"receipt":"baseline","healthy":true},
+ {"version":1,"tag":"v1","commit":"one","title":"Lantern orchard","requester":"Comet04","modules":[],"receipt":"one","healthy":true},
+ {"version":2,"tag":"v2","commit":"two","title":"Firefly grove","requester":"Fern","modules":[],"receipt":"two","healthy":true},
+ {"version":3,"tag":"v3","commit":"three","title":"Paper boats","requester":"COMET04","modules":[],"receipt":"three","healthy":true},
+ {"version":4,"tag":"v4","commit":"four","title":"Automatic revert","requester":"system","modules":[],"receipt":"four","healthy":true,"restoredFrom":"v2"},
+ {"version":5,"tag":"v5","commit":"five","title":"Restore v1","requester":"RollbackVoter","modules":[],"receipt":"five","healthy":true,"restoredFrom":"v1"},
+ {"version":6,"tag":"v6","commit":"six","title":"Failed activation","requester":"FailedViewer","modules":[],"receipt":"six","healthy":false}
+]

@@ -70,7 +70,9 @@ seven proposals become four ideas, three candidates and twelve voters with total
 Git and browser-receipt checks. A passing run ships v1 for Comet04. Allow about a
 minute. The follow-up raid admits 150 into the 104-citizen world, giving 254 total.
 It uses the same incoming `channel.raid` decoder as Twitch and saves a screenshot.
-Reopen `/history` to play v1. Fixtures make no Twitch or Bedrock calls.
+Reopen `/history` to play v1. After the last chapter, contributor credits roll
+over the world and hold the closing line. Reduced motion shows a static credits
+list. Replay starts the timelapse again. Fixtures make no Twitch or Bedrock calls.
 
 State survives restarts. For a repeatable first run, use another fresh clone;
 restarting does not clear citizens, cooldowns or rounds. Keep `DEMO_MODE` unset
