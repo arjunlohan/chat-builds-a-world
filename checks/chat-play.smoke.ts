@@ -5,8 +5,8 @@ import {candidateCheck} from "../server/runner/check.js";
 import {CHAT_PLAY} from "../world/shared/chat-play.js";
 import {inspectModule} from "../server/runner/policy.js";
 const original=await readFile("checks/fixtures/modules/chat-play.ts","utf8").then(source=>source.replace("../../../world/engine/api.js","../engine/api.js")),results=[];
-for(const kind of (process.argv[2]?[process.argv[2]]:["good","small","throws","no-focus"])){
- const id=`chat-${kind}`;let source=original.replace("FIXTURE_ID",id);
+for(const kind of (process.argv[2]?[process.argv[2]]:["good","small","throws","no-focus","late-throws"])){
+ const id=`chat-${kind}`;let source=(kind==="late-throws"?(await readFile("checks/fixtures/modules/late-fault.ts","utf8")).replace("../../../world/engine/api.js","../engine/api.js"):original).replace("FIXTURE_ID",id);
  if(kind==="small")source=source.replace("IcosahedronGeometry(1.8,0)","IcosahedronGeometry(.6,0)").replace("body.position.y+=4","body.position.y+=1.2");
  if(kind==="throws")source=source.replace('const citizen=s.citizens.get(event.userId);','throw new Error("fixture command crash"); const citizen=s.citizens.get(event.userId);');
  if(kind==="no-focus")source=source.replaceAll(/s\.camera\.focus\(citizen\.position,\{duration:1\.5,priority:[13]\}\);/g,'');
@@ -18,6 +18,7 @@ for(const kind of (process.argv[2]?[process.argv[2]]:["good","small","throws","n
  if(kind==="small")source=source.replace("IcosahedronGeometry(1.8,0)","IcosahedronGeometry(.6,0)").replace("body.position.y+=4","body.position.y+=1.2");
  if(kind==="throws")assert.match(result.reason!,/onChat threw/);
  if(kind==="no-focus")assert.match(result.reason!,/no camera.focus result/);
+ if(kind==="late-throws"){assert.match(result.reason!,/update threw/);assert.equal(evidence.slices.length,14,"Fixture must fault after all timing slices");assert.notEqual(evidence.status,"passed");assert.match(evidence.failure.stats.moduleError,/update threw/);}
  results.push({kind,...result});
 }
 await writeFile("state/chat-play-gate-results.json",JSON.stringify(results,null,2));console.log("PASS: command-driven visible play, win focus, onChat exceptions and missing focus gate paths.");

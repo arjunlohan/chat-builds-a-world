@@ -37,7 +37,8 @@ async function sendCommands(page:Page){
  const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(candidateRejected(error));await save();
 }
 async function warm(page:Page,count:number,stage="candidate"){const frame=await page.evaluate(()=>window.__worldStats.frame);await page.waitForFunction(target=>window.__worldStats.frame>=target||!!window.__worldStats.moduleError,frame+count,{timeout:C.warmupTimeoutMs});const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(stage==="baseline"?infrastructureFailed(error):candidateRejected(error));}
-async function waitSim(page:Page,seconds:number){const start=await page.evaluate(()=>window.__worldStats.simTime);await page.waitForFunction(target=>window.__worldStats.simTime>=target||!!window.__worldStats.moduleError,start+seconds,{polling:50,timeout:C.warmupTimeoutMs});}
+async function requireHealthy(page:Page){const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(candidateRejected(error));}
+async function waitSim(page:Page,seconds:number){const start=await page.evaluate(()=>window.__worldStats.simTime);await page.waitForFunction(target=>window.__worldStats.simTime>=target||!!window.__worldStats.moduleError,start+seconds,{polling:50,timeout:C.warmupTimeoutMs});await requireHealthy(page);}
 async function sample(page:Page,count:number,stage:string){
  const start=await page.evaluate(()=>({frame:window.__worldStats.frame,time:window.__worldStats.lastFrameAt,simTime:window.__worldStats.simTime})),target=start.frame+1+count;
  evidence.status=stage;await save();
@@ -103,6 +104,7 @@ try{
  evidence.playLabels=await page.evaluate(players=>{const result=[];for(let i=0;i<players;i++){const id=`check-${i}`,label=document.querySelector<HTMLElement>(`.citizen-label[data-user-id="${id}"]`);if(label&&!label.hidden)result.push({id,name:label.querySelector(".citizen-name")?.textContent,mode:label.dataset.mode});}return result;},P.players);
  const visibility=visibilityVerdict(footprints);Object.assign(evidence,{end:await page.evaluate(()=>window.__worldStats),frames:candidate.trace,timing,visibility});await save();
  if(!timing.ok)throw new GateError(candidateRejected(timing.reason!));if(!visibility.ok)throw new GateError(candidateRejected(visibility.reason!));
+ await requireHealthy(page);if(errors.length)throw new Error("Checker console error.");
  evidence.status="passed";await save();console.log(JSON.stringify({...timing,framesPerSlice:C.sliceFrames,slicePairs:C.slicePairs,modulePixels:visibility.best?.hdPixels,visibility,citizens:300}));await page.screenshot({path:join(directory,"canvas.png"),timeout:1000}).catch(()=>{});
 }catch(error){evidence.status="failed";evidence.reason=error instanceof Error?error.message.slice(0,500):"Candidate check failed.";await save().catch(()=>{});if(page){const last=await Promise.race([Promise.all([frames(page),page.evaluate(()=>window.__worldStats)]).then(([frames,stats])=>({frames,stats})),new Promise<null>(r=>setTimeout(()=>r(null),600))]).catch(()=>null);evidence.failure=last;await save().catch(()=>{});await page.screenshot({path:join(directory,"canvas.png"),timeout:600}).catch(()=>{});}console.log(JSON.stringify(error instanceof GateError?error.verdict:infrastructureFailed(String(evidence.reason))));process.exitCode=1;
 }finally{await browser?.close();await browserServer?.close();app?.closeStreams();versions.close();if(app)await new Promise<void>(r=>app!.server.close(()=>r()));}
