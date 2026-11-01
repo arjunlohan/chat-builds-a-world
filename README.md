@@ -219,7 +219,7 @@ appear as raw speech bubbles. Guard rejections and failed builds retain the worl
   pose used for candidate timing, then rejects a candidate
   costing over 20% throughput, over 2ms p95 hook CPU or added render time, errors,
   frozen/black output, sustained collapse or an insufficient visible footprint.
-  Isolated scheduler gaps do not reject a module. The gate has a 40-second watchdog.
+  Isolated scheduler gaps do not reject a module. The gate has a 50-second watchdog.
   Approved custom commands are exercised by ten synthetic players; real camera
   focus is enabled for the post-command visibility probes. Player objects, win
   markers and reachable win conditions are explicit shared builder rules.

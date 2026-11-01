@@ -29,6 +29,7 @@ async function sendCommands(page:Page){
  await page.waitForFunction(count=>window.__worldStats.moduleChats>=count||!!window.__worldStats.moduleError,sent.length,{timeout:3000});
  const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(candidateRejected(error));await save();
 }
+async function warm(page:Page,count:number,stage="candidate"){const frame=await page.evaluate(()=>window.__worldStats.frame);await page.waitForFunction(target=>window.__worldStats.frame>=target||!!window.__worldStats.moduleError,frame+count,{timeout:C.warmupTimeoutMs});const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(stage==="baseline"?infrastructureFailed(error):candidateRejected(error));}
 async function sample(page:Page,seconds:number,stage:string){
  const start=await page.evaluate(()=>({frame:window.__worldStats.frame,time:window.__worldStats.lastFrameAt})),samples:unknown[]=[],hashes=new Set<number>();let trace:FrameEvidence[]=[];
  const begin=performance.now();evidence.status=stage;await save();
@@ -50,14 +51,14 @@ try{
  browserServer=await chromium.launchServer({timeout:8000,headless:true,args:["--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});console.log(JSON.stringify({browserPid:browserServer.process().pid}));browser=await chromium.connect(browserServer.wsEndpoint());page=await browser.newPage({viewport:{width:1920,height:1080}});
  page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});
  evidence.status="loading";await save();await page.goto(`http://127.0.0.1:${port}/world?check=1&overlay=1&time=day&probe=${encodeURIComponent(input.probeId)}`);
- await page.waitForFunction(()=>window.__worldStats?.moduleVersion===1,undefined,{timeout:8000});await page.waitForSelector('canvas[data-ready="true"]');await page.waitForTimeout(1000);
+ await page.waitForFunction(()=>window.__worldStats?.moduleVersion===1,undefined,{timeout:8000});await page.waitForSelector('canvas[data-ready="true"]');await warm(page,C.warmupFrames,"baseline");
  await page.evaluate(()=>{window.__worldStats.measureCameraLocked=true;});evidence.costCamera="same locked pose for both phases";
  const baseline=await sample(page,C.baselineSeconds,"baseline"),badBaseline=breakage(baseline.summary,baseline.hashes);if(badBaseline)throw new GateError(infrastructureFailed(`Baseline: ${badBaseline}`));
  // Same page, citizen roster, renderer and retained instances. Only the candidate is added.
  await versions.activate({version:2,tag:"candidate",commit:"candidate",title:"Candidate",requester:"check",modules},false);
  await page.waitForFunction(()=>window.__worldStats.moduleVersion===2||!!window.__worldStats.moduleError,undefined,{timeout:6500});const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(candidateRejected(error));
  const initialFocuses=await page.evaluate(()=>window.__worldStats.moduleFocuses);
- await sendCommands(page);await page.waitForTimeout(800);
+ await sendCommands(page);await warm(page,C.candidateWarmupFrames);
  const candidate=await sample(page,C.sampleSeconds,"candidate"),timing=frameVerdict(baseline.summary,candidate.summary,candidate.hashes);
  const commandResult=await page.evaluate(()=>({calls:window.__worldStats.moduleChats,focuses:window.__worldStats.moduleFocuses}));evidence.commandResult=commandResult;
  if(commands.length&&commandResult.focuses<=initialFocuses)throw new GateError(candidateRejected("Chat commands produced no camera.focus result; focus the visible play outcome or winning citizen."));
@@ -68,5 +69,5 @@ try{
  const visibility=visibilityVerdict(footprints);Object.assign(evidence,{end:await page.evaluate(()=>window.__worldStats),frames:candidate.trace,timing,visibility});await save();
  if(!timing.ok)throw new GateError(candidateRejected(timing.reason!));if(!visibility.ok)throw new GateError(candidateRejected(visibility.reason!));
  evidence.status="passed";await save();await page.screenshot({path:join(directory,"canvas.png"),timeout:1000}).catch(()=>{});console.log(JSON.stringify({...timing,samples:C.sampleSeconds,baselineSeconds:C.baselineSeconds,modulePixels:visibility.best?.hdPixels,visibility,citizens:300}));
-}catch(error){evidence.status="failed";evidence.reason=error instanceof Error?error.message.slice(0,500):"Candidate check failed.";await save().catch(()=>{});if(page)await page.screenshot({path:join(directory,"canvas.png"),timeout:600}).catch(()=>{});console.log(JSON.stringify(error instanceof GateError?error.verdict:infrastructureFailed(String(evidence.reason))));process.exitCode=1;
+}catch(error){evidence.status="failed";evidence.reason=error instanceof Error?error.message.slice(0,500):"Candidate check failed.";await save().catch(()=>{});if(page){const last=await Promise.race([Promise.all([frames(page),page.evaluate(()=>window.__worldStats)]).then(([frames,stats])=>({frames,stats})),new Promise<null>(r=>setTimeout(()=>r(null),600))]).catch(()=>null);evidence.failure=last;await save().catch(()=>{});await page.screenshot({path:join(directory,"canvas.png"),timeout:600}).catch(()=>{});}console.log(JSON.stringify(error instanceof GateError?error.verdict:infrastructureFailed(String(evidence.reason))));process.exitCode=1;
 }finally{await browser?.close();await browserServer?.close();app?.closeStreams();versions.close();if(app)await new Promise<void>(r=>app!.server.close(()=>r()));}
