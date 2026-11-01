@@ -1,3 +1,4 @@
+import {moduleBounds} from "./module-bounds.js";
 import { contributionFootprint, VISIBILITY_PROBE } from "./visibility.js";
 import { PRODUCTION_PROFILE, type RenderProfile } from "./render-profile.js";
 import { SUMMON_POOL, modulePool, emptyUsage, RenderFailure } from "../shared/limits.js";
@@ -249,6 +250,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       if (probe && options.probeId && stats.value.probeRequest>stats.value.probeCompleted) {
         const roots=host.visualRoots(options.probeId),visible=roots.map(root=>root.visible),toScreen=output.renderToScreen;
         try {
+          const bounds=moduleBounds(roots);
+          stats.value.moduleWorldHeight=bounds.isEmpty()?0:bounds.max.y-bounds.min.y;
           output.renderToScreen=false;
           probe.capture(probe.withPixels);
           for(const root of roots)root.visible=false;

@@ -1,3 +1,4 @@
+import {GARDEN_TREE as TREE} from "../shared/scale.js";
 import { batchStaticGarden } from "./static-batch.js";
 import { indexGeometry } from "./index-geometry.js";
 import {
@@ -37,7 +38,7 @@ export function createGarden() {
   }
 
   const trees: { x: number; z: number; size: number; tint: string }[] = [
-    { x: 0.3, z: -3.6, size: 2.1, tint: "#e8a38f" },
+    { x: 0.3, z: -3.6, size: TREE.largestSize, tint: "#e8a38f" },
     { x: -5.6, z: -2.9, size: 1.15, tint: "#e2ad8c" },
     { x: 6, z: -3.6, size: 0.9, tint: "#90c8a0" },
     { x: -7, z: 0, size: 0.7, tint: "#91c4aa" },
@@ -60,8 +61,8 @@ export function createGarden() {
     }
     for (let j = 0; j < 7; j++) {
       const a = j * 2.4, r = j === 0 ? 0 : 0.8 * s;
-      place(crowns, i * 7 + j, tree.x + Math.cos(a) * r, y + s * (2.25 + rng() * 0.3), tree.z + Math.sin(a) * r,
-        s * (0.9 + rng() * 0.25), s * (0.45 + rng() * 0.2), s * (0.85 + rng() * 0.25), a);
+      place(crowns, i * 7 + j, tree.x + Math.cos(a) * r, y + s * (TREE.crownCenter + rng() * TREE.crownCenterJitter), tree.z + Math.sin(a) * r,
+        s * (0.9 + rng() * 0.25), s * (TREE.crownY + rng() * TREE.crownYJitter), s * (0.85 + rng() * 0.25), a);
       color.set(tree.tint).multiplyScalar(0.85 + rng() * 0.25);
       crowns.setColorAt(i * 7 + j, color);
     }

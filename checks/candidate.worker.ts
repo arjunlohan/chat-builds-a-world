@@ -1,3 +1,4 @@
+import {scaleVerdict} from "../world/shared/scale.js";
 import {CHAT_PLAY as P} from "../world/shared/chat-play.js";
 import {chatCommands} from "../server/runner/chat-play.js";
 import {readFile,writeFile} from "node:fs/promises";
@@ -18,7 +19,7 @@ const commands=chatCommands({description:(input.commands??[]).join(" "),steps:[]
 const errors:string[]=[],footprints:Footprint[]=[],evidence:Record<string,unknown>={status:"starting",profile:"production",viewport:[1920,1080],framebuffer:[160,90],probe:[192,108],probeId:input.probeId,retained:retained.map(m=>m.id),commands,sent,footprints,errors};
 const save=()=>writeFile(join(directory,"evidence.json"),JSON.stringify(evidence,null,2),{mode:0o600});
 await save();
-async function probe(page:Page){const request=await page.evaluate(()=>++window.__worldStats.probeRequest);await page.waitForFunction(request=>window.__worldStats.probeCompleted>=request,request,{timeout:4000});const f=await page.evaluate(()=>({probePixels:window.__worldStats.moduleProbePixels,hdPixels:window.__worldStats.modulePixels,hdWidth:window.__worldStats.moduleWidth,hdHeight:window.__worldStats.moduleHeight}));footprints.push({...f,probeWidth:VISIBILITY_PROBE.width,probeHeight:VISIBILITY_PROBE.height,qualifies:f.hdPixels>=VISIBILITY_PROBE.minPixels&&f.hdWidth>=VISIBILITY_PROBE.minWidth&&f.hdHeight>=VISIBILITY_PROBE.minHeight});await save();}
+async function probe(page:Page){const request=await page.evaluate(()=>++window.__worldStats.probeRequest);await page.waitForFunction(request=>window.__worldStats.probeCompleted>=request,request,{timeout:4000});const f=await page.evaluate(()=>({probePixels:window.__worldStats.moduleProbePixels,hdPixels:window.__worldStats.modulePixels,hdWidth:window.__worldStats.moduleWidth,hdHeight:window.__worldStats.moduleHeight}));const height=await page.evaluate(()=>window.__worldStats.moduleWorldHeight);evidence.moduleWorldHeight=height;const scaleError=scaleVerdict(height);if(scaleError)throw new GateError(candidateRejected(scaleError));footprints.push({...f,probeWidth:VISIBILITY_PROBE.width,probeHeight:VISIBILITY_PROBE.height,qualifies:f.hdPixels>=VISIBILITY_PROBE.minPixels&&f.hdWidth>=VISIBILITY_PROBE.minWidth&&f.hdHeight>=VISIBILITY_PROBE.minHeight});await save();}
 async function frames(page:Page){return page.evaluate(()=>{const t=window.__worldFrameTrace!,result=[];for(let n=0;n<t.size;n++){const i=(t.cursor-t.size+n+t.frames.length)%t.frames.length;result.push({frame:t.frames[i]!,time:t.times[i]!,dt:t.intervals[i]!,cpu:t.cpu[i]!,render:t.render[i]!,module:t.module[i]!,probe:t.probe[i]!});}return result;});}
 async function sendCommands(page:Page){
  if(!commands.length)return;const currentBurst=++burst;

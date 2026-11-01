@@ -1,3 +1,6 @@
+import {moduleBounds} from "../world/engine/module-bounds.js";
+import {Group,Mesh,BoxGeometry,MeshBasicMaterial} from "three";
+import {scaleVerdict,TALLEST_TREE_HEIGHT} from "../world/shared/scale.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { frameVerdict, summarizeFrames, visibilityVerdict, type FrameEvidence } from "./candidate-policy.js";
@@ -30,4 +33,10 @@ test("interleaved pairs absorb host drift but charge consistent module cost",()=
  const pairs=[32,42,34,40,33,41,35].map(fps=>({baseline:summary(frames(fps)),candidate:summary(frames(fps*.97))}));
  assert.equal(frameVerdict(summary(frames(42)),summary(frames(32)),15,pairs).ok,true);
  assert.equal(frameVerdict(summary(),summary(),15,pairs.map(p=>({...p,candidate:{...p.candidate,fps:p.baseline.fps*.65}}))).ok,false);
+});
+
+test("scale admission uses transformed world-space bounds and the tree recipe",()=>{
+ const root=new Group(),mesh=new Mesh(new BoxGeometry(1,1,1),new MeshBasicMaterial());root.add(mesh);root.position.y=20;mesh.scale.y=TALLEST_TREE_HEIGHT;root.updateWorldMatrix(true,true);
+ let bounds=moduleBounds([root]);assert.equal(scaleVerdict(bounds.max.y-bounds.min.y),undefined);
+ mesh.scale.y=TALLEST_TREE_HEIGHT+1;root.updateWorldMatrix(true,true);bounds=moduleBounds([root]);assert.match(scaleVerdict(bounds.max.y-bounds.min.y)!,/tallest tree/);mesh.visible=false;assert.equal(moduleBounds([root]).isEmpty(),true,"Hidden pooled props do not enlarge visible bounds");mesh.geometry.dispose();mesh.material.dispose();
 });
