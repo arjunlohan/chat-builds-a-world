@@ -1,3 +1,4 @@
+import {SHADOW_RESOLUTION} from "./render-profile.js";
 import type {WorldLook} from "./render-profile.js";
 import { indexGeometry } from "./index-geometry.js";
 import {
@@ -8,7 +9,7 @@ import {
 import { random } from "./terrain.js";
 
 /** Ten-minute day, authored in linear color; no image textures or external skybox. */
-export function createSky(scene: Scene, fixedTime?: number,look:WorldLook="new") {
+export function createSky(scene: Scene, fixedTime?: number,look:WorldLook="new",shadowSize:number=look==="classic"?SHADOW_RESOLUTION.classic:SHADOW_RESOLUTION.new) {
   const root = new Group();
   const top = new Color(), horizon = new Color(), sunColor = new Color();
   const nightTop = new Color("#13223c"), dayTop = new Color("#286b9b");
@@ -47,7 +48,7 @@ export function createSky(scene: Scene, fixedTime?: number,look:WorldLook="new")
   const sunlight = new DirectionalLight("#ffe0bb", 3);
   sunlight.position.set(-9, 18, 8);
   sunlight.castShadow = true;
-  const shadowSize=look==="classic"?1024:2048;sunlight.shadow.mapSize.set(shadowSize,shadowSize);
+  sunlight.shadow.mapSize.set(shadowSize,shadowSize);
   sunlight.shadow.camera.left = look==="classic"?-15:-13;
   sunlight.shadow.camera.right = look==="classic"?15:13;
   sunlight.shadow.camera.top = look==="classic"?15:13;

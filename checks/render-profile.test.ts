@@ -18,3 +18,7 @@ test('look overrides share one profile resolver and the primary world persists i
  const {Versions}=await import('../server/versions/index.js'),{mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{join}=await import('node:path');const root=await mkdtemp(join(tmpdir(),'look-profile-'));
  try{const versions=new Versions(root,()=>{});await versions.reportBaseUsage({nodes:1,triangles:1,draws:1,particles:0,lights:0},'classic');const restored=new Versions(root,()=>{});await restored.init();assert.equal(restored.renderLook,'classic');await restored.reportBaseUsage(restored.baseUsage!,'new');assert.equal(restored.renderLook,'new');versions.close();restored.close();}finally{await rm(root,{recursive:true,force:true});}
 });
+
+test('candidate shadows use the same pass at reduced resolution; production and classic keep their sizes',async()=>{
+ const {shadowResolution,SHADOW_RESOLUTION}=await import('../world/engine/render-profile.js');assert.equal(shadowResolution(pageProfile(new URLSearchParams('check=1'))),SHADOW_RESOLUTION.candidate);assert.equal(shadowResolution(pageProfile(new URLSearchParams())),SHADOW_RESOLUTION.new);assert.equal(shadowResolution(pageProfile(new URLSearchParams('look=classic'))),SHADOW_RESOLUTION.classic);
+});

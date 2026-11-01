@@ -11,3 +11,6 @@ export function pageProfile(query:URLSearchParams,defaultLook:WorldLook="new"):R
 }
 
 export function documentLook():WorldLook{return document.querySelector<HTMLMetaElement>('meta[name="world-look"]')?.content==='classic'?'classic':'new';}
+
+export const SHADOW_RESOLUTION=Object.freeze({classic:1024,new:2048,candidate:256});
+export function shadowResolution(profile:Readonly<RenderProfile>){return profile.look==="classic"?SHADOW_RESOLUTION.classic:profile.probe?SHADOW_RESOLUTION.candidate:SHADOW_RESOLUTION.new;}
