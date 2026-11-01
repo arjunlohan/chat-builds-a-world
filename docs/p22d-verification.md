@@ -103,3 +103,15 @@ ambient-fill fallback, and classic remains the escape hatch.
 
 Optional canopy/mip filtering is deferred: no additional coverage/LOD change was
 verified within the 09:50 cutoff. Alpha-cutout bloom masking is fixed above.
+
+## Final fresh-clone fixture rehearsal
+
+Fresh clone of `9ee39cd`, no copied `.env`, installed the lockfile (1.28s) and
+Chromium (1.57s), then started fixture `pnpm dev` (1.95s). World was open before
+sim. `pnpm sim` shipped v1 on attempt 1 in 76.40s: 184 events, 104 citizens,
+[1,9,2], Lantern orchard for Comet04. Build 48.777s, gate 42.616s. The screenshot
+raid admitted 150 to 254 total at 59.99 FPS. Empty history and v1 credits passed,
+with zero browser errors. The earlier literal walkthrough includes a fresh-clone
+full check; final source also passed the full 273-test check separately, so the
+last rehearsal did not repeat that command. Logs: `state/asset-cache/readme-final/`
+and `p22d-final-readme.log`; the earlier full walk is preserved in `readme-40829b8/`.
