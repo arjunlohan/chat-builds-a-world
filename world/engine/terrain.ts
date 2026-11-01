@@ -1,6 +1,9 @@
+import {terrainMaterial} from "./terrain-material.js";
+import {assetModel} from "./asset-bank.js";
+import {modelTemplate} from "./model-template.js";
 import {surfaceMaterial,surfaceNormals} from "./materials.js";
 import type {WorldLook} from "./render-profile.js";
-import { BufferGeometry, Color, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial } from "three";
+import { BufferGeometry, Color, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, InstancedMesh, Object3D } from "three";
 
 import { random, terrainHeight, coast } from "./land.js";
 export { random, terrainHeight, coast } from "./land.js";
@@ -42,7 +45,8 @@ export function createTerrain(look:WorldLook="new") {
   top.setAttribute("color", new Float32BufferAttribute(colors, 3));
   top.computeVertexNormals();
   const material = surfaceMaterial({ vertexColors: true, roughness: 0.95, flatShading: true },look);
-  const surface = new Mesh(surfaceNormals(top,look), material);
+  const surface = new Mesh(surfaceNormals(top,look), look==="classic"?material:terrainMaterial());
+  surface.castShadow=look!=="classic";
   surface.receiveShadow = true;
   group.add(surface);
 
@@ -69,9 +73,14 @@ export function createTerrain(look:WorldLook="new") {
   sides.setAttribute("position", new Float32BufferAttribute(positions, 3));
   sides.setAttribute("color", new Float32BufferAttribute(colors, 3));
   sides.computeVertexNormals();
-  const rock = new Mesh(surfaceNormals(sides,look,Math.PI/3), material);
+  const rock = new Mesh(surfaceNormals(sides,look,Math.PI/3), look==="classic"?material:terrainMaterial(true));
   rock.castShadow = true;
   rock.receiveShadow = true;
   group.add(rock);
+  if(look!=="classic"&&assetModel('rock')){
+    const model=modelTemplate('rock',true),materials=model.materials.map(m=>{const n=m.clone();n.color.multiplyScalar(.28);n.envMapIntensity=.18;n.roughness=.94;return n;});
+    const outcrops=new InstancedMesh(model.geometry.clone(),materials,16),dummy=new Object3D();outcrops.name="scanned basalt buttresses";
+    for(let i=0;i<16;i++){const a=i/16*Math.PI*2,r=.78+Math.sin(i*2.2)*.06;dummy.position.set(Math.cos(a)*10.5*coast(a)*r,-3.5+rng()*.6,Math.sin(a)*8.4*coast(a)*r);dummy.rotation.set(.1*Math.sin(a),a,.12*Math.cos(a));dummy.scale.set(1.4+rng(),2.6+rng()*1.2,1.3+rng()*.7);dummy.updateMatrix();outcrops.setMatrixAt(i,dummy.matrix);}outcrops.castShadow=true;outcrops.receiveShadow=true;outcrops.computeBoundingSphere();group.add(outcrops);
+  }
   return group;
 }

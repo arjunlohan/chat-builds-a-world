@@ -1,7 +1,7 @@
 {
   "format": 1,
   "budgetBytes": 120000000,
-  "bytes": 55011338,
+  "bytes": 59145272,
   "assets": [
     {
       "name": "basalt",
@@ -219,6 +219,8 @@
       "name": "lantern",
       "type": "model",
       "id": "wooden_lantern_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_lantern_01/wooden_lantern_01_1k.gltf",
+      "sourceMd5": "e31edca6461023e076183cb74721b0b9",
       "source": "https://polyhaven.com/a/wooden_lantern_01",
       "license": "CC0-1.0",
       "triangles": 1136,
@@ -235,14 +237,14 @@
           "bytes": 828492,
           "sha256": "4424328a5c1d16e78338af5a2249936c5cc4b78483236fb16819a107bc2a1601"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_lantern_01/wooden_lantern_01_1k.gltf",
-      "sourceMd5": "e31edca6461023e076183cb74721b0b9"
+      ]
     },
     {
       "name": "bench",
       "type": "model",
       "id": "painted_wooden_bench",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/painted_wooden_bench/painted_wooden_bench_1k.gltf",
+      "sourceMd5": "784a49250144aa5299a93c1f3b6968d7",
       "source": "https://polyhaven.com/a/painted_wooden_bench",
       "license": "CC0-1.0",
       "triangles": 630,
@@ -259,14 +261,14 @@
           "bytes": 501100,
           "sha256": "e7f025db7cd2bc1e8799933893f39df02b49744bff5d3ad9d34db2fa974b6184"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/painted_wooden_bench/painted_wooden_bench_1k.gltf",
-      "sourceMd5": "784a49250144aa5299a93c1f3b6968d7"
+      ]
     },
     {
       "name": "crate",
       "type": "model",
       "id": "wooden_crate_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_crate_01/wooden_crate_01_1k.gltf",
+      "sourceMd5": "33df4d2ae00186d4b64e878466c9e22e",
       "source": "https://polyhaven.com/a/wooden_crate_01",
       "license": "CC0-1.0",
       "triangles": 652,
@@ -283,14 +285,14 @@
           "bytes": 543696,
           "sha256": "4c74631b813d850533b029cc05410db4208e30a533d5f2d4e8629528d9c901e5"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_crate_01/wooden_crate_01_1k.gltf",
-      "sourceMd5": "33df4d2ae00186d4b64e878466c9e22e"
+      ]
     },
     {
       "name": "barrel",
       "type": "model",
       "id": "barrel_03",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/barrel_03/barrel_03_1k.gltf",
+      "sourceMd5": "204eec2159a38a1dc4b826ef255f9468",
       "source": "https://polyhaven.com/a/barrel_03",
       "license": "CC0-1.0",
       "triangles": 500,
@@ -307,14 +309,14 @@
           "bytes": 458880,
           "sha256": "5577c40d928bcd028b59fb1008bee62660a5fdf46513b418a811c14c6a785158"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/barrel_03/barrel_03_1k.gltf",
-      "sourceMd5": "204eec2159a38a1dc4b826ef255f9468"
+      ]
     },
     {
       "name": "bridge-planks",
       "type": "model",
       "id": "modular_wooden_pier",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/modular_wooden_pier/modular_wooden_pier_1k.gltf",
+      "sourceMd5": "5a5c75c7711b8804c680970a60bd382f",
       "source": "https://polyhaven.com/a/modular_wooden_pier",
       "license": "CC0-1.0",
       "triangles": 900,
@@ -331,14 +333,14 @@
           "bytes": 855916,
           "sha256": "80b5c7a7acf70132af1820ee362f7b2b758f60fa868c2636f420934d8bb698cc"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/modular_wooden_pier/modular_wooden_pier_1k.gltf",
-      "sourceMd5": "5a5c75c7711b8804c680970a60bd382f"
+      ]
     },
     {
       "name": "plinth",
       "type": "model",
       "id": "folding_wooden_stool",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/folding_wooden_stool/folding_wooden_stool_1k.gltf",
+      "sourceMd5": "a19174156f8a643c4f2cb14345beb204",
       "source": "https://polyhaven.com/a/folding_wooden_stool",
       "license": "CC0-1.0",
       "triangles": 498,
@@ -355,14 +357,14 @@
           "bytes": 579856,
           "sha256": "16e897ab773f09cf01ac7576e21c2516a299051bdc13949d88058f151e4004c7"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/folding_wooden_stool/folding_wooden_stool_1k.gltf",
-      "sourceMd5": "a19174156f8a643c4f2cb14345beb204"
+      ]
     },
     {
       "name": "campfire",
       "type": "model",
       "id": "stone_fire_pit",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/stone_fire_pit/stone_fire_pit_1k.gltf",
+      "sourceMd5": "f3a23e45ee66802ccc7a5462a9371ae3",
       "source": "https://polyhaven.com/a/stone_fire_pit",
       "license": "CC0-1.0",
       "triangles": 697,
@@ -379,14 +381,14 @@
           "bytes": 793584,
           "sha256": "9b323521cf5f907604ab45464e8c67abef1b05cc8abbde36b2b3f51edfd8ac65"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/stone_fire_pit/stone_fire_pit_1k.gltf",
-      "sourceMd5": "f3a23e45ee66802ccc7a5462a9371ae3"
+      ]
     },
     {
       "name": "bucket",
       "type": "model",
       "id": "wooden_bucket_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_bucket_01/wooden_bucket_01_1k.gltf",
+      "sourceMd5": "d3a6ff00895b69406b203dc417113d9a",
       "source": "https://polyhaven.com/a/wooden_bucket_01",
       "license": "CC0-1.0",
       "triangles": 709,
@@ -403,14 +405,14 @@
           "bytes": 561532,
           "sha256": "fa2a3a9f6347074a9c795589a9727e8d79833f0a7feae333ddcc0fcb5cac60c6"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_bucket_01/wooden_bucket_01_1k.gltf",
-      "sourceMd5": "d3a6ff00895b69406b203dc417113d9a"
+      ]
     },
     {
       "name": "pot",
       "type": "model",
       "id": "planter_pot_clay",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/planter_pot_clay/planter_pot_clay_1k.gltf",
+      "sourceMd5": "1c78fcfd6144747c97e2b822a6229c0d",
       "source": "https://polyhaven.com/a/planter_pot_clay",
       "license": "CC0-1.0",
       "triangles": 450,
@@ -427,14 +429,14 @@
           "bytes": 388868,
           "sha256": "7f2326c6ffeec41306b292e08cfbd93ae09d1739ebfdd26d5705e24524f39693"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/planter_pot_clay/planter_pot_clay_1k.gltf",
-      "sourceMd5": "1c78fcfd6144747c97e2b822a6229c0d"
+      ]
     },
     {
       "name": "flowers",
       "type": "model",
       "id": "flower_ursinia",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/flower_ursinia/flower_ursinia_1k.gltf",
+      "sourceMd5": "53045f0f07450a5d5b5bb55d6805fbe1",
       "source": "https://polyhaven.com/a/flower_ursinia",
       "license": "CC0-1.0",
       "triangles": 446,
@@ -451,14 +453,14 @@
           "bytes": 319608,
           "sha256": "b82e1939b77788cbec8202e25fd1911ba1cc1f51ead51ebe275f32342839ad0c"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/flower_ursinia/flower_ursinia_1k.gltf",
-      "sourceMd5": "53045f0f07450a5d5b5bb55d6805fbe1"
+      ]
     },
     {
       "name": "fern",
       "type": "model",
       "id": "fern_02",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fern_02/fern_02_1k.gltf",
+      "sourceMd5": "cf276874d37bfb73c299504a6b355b77",
       "source": "https://polyhaven.com/a/fern_02",
       "license": "CC0-1.0",
       "triangles": 449,
@@ -475,14 +477,14 @@
           "bytes": 228508,
           "sha256": "01cbee52fa268e46e81196688d64e3cff12c4a63b2e8601f2dfdf7c0e559d548"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fern_02/fern_02_1k.gltf",
-      "sourceMd5": "cf276874d37bfb73c299504a6b355b77"
+      ]
     },
     {
       "name": "grass",
       "type": "model",
       "id": "grass_medium_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/grass_medium_01/grass_medium_01_1k.gltf",
+      "sourceMd5": "28dd8247f3faa749bf87a0b84be01e7e",
       "source": "https://polyhaven.com/a/grass_medium_01",
       "license": "CC0-1.0",
       "triangles": 253,
@@ -499,14 +501,14 @@
           "bytes": 650436,
           "sha256": "7f26be2ceaf29b664e1cc4682f255e5cab25fb85dd9c09e8b6793debb3162a73"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/grass_medium_01/grass_medium_01_1k.gltf",
-      "sourceMd5": "28dd8247f3faa749bf87a0b84be01e7e"
+      ]
     },
     {
       "name": "scanned-tree",
       "type": "model",
       "id": "island_tree_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/island_tree_01/island_tree_01_1k.gltf",
+      "sourceMd5": "fbc0c570ebd71ea88cedc1f9d5edb835",
       "source": "https://polyhaven.com/a/island_tree_01",
       "license": "CC0-1.0",
       "triangles": 2763,
@@ -523,14 +525,14 @@
           "bytes": 1655428,
           "sha256": "d6106fef210379f3b3c592e8f2a57d1ec71bb65fbba888153d13c128a339d790"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/island_tree_01/island_tree_01_1k.gltf",
-      "sourceMd5": "fbc0c570ebd71ea88cedc1f9d5edb835"
+      ]
     },
     {
       "name": "rock",
       "type": "model",
       "id": "rock_09",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/rock_09/rock_09_1k.gltf",
+      "sourceMd5": "d12ac6e8433fe1346fe6945154269f66",
       "source": "https://polyhaven.com/a/rock_09",
       "license": "CC0-1.0",
       "triangles": 240,
@@ -547,14 +549,14 @@
           "bytes": 461080,
           "sha256": "5abee1cc2b7eaa8626076e6c66ef2fbdc3198361a1c15879691dfc88230ec66c"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/rock_09/rock_09_1k.gltf",
-      "sourceMd5": "d12ac6e8433fe1346fe6945154269f66"
+      ]
     },
     {
       "name": "moss-rock",
       "type": "model",
       "id": "rock_moss_set_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/rock_moss_set_01/rock_moss_set_01_1k.gltf",
+      "sourceMd5": "75113cc1c21806cca5d8badad4737af7",
       "source": "https://polyhaven.com/a/rock_moss_set_01",
       "license": "CC0-1.0",
       "triangles": 452,
@@ -571,14 +573,14 @@
           "bytes": 447508,
           "sha256": "3e6bd9b52627288df12cc205b8cf36fce40e059b1ca06707131acd2b41814f34"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/rock_moss_set_01/rock_moss_set_01_1k.gltf",
-      "sourceMd5": "75113cc1c21806cca5d8badad4737af7"
+      ]
     },
     {
       "name": "shrub",
       "type": "model",
       "id": "shrub_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/shrub_01/shrub_01_1k.gltf",
+      "sourceMd5": "4ac1312e5ea687b321b78382f5f209c8",
       "source": "https://polyhaven.com/a/shrub_01",
       "license": "CC0-1.0",
       "triangles": 499,
@@ -595,14 +597,14 @@
           "bytes": 419124,
           "sha256": "12e9ec67a87dbbf2d6d972504df959db037e518bbe318a91604076ca3ed01bd3"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/shrub_01/shrub_01_1k.gltf",
-      "sourceMd5": "4ac1312e5ea687b321b78382f5f209c8"
+      ]
     },
     {
       "name": "log",
       "type": "model",
       "id": "tree_stump_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/tree_stump_01/tree_stump_01_1k.gltf",
+      "sourceMd5": "fedfc620634a8dbaf6345413b13abe1a",
       "source": "https://polyhaven.com/a/tree_stump_01",
       "license": "CC0-1.0",
       "triangles": 620,
@@ -619,14 +621,14 @@
           "bytes": 1052760,
           "sha256": "d34cb60f8059886f655a96824553509300ded61906d73207fde75c38dd297609"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/tree_stump_01/tree_stump_01_1k.gltf",
-      "sourceMd5": "fedfc620634a8dbaf6345413b13abe1a"
+      ]
     },
     {
       "name": "ladder",
       "type": "model",
       "id": "wooden_ladder",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_ladder/wooden_ladder_1k.gltf",
+      "sourceMd5": "d50e132958f033f0600b286aafb72a8e",
       "source": "https://polyhaven.com/a/wooden_ladder",
       "license": "CC0-1.0",
       "triangles": 1450,
@@ -643,14 +645,14 @@
           "bytes": 747264,
           "sha256": "a82184e70727c64259457917d8511fd1c67fddf00214d3ffc55d48c03bf0433c"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_ladder/wooden_ladder_1k.gltf",
-      "sourceMd5": "d50e132958f033f0600b286aafb72a8e"
+      ]
     },
     {
       "name": "chair",
       "type": "model",
       "id": "painted_wooden_chair_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/painted_wooden_chair_01/painted_wooden_chair_01_1k.gltf",
+      "sourceMd5": "28e739db9799cdadf820ead2b486d463",
       "source": "https://polyhaven.com/a/painted_wooden_chair_01",
       "license": "CC0-1.0",
       "triangles": 700,
@@ -667,14 +669,14 @@
           "bytes": 322152,
           "sha256": "099f9fa2571bd3de6742282ddfbb314a1b206d0c03d46d5d83a55637551b175a"
         }
-      ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/painted_wooden_chair_01/painted_wooden_chair_01_1k.gltf",
-      "sourceMd5": "28e739db9799cdadf820ead2b486d463"
+      ]
     },
     {
       "name": "table",
       "type": "model",
       "id": "small_wooden_table_01",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/small_wooden_table_01/small_wooden_table_01_1k.gltf",
+      "sourceMd5": "716b66952dc473d09a3ac5f48ef50a68",
       "source": "https://polyhaven.com/a/small_wooden_table_01",
       "license": "CC0-1.0",
       "triangles": 649,
@@ -691,9 +693,37 @@
           "bytes": 237584,
           "sha256": "8582f882649e131fc27b368a4a55ec8d4ef9df09409a545485f2a41942c255b8"
         }
+      ]
+    },
+    {
+      "name": "ground",
+      "type": "atlas",
+      "id": "dark_rock",
+      "source": "https://polyhaven.com/a/dark_rock",
+      "derivedFrom": [
+        "grass_ground",
+        "mossy_rock",
+        "forest_floor",
+        "dark_rock"
       ],
-      "download": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/small_wooden_table_01/small_wooden_table_01_1k.gltf",
-      "sourceMd5": "716b66952dc473d09a3ac5f48ef50a68"
+      "license": "CC0-1.0",
+      "outputs": [
+        {
+          "file": "ground-color.webp",
+          "bytes": 1013618,
+          "sha256": "af286563fea6a07d6c416ab8ac7229370a1b3962161b7e2f32806e9bd34e733f"
+        },
+        {
+          "file": "ground-normal.webp",
+          "bytes": 1926002,
+          "sha256": "8a750a97b6194bda90c5c04364e8bbe63399cec4c7e90a2cdad8a4258f857a72"
+        },
+        {
+          "file": "ground-arm.webp",
+          "bytes": 1190076,
+          "sha256": "7fb3530a6a82e963600eb8ec5f22ec0a490eaf9197ec16808d9174f24b8f0fe3"
+        }
+      ]
     },
     {
       "name": "sky",

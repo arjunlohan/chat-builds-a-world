@@ -2,9 +2,9 @@
 
 Powered by [Poly Haven](https://polyhaven.com). Prepared with `pnpm assets:fetch`; runtime pages fetch only committed same-origin data. [Poly Haven license](https://polyhaven.com/license), [ambientCG license](https://docs.ambientcg.com/license/): CC0 1.0.
 
-All source models are simplified, meshopt-compressed glTF with 1K WebP textures and a second LOD. Materials use 1K WebP color, OpenGL normals and packed AO/roughness/metalness. The unclipped sky is 2K HDR. Only data files survive the offline conversion. Raw sources and ZIPs stay in ignored state/. Collection assets select one named variant before simplification. No source scripts, Blender files or executable extensions are copied.
+All source models are simplified, meshopt-compressed glTF with 1K WebP textures and a second LOD. Materials use 1K WebP color, OpenGL normals and packed AO/roughness/metalness. The terrain packs four sets into a padded 2K atlas. The unclipped sky is 2K HDR. Only data files survive the offline conversion. Raw sources and ZIPs stay in ignored state/. Collection assets select one named variant before simplification. No source scripts, Blender files or executable extensions are copied.
 
-Compressed world outputs: 38,808,725 bytes. All committed asset sources and media: 55,011,338 bytes; limit 120,000,000. Manifest records exact download URLs, checksums and per-file sizes in [manifest.json](assets/world/manifest.json).
+Compressed world outputs: 42,938,421 bytes. All committed asset sources and media: 59,145,272 bytes; limit 120,000,000. Manifest records exact download URLs, checksums and per-file sizes in [manifest.json](assets/world/manifest.json).
 
 | Name | Type | Source | License | Bytes | Outputs |
 | --- | --- | --- | --- | ---: | --- |
@@ -36,6 +36,7 @@ Compressed world outputs: 38,808,725 bytes. All committed asset sources and medi
 | ladder | model | [wooden_ladder](https://polyhaven.com/a/wooden_ladder) | CC0-1.0 | 1,494,504 | [ladder.glb](assets/world/ladder.glb), [ladder-lod.glb](assets/world/ladder-lod.glb) |
 | chair | model | [painted_wooden_chair_01](https://polyhaven.com/a/painted_wooden_chair_01) | CC0-1.0 | 647,788 | [chair.glb](assets/world/chair.glb), [chair-lod.glb](assets/world/chair-lod.glb) |
 | table | model | [small_wooden_table_01](https://polyhaven.com/a/small_wooden_table_01) | CC0-1.0 | 478,516 | [table.glb](assets/world/table.glb), [table-lod.glb](assets/world/table-lod.glb) |
+| ground | atlas | [dark_rock](https://polyhaven.com/a/dark_rock) | CC0-1.0 | 4,129,696 | [ground-color.webp](assets/world/ground-color.webp), [ground-normal.webp](assets/world/ground-normal.webp), [ground-arm.webp](assets/world/ground-arm.webp) |
 | sky | hdri | [kloofendal_48d_partly_cloudy_puresky](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky) | CC0-1.0 | 5,451,493 | [sky.hdr](assets/world/sky.hdr) |
 
 Kit names refer to these sources, not exact replicas of missing props: bridge-planks uses a modular pier, plinth a wooden stool, campfire a stone fire pit, log a stump. No trademarked props or third-party emote likenesses are included.

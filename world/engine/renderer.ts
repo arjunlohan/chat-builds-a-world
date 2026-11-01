@@ -71,7 +71,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const environment = new Group();
   scene.add(environment);
   const camera = new PerspectiveCamera(38, 16 / 9, 0.1, 300);
-  const director = new CameraDirector(camera, reducedMotion.matches);
+  const director = new CameraDirector(camera, reducedMotion.matches,profile.look);
   const terrain = createTerrain(profile.look);
   const garden = createGarden(profile.look);
   const water = createWater();
@@ -229,7 +229,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
       stats.value.cameraFocuses = director.automaticFocuses;
       stats.value.moduleMs=0;host.update(dt);
-      if(options.capture){const id=options.capture.moduleId??host.ids[0];capturePath(camera,options.capture.path,clock.seconds,moduleBounds(id?host.visualRoots(id):[]));}
+      if(options.capture){const id=options.capture.moduleId??host.ids[0];capturePath(camera,options.capture.path,clock.seconds,moduleBounds(id?host.visualRoots(id):[]),profile.look);}
       labelManager.update(clock.now(),camera,director.focusPoint);
       if (pendingAck) {
         if (stats.value.moduleError) { moduleReceipt(pendingAck.version, false); pendingAck = null; }

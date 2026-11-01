@@ -98,3 +98,35 @@ exceptions and missing focus (`state/asset-cache/gate-fix-chat-play.log`).
 Gate correction `pnpm check`: 253/253, all bundles, media and history checks pass
 (`state/asset-cache/gate-fix-check-final.log`). The clock, post-target sample
 allocation, live growth bounds and deciding-median tests are included.
+
+## Step 2: scanned ground and closer framing
+
+Slope/height blends grass, moss, forest floor and wet basalt over the original
+heightfield, with triplanar cliffs, macro variation and scanned basalt outcrops.
+The authored navigation function, coast and landmark anchors are unchanged.
+A padded 2K atlas reduces sampler pressure; coherent slope branches avoid
+sampling absent layers. The first unoptimized shader measured 16.90ms GPU and
+hit a cold software-probe compile timeout. The optimized shader measures below.
+Cold probe compilation uses the existing warmup timeout inside the same overall
+gate deadline. The shared new home pose fills about 65% of frame width; classic
+keeps its original pose, and fixed capture reads the director's exported pose.
+
+| Phase | FPS, 150 raiders | GPU average ms | GPU p95 ms | CPU submission ms |
+| --- | ---: | ---: | ---: | ---: |
+| Day | 59.97 | 15.52 | 18.67 | 0.47 |
+| Dusk | 59.77 | 15.67 | 16.83 | 0.41 |
+| Night | 59.97 | 15.08 | 15.34 | 0.46 |
+
+Cold load: 2.397s. Assets at preparation: 59,145,272 bytes including existing
+media/source, below 120 MB. `pnpm check`: 254/254 plus bundles/media/history.
+Gate: cheap passes idle/loaded at 33.85/19.70 median FPS, with exactly 24 frames
+in every slice; 27.262/36.341s total. Median paired costs 2.50%/-7.26%.
+Expensive rejects idle/loaded on hook overruns in 8.530/9.414s. All real geometry
+and materials remain in the cost scene. The loaded windows extend to collect
+24 frames rather than judging a handful of frames in one wall-clock second.
+
+Raw logs: `state/asset-cache/step2-{visual,gate,check}-final.log`.
+Images/metrics: `state/visual/realism-step2-*`. P22 before set:
+`state/visual/realism-before-{day,dusk,night}.png`, plus native edge/citizen crops.
+GPU headroom remains limited at this step and is tracked through the remaining
+scene work; no inference of spare GPU capacity is made from the 60Hz ceiling.

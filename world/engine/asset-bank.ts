@@ -29,7 +29,7 @@ export function prepareWorldAssets(look:WorldLook='new'){
 async function load(){
  const textureLoader=new TextureLoader();
  await Promise.all(manifest.assets.map(async a=>{
-  if(a.type==='texture'){
+  if(a.type==='texture'||a.type==='atlas'){
    const maps=await Promise.all(a.outputs.map(async o=>{const map=await textureLoader.loadAsync(url(o));map.wrapS=map.wrapT=RepeatWrapping;map.anisotropy=8;if(o.file.includes('-color.'))map.colorSpace=SRGBColorSpace;return map;}));
    textures.set(a.name,{color:maps[0]!,normal:maps[1]!,arm:maps[2]!});
   }else if(a.type==='model'){
