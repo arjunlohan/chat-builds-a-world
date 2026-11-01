@@ -51,6 +51,17 @@ test("diff audit includes ignored/untracked files and rejects deletions, renames
   await rename(join(root,"world/modules/new.ts"),join(root,"world/modules/a.ts"));await symlink(join(root,"README.md"),join(root,"world/modules/new.ts"));await assert.rejects(()=>auditDiff(root,base,before,allowed),/Symlinks/);
  } finally {await rm(root,{recursive:true,force:true})}
 });
+test("inventory accepts the real committed asset tree, while writes keep the 2 MiB limit",async()=>{
+ const root=process.cwd(),base=await git(root,"rev-parse","HEAD");let tree="";
+ try{tree=await createTree(root,999999,base);const before=await inventory(tree);
+  assert.ok(before.has("assets/world/sky.hdr"));
+  await writeFile(join(tree,"world/modules/oversized.ts"),Buffer.alloc(2_097_153));
+  await assert.rejects(auditDiff(tree,base,before,["world/modules/oversized.ts"]),/exceeds 2 MiB/);
+  await rm(join(tree,"world/modules/oversized.ts"));
+  await writeFile(join(tree,"assets/world/sky.hdr"),Buffer.alloc(2_097_153));
+  await assert.rejects(auditDiff(tree,base,before,[]),/exceeds 2 MiB/);
+ }finally{if(tree)await removeTree(root,tree);}
+});
 test("dirty session state and an advanced master block promotion without checkout, stash or reset",async()=>{
  const root=await repository();let tree="";
  try {

@@ -130,3 +130,17 @@ Images/metrics: `state/visual/realism-step2-*`. P22 before set:
 `state/visual/realism-before-{day,dusk,night}.png`, plus native edge/citizen crops.
 GPU headroom remains limited at this step and is tracked through the remaining
 scene work; no inference of spare GPU capacity is made from the 60Hz ceiling.
+
+## Live-build blocker: audited assets
+
+Inventory fingerprints every regular file without imposing a candidate-write size
+limit on unchanged source assets. The changed-file audit still rejects every
+added or modified file over 2 MiB, including ignored and outside-module writes.
+The regression test inventories a fresh worktree of the real tracked tree,
+including the 5,451,493-byte HDR, then rejects oversized module and asset writes.
+
+`pnpm exec tsx --test checks/runner.test.ts`: 29/29. Fresh isolated README
+fixture server, world opened before `pnpm sim`: first attempt SHIPPED v1 for
+Comet04, 184 events, 104 citizens, three summons, zero browser errors. Simulator
+58.65s; build 31.30s; gate 26.60s. No provider calls. Screenshot:
+`state/visual/blocker-fixture-shipped.png`; log `state/asset-cache/blocker-readme.log`.

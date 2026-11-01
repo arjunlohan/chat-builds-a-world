@@ -70,7 +70,7 @@ export async function inventory(root: string) {
       if (entry.isSymbolicLink()) throw new Error("Symlinks are forbidden in candidate trees.");
       if (entry.isDirectory()) await walk(path);
       else if (entry.isFile()) {
-        const stat = await lstat(path); if (stat.nlink > 1) throw new Error("Hard-linked files are forbidden."); if (stat.size > 2_097_152) throw new Error("Candidate file exceeds 2 MiB.");
+        const stat = await lstat(path); if (stat.nlink > 1) throw new Error("Hard-linked files are forbidden.");
         const { createHash } = await import("node:crypto");
         files.set(name, `${stat.mode & 0o777}:${createHash("sha256").update(await readFile(path)).digest("hex")}`);
       } else throw new Error("Unsupported candidate filesystem entry.");
@@ -83,6 +83,7 @@ export async function auditDiff(tree: string, base: string, before: Map<string, 
   const after = await inventory(tree), touched: string[] = [];
   for (const name of new Set([...before.keys(), ...after.keys()])) {
     if (before.get(name) === after.get(name)) continue;
+    if (after.has(name) && (await lstat(join(tree, name))).size > 2_097_152) throw new Error("Candidate file exceeds 2 MiB.");
     if (!name.startsWith("world/modules/") || !allowed.includes(name) || !name.endsWith(".ts")) throw new Error(`Diff outside approved module files: ${name.slice(0, 120)}`);
     if (!after.has(name)) throw new Error("Module deletions are forbidden.");
     if (before.has(name) && before.get(name)!.split(":")[0] !== after.get(name)!.split(":")[0]) throw new Error("File mode changes are forbidden.");
