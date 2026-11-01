@@ -107,7 +107,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const materializer = new SpecMaterializer({ ...materializerOptions, ledger: summonLedger, onVisible: state => ack(state) });
   const moduleMaterializer = new SpecMaterializer({ ...materializerOptions, ledger });
   const hostOptions: ConstructorParameters<typeof ModuleHost>[0] = {
-    ...(profile.probe?{onWork:(id:string,ms:number)=>{if(id===options.probeId)stats.value.moduleMs=ms;}}:{}),
+    ...(profile.probe?{onWork:(id:string,ms:number)=>{if(id===options.probeId)stats.value.moduleMs=ms;},onHook:(id:string,hook:string)=>{if(id===options.probeId&&hook==="onChat")stats.value.moduleChats++;},onFocus:(id:string)=>{if(id===options.probeId)stats.value.moduleFocuses++;}}:{}),
     root: moduleRoot, ledger, onSceneChange: () => { shadowDirty = true; }, protectedResources: engineResources,
     services: { citizens: citizens.services, spawnSpec: spec => moduleMaterializer.spawn(spec), camera: { focus: director.focus }, effects: { play: effects.play }, log },
     onStatus: (event: ModuleStatus) => {
@@ -225,7 +225,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       water.update(visualTime, sky.day);
       motes.update(visualTime, 1 - sky.day);
       effects.update(elapsed);stats.value.raidPortalActive=raidPortal.update(elapsed,reducedMotion.matches);
-      director.update(dt);
+      if(!profile.probe||!stats.value.measureCameraLocked)director.update(dt);
       citizens.update(dt, elapsed, Date.now() + serverOffset, camera, reducedMotion.matches);
       materializer.update(dt, camera, reducedMotion.matches); moduleMaterializer.update(dt, camera, reducedMotion.matches);
       labelManager.update(Date.now() + serverOffset, camera, director.focusPoint);

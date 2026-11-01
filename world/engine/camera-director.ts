@@ -1,3 +1,4 @@
+import {FOCUS_LIMITS as F} from "../shared/chat-play.js";
 import { MathUtils, Vector3, type PerspectiveCamera } from "three";
 import { clampToWorld } from "../shared/limits.js";
 import type { WorldServices } from "./api.js";
@@ -50,11 +51,11 @@ export class CameraDirector {
 
   readonly focus: WorldServices["camera"]["focus"] = (position, options = {}) => {
     if (![position.x, position.y, position.z].every(Number.isFinite)) return;
-    const priority = MathUtils.clamp(Math.round(options.priority ?? 1), 0, 3);
-    if (this.hold > 0 && (priority < this.priority || (priority < 3 && priority === this.priority && this.time - this.lastFocus < 6))) return;
+    const priority = MathUtils.clamp(Math.round(options.priority ?? 1), F.minPriority, F.maxPriority);
+    if (this.hold > 0 && (priority < this.priority || (priority < F.maxPriority && priority === this.priority && this.time - this.lastFocus < 6))) return;
     this.lastFocus = this.time;
     this.priority = priority;
-    this.duration = this.reducedMotion ? 0.25 : MathUtils.clamp(options.duration ?? 2.5, 0.25, 5);
+    this.duration = this.reducedMotion ? F.minDuration : MathUtils.clamp(options.duration ?? 2.5, F.minDuration, F.maxDuration);
     clampToWorld(this.target.copy(position));
     this.from.copy(this.camera.position);
     this.fromLook.copy(this.look);
@@ -84,7 +85,7 @@ export class CameraDirector {
       if (!this.returning && this.hold === 0) {
         this.from.copy(this.camera.position);
         this.fromLook.copy(this.look);
-        this.duration = this.reducedMotion ? 0.25 : 5;
+        this.duration = this.reducedMotion ? F.minDuration : F.maxDuration;
         this.flight = 0;
         this.returning = true;
       } else if (this.returning && t === 1) {

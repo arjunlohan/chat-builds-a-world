@@ -20,6 +20,6 @@ for(const loaded of [false,true]){
    if(kind==="slow")assert.match(result.reason!,/overrun|hook CPU|relative FPS|render/);
    else {const evidence=JSON.parse(await readFile(result.evidence+"/evidence.json","utf8"));assert.ok(evidence.baseline.summary.frames>0);assert.ok(evidence.candidate.summary.frames>0);assert.equal(evidence.status,"passed");}
   }
- }finally{for(const child of children)child.kill("SIGTERM");await Promise.all(children.map(child=>child.exitCode!==null?Promise.resolve():new Promise<void>(r=>child.once("exit",()=>r()))));}
+ }finally{for(const child of children)child.kill("SIGTERM");await Promise.all(children.map(child=>child.exitCode!==null||child.signalCode!==null?Promise.resolve():new Promise<void>(r=>child.once("exit",()=>r()))));}
 }
 await mkdir("state",{recursive:true});await writeFile("state/candidate-load-results.json",JSON.stringify(results,null,2)+"\n");console.log("PASS: cheap passes and expensive fails, with and without parallel CPU load.");

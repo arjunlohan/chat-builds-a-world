@@ -215,10 +215,14 @@ appear as raw speech bubbles. Guard rejections and failed builds retain the worl
   Plugin/app/hook discovery is disabled. Output is bounded and redacted; the
   process group is killed on timeout/cancellation. Tokens are never logged.
 - Path/AST/type/resource checks precede a 15-second Chromium/SwiftShader gate with
-  300 citizens. It first samples the same retained world for 5 seconds, then rejects a candidate
+  300 citizens. It first samples the same retained world for 5 seconds, with the same camera
+  pose used for candidate timing, then rejects a candidate
   costing over 20% throughput, over 2ms p95 hook CPU or added render time, errors,
   frozen/black output, sustained collapse or an insufficient visible footprint.
   Isolated scheduler gaps do not reject a module. The gate has a 40-second watchdog.
+  Approved custom commands are exercised by ten synthetic players; real camera
+  focus is enabled for the post-command visibility probes. Player objects, win
+  markers and reachable win conditions are explicit shared builder rules.
   It uses a 1920x1080 viewport and a reduced 160x90 framebuffer for software
   rendering, with separate visibility probes; it is not a full-HD GPU benchmark.
 - Checked modules require a live activation acknowledgement. Failed activations
@@ -312,8 +316,15 @@ workloads do not compete. To reproduce the raid workload and actual SIGKILL reco
 
 ```sh
 pnpm check:raid
+pnpm check:gate-load
+pnpm check:chat-play
 pnpm exec tsx checks/hardening.smoke.ts
 ```
+
+`check:gate-load` compares cheap and expensive fixture modules with and without
+six (or fewer, based on CPU count) parallel CPU-load processes. `check:chat-play`
+exercises synthetic commands, focus/visible results and command-only exceptions.
+Their JSON evidence remains under ignored `state/`. No provider calls are made.
 
 A short run verifies the soak harness and full checked fixture setup:
 

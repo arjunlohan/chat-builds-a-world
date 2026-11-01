@@ -1,3 +1,4 @@
+import {FOCUS_LIMITS as F} from "../shared/chat-play.js";
 import { ACTIVE_MODULE_CAP, clampToWorld } from "../shared/limits.js";
 import { Group, Vector3 } from "three";
 import type { ChatEvent, RaidEvent } from "../../server/contracts.js";
@@ -27,6 +28,8 @@ interface HostOptions {
   onStatus?: (status: ModuleStatus) => void;
   onSceneChange?: () => void;
   onWork?: (id:string,ms:number) => void;
+  onHook?: (id:string,hook:string) => void;
+  onFocus?: (id:string) => void;
 }
 const snapshot = (citizen: Citizen): Citizen => Object.isFrozen(citizen) && Object.isFrozen(citizen.position) ? citizen : Object.freeze({
   id: citizen.id, displayName: citizen.displayName, color: citizen.color,
@@ -67,7 +70,7 @@ export class ModuleHost {
       void Promise.resolve(result).catch(() => {});
       throw new Error(`${hook} must be synchronous`);
     }
-    return Math.max(0, this.now() - start);
+    const elapsed=Math.max(0,this.now()-start);this.options.onHook?.(record.id,hook);return elapsed;
   }
 
   private services(record: RecordState): WorldServices {
@@ -99,12 +102,13 @@ export class ModuleHost {
       },
       camera: Object.freeze({ focus: (target: Readonly<Vector3>, opts: { duration?: number; priority?: number } = {}) => {
         allow();
-        if (this.now() - record.lastFocus < 1000) return;
+        if (this.now() - record.lastFocus < F.intervalMs) return;
         record.lastFocus = this.now();
         this.options.services.camera.focus(position(target), {
-          duration: Number.isFinite(opts.duration) ? Math.max(0.25, Math.min(5, opts.duration!)) : 2.5,
-          priority: Number.isFinite(opts.priority) ? Math.max(0, Math.min(3, Math.round(opts.priority!))) : 1,
+          duration: Number.isFinite(opts.duration) ? Math.max(F.minDuration, Math.min(F.maxDuration, opts.duration!)) : 2.5,
+          priority: Number.isFinite(opts.priority) ? Math.max(F.minPriority, Math.min(F.maxPriority, Math.round(opts.priority!))) : 1,
         });
+        this.options.onFocus?.(record.id);
       } }),
       effects: Object.freeze({ play: (name: "spawn" | "portal" | "sparkle", target: Readonly<Vector3>) => {
         limits();

@@ -243,7 +243,7 @@ test("resource rejections get one repair then retain the final reason; checker t
  for(const timeout of [false,true]){
   const root=await retryRepository();let calls=0;try{
    const versions=await knownVersions(root,()=>{});if(!timeout)await versions.reportBaseUsage({nodes:0,triangles:129999,draws:0,lights:0,particles:0});
-   const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{},builder:options=>{calls++;return runCodex(options);},check:async()=>infrastructureFailed("Candidate checker timed out after 24 seconds.")});
+   const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:"fixture-only"},bin:resolve("checks/fixtures/fake-builder.cjs"),feed(){},announce:async()=>{},builder:options=>{calls++;return runCodex(options);},check:async()=>infrastructureFailed("Candidate checker timed out.")});
    const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.equal(result.outcome,"REVERTED");assert.equal(calls,timeout?1:2);assert.match(result.reason,timeout?/timed out/:/triangles world limit/);assert.equal(result.attempts,calls);assert.equal(await git(root,"tag","--list"),"");await runner.close();versions.close();
   }finally{await rm(root,{recursive:true,force:true});}
  }
@@ -267,4 +267,12 @@ test("infrastructure and unclassified checker failures do not opt in to a repair
    const result=await runner.build({requester:"viewer",signal:new AbortController().signal,decision:repairDecision()});assert.equal(result.outcome,"REVERTED");assert.equal(result.attempts,1);assert.equal(calls,1);assert.equal(result.firstReason,undefined);await runner.close();versions.close();
   }finally{await rm(root,{recursive:true,force:true});}
  }
+});
+
+test("runner forwards only approved spec command names into the candidate gate",async()=>{
+ const root=await retryRepository();let versions!:Versions,seen:readonly string[]=[];try{
+  versions=await knownVersions(root,v=>{if(v)void versions.acknowledge(v.version,v.receipt,true);});
+  const runner=new Runner({root,versions,env:{PATH:process.env.PATH!,HOME:process.env.HOME!,AWS_BEARER_TOKEN_BEDROCK:'fixture-only'},bin:resolve('checks/fixtures/fake-builder.cjs'),feed(){},announce:async()=>{},check:async(_root,_modules,_id,_signal,commands)=>{seen=commands??[];return {ok:true};}});
+  const decision=repairDecision('good');decision.spec.steps=['Respond to !race and !dig'];const result=await runner.build({requester:'Player',signal:new AbortController().signal,decision});assert.equal(result.ok,true,result.reason);assert.deepEqual(seen,['!race','!dig']);await runner.close();
+ }finally{versions?.close();await rm(root,{recursive:true,force:true});}
 });
