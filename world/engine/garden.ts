@@ -1,3 +1,5 @@
+import {surfaceMaterial,surfaceNormals} from "./materials.js";
+import type {WorldLook} from "./render-profile.js";
 import {GARDEN_TREE as TREE} from "../shared/scale.js";
 import { batchStaticGarden } from "./static-batch.js";
 import { indexGeometry } from "./index-geometry.js";
@@ -9,20 +11,20 @@ import {
 import { random, terrainHeight } from "./terrain.js";
 
 /** A small palette, low-poly silhouettes and shared geometry throughout. */
-export function createGarden() {
+export function createGarden(look:WorldLook="new") {
   const root = new Group();
   root.name = "lantern garden";
   const rng = random(72);
   const transform = new Object3D();
   const color = new Color();
-  const stone = new MeshStandardMaterial({ color: "#d4cead", roughness: 0.95, flatShading: true });
-  const bark = new MeshStandardMaterial({ color: "#806b6e", roughness: 1, flatShading: true });
-  const leaves = new MeshStandardMaterial({ color: "#ffffff", roughness: 0.9, flatShading: true });
-  const amber = new MeshStandardMaterial({ color: "#ffdf99", emissive: "#ffc66b", emissiveIntensity: 2.4, roughness: 0.5 });
-  const teal = new MeshStandardMaterial({ color: "#b2f5d6", emissive: "#74e1cc", emissiveIntensity: 1.3, roughness: 0.5 });
+  const stone = surfaceMaterial({ color: "#d4cead", roughness: 0.95, flatShading: true },look);
+  const bark = surfaceMaterial({ color: "#806b6e", roughness: 1, flatShading: true },look);
+  const leaves = surfaceMaterial({ color: "#ffffff", roughness: 0.9, flatShading: true },look);
+  const amber = surfaceMaterial({ color: "#ffdf99", emissive: "#ffc66b", emissiveIntensity: 2.4, roughness: 0.5 },look);
+  const teal = surfaceMaterial({ color: "#b2f5d6", emissive: "#74e1cc", emissiveIntensity: 1.3, roughness: 0.5 },look);
 
   function instances(geometry: BufferGeometry, material: MeshStandardMaterial, count: number, name: string, shadows = true) {
-    const mesh = new InstancedMesh(indexGeometry(geometry), material, count);
+    const mesh = new InstancedMesh(indexGeometry(surfaceNormals(geometry,look)), material, count);
     mesh.name = name;
     mesh.castShadow = shadows;
     mesh.receiveShadow = shadows;
@@ -46,7 +48,7 @@ export function createGarden() {
     { x: -0.1, z: 5.5, size: 0.65, tint: "#81b9a2" },
     { x: 2.5, z: -6, size: 0.65, tint: "#e6ba96" },
   ];
-  const trunks = instances(new CylinderGeometry(0.14, 0.25, 1, 6), bark, trees.length * 4, "branch silhouettes");
+  const trunks = instances(new CylinderGeometry(0.14, 0.25, 1, look==="classic"?6:12), bark, trees.length * 4, "branch silhouettes");
   const crowns = instances(new IcosahedronGeometry(1, 1), leaves, trees.length * 7, "coral and sage canopies");
   for (const [i, tree] of trees.entries()) {
     const y = terrainHeight(tree.x, tree.z), s = tree.size;
@@ -71,7 +73,7 @@ export function createGarden() {
   const path = new CatmullRomCurve3([
     new Vector3(-7, 0, 3.7), new Vector3(-2.6, 0, 4.5), new Vector3(2.8, 0, 2.8), new Vector3(4.4, 0, -1.5),
   ]);
-  const steps = instances(new CylinderGeometry(1, 1.1, 0.16, 7), stone, 44, "winding stepping stones");
+  const steps = instances(new CylinderGeometry(1, 1.1, 0.16, look==="classic"?7:12), stone, 44, "winding stepping stones");
   for (let i = 0; i < 44; i++) {
     const p = path.getPoint(i / 43);
     const x = p.x + (rng() - 0.5) * 0.12, z = p.z + (rng() - 0.5) * 0.12;
@@ -82,10 +84,10 @@ export function createGarden() {
   gate.name = "the moon gate";
   gate.position.set(4.5, terrainHeight(4.5, -1.4) + 1.5, -1.4);
   gate.rotation.y = 0.45;
-  const arch = new Mesh(new TorusGeometry(1.4, 0.22, 6, 48), stone);
+  const arch = new Mesh(new TorusGeometry(1.4, 0.22, look==="classic"?6:12, 48), stone);
   arch.castShadow = true;
   arch.receiveShadow = true;
-  const seam = new Mesh(new TorusGeometry(1.17, 0.024, 5, 64), teal);
+  const seam = new Mesh(new TorusGeometry(1.17, 0.024, look==="classic"?5:10, 64), teal);
   seam.position.z = 0.05;
   gate.add(arch, seam);
   root.add(gate);
@@ -111,7 +113,7 @@ export function createGarden() {
     0, 0, -0.12, 0, 0, 0.12, 0, 0.36, 0,
   ], 3));
   grassGeometry.computeVertexNormals();
-  const grassMaterial = new MeshStandardMaterial({ color: "#a8c994", roughness: 1, side: 2 });
+  const grassMaterial = surfaceMaterial({ color: "#a8c994", roughness: 1, side: 2 },look);
   const grass = instances(grassGeometry, grassMaterial, 1100, "meadow • instanced blades", false);
   let n = 0;
   for (let attempt = 0; attempt < 8000 && n < grass.count; attempt++) {

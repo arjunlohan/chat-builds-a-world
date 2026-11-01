@@ -68,15 +68,15 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   scene.add(environment);
   const camera = new PerspectiveCamera(38, 16 / 9, 0.1, 300);
   const director = new CameraDirector(camera, reducedMotion.matches);
-  const terrain = createTerrain();
-  const garden = createGarden();
+  const terrain = createTerrain(profile.look);
+  const garden = createGarden(profile.look);
   const water = createWater();
   const motes = createMotes();
   const sky = createSky(scene, options.fixedTime);
   const effects = createEffects();
   const labelLayer = options.labels ?? document.createElement("div");
   const labelManager = new LabelManager();
-  const citizens = new Citizens(labelLayer, labelManager);
+  const citizens = new Citizens(labelLayer, labelManager,profile.look);
   const raidPortal=createRaidPortal(labelLayer,labelManager);
   const resizeLabels = new ResizeObserver(entries => {
     labelLayer.style.transform = `scale(${entries[0]!.contentRect.width / 1920})`;
@@ -108,7 +108,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const ack = (state: import("../../server/contracts.js").SummonState, error?: string) => {
     post("/summon/ack", { id: state.id, receipt: state.receipt, ...(error ? { error } : {}) });
   };
-  const materializerOptions = { root: scene, layout: labelManager, labels: labelLayer, onSceneChange: () => { shadowDirty = true; },
+  const materializerOptions = { look:profile.look??"new", root: scene, layout: labelManager, labels: labelLayer, onSceneChange: () => { shadowDirty = true; },
     effects: { play: effects.play }, camera: { focus: director.focus }, citizens: citizens.services };
   const materializer = new SpecMaterializer({ ...materializerOptions, ledger: summonLedger, onVisible: state => ack(state) });
   const moduleMaterializer = new SpecMaterializer({ ...materializerOptions, ledger });

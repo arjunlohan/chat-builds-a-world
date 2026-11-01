@@ -1,9 +1,11 @@
+import {surfaceMaterial,surfaceNormals} from "./materials.js";
+import type {WorldLook} from "./render-profile.js";
 import { BufferGeometry, Color, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial } from "three";
 
 import { random, terrainHeight, coast } from "./land.js";
 export { random, terrainHeight, coast } from "./land.js";
 
-export function createTerrain() {
+export function createTerrain(look:WorldLook="new") {
   const group = new Group();
   group.name = "island • jade terraces and basalt roots";
   const rng = random();
@@ -11,16 +13,20 @@ export function createTerrain() {
   const colors: number[] = [];
   const jade = new Color("#5b9f7c"), sand = new Color("#d5c69b"), high = new Color("#91b88a");
   const color = new Color();
-  const segments = 80, rings = 22;
+  const segments = look==="classic"?80:96, rings = look==="classic"?22:28;
   const point = (ring: number, segment: number): [number, number, number] => {
     const angle = segment / segments * Math.PI * 2;
     const radius = ring / rings * coast(angle);
     const x = Math.cos(angle) * 10.5 * radius, z = Math.sin(angle) * 8.4 * radius;
     return [x, terrainHeight(x, z), z];
   };
+  let topSurface=true;
   const triangle = (a: number[], b: number[], c: number[], tint: Color) => {
     positions.push(...a, ...b, ...c);
-    for (let i = 0; i < 3; i++) colors.push(tint.r, tint.g, tint.b);
+    for (const point of [a,b,c]) {
+      if(look!=="classic"&&topSurface){color.copy(jade).lerp(sand,1-Math.min(1,Math.max(0,(point[1]!-1.1)/.35))).lerp(high,Math.max(0,point[1]!-1.5)*.2);colors.push(color.r,color.g,color.b);}
+      else colors.push(tint.r,tint.g,tint.b);
+    }
   };
   for (let ring = 0; ring < rings; ring++) {
     for (let s = 0; s < segments; s++) {
@@ -35,11 +41,12 @@ export function createTerrain() {
   top.setAttribute("position", new Float32BufferAttribute(positions, 3));
   top.setAttribute("color", new Float32BufferAttribute(colors, 3));
   top.computeVertexNormals();
-  const material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
-  const surface = new Mesh(top, material);
+  const material = surfaceMaterial({ vertexColors: true, roughness: 0.95, flatShading: true },look);
+  const surface = new Mesh(surfaceNormals(top,look), material);
   surface.receiveShadow = true;
   group.add(surface);
 
+  topSurface=false;
   positions.length = 0;
   colors.length = 0;
   const scales = [1, 1.015, 0.96, 0.79, 0.56, 0.24, 0.015];
@@ -62,7 +69,7 @@ export function createTerrain() {
   sides.setAttribute("position", new Float32BufferAttribute(positions, 3));
   sides.setAttribute("color", new Float32BufferAttribute(colors, 3));
   sides.computeVertexNormals();
-  const rock = new Mesh(sides, material);
+  const rock = new Mesh(surfaceNormals(sides,look,Math.PI/3), material);
   rock.castShadow = true;
   rock.receiveShadow = true;
   group.add(rock);

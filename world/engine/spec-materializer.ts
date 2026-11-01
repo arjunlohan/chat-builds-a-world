@@ -1,3 +1,5 @@
+import {surfaceMaterial} from "./materials.js";
+import type {WorldLook} from "./render-profile.js";
 import { SUMMON_COUNT, clampToWorld, RenderFailure } from "../shared/limits.js";
 import {
   AdditiveBlending, BufferGeometry, Color, Float32BufferAttribute, Group, Mesh,
@@ -19,6 +21,7 @@ interface Entry {
   metadata?: SummonState; label?: HTMLElement; removeLabel?: () => void; needsAck: boolean; spawnPending: boolean;
 }
 export interface MaterializerOptions {
+  look?:WorldLook;
   root: Object3D; ledger: ResourceLedger; layout: LabelManager; labels: HTMLElement;
   effects: WorldServices["effects"]; camera: WorldServices["camera"]; citizens: WorldServices["citizens"];
   onVisible?: (state: SummonState) => void;
@@ -41,10 +44,10 @@ export class SpecMaterializer {
     const root = new Group(), owner = new ResourceOwner();
     root.name = `scene-spec:${id}`;
     try {
-      const geometries = new Map(spec.geometries.map(g => { const geometry = createSpecGeometry(g); owner.geometries.add(geometry); return [g.id, geometry]; }));
+      const geometries = new Map(spec.geometries.map(g => { const geometry = createSpecGeometry(g,this.options.look); owner.geometries.add(geometry); return [g.id, geometry]; }));
       const materials = new Map(spec.materials.map(m => {
-        const material = new MeshStandardMaterial({ color: m.color, emissive: m.emissive, emissiveIntensity: m.emissiveIntensity,
-          roughness: m.roughness, metalness: m.metalness, opacity: m.opacity, transparent: m.opacity < 1, flatShading: true, side: 2 });
+        const material = surfaceMaterial({ color: m.color, emissive: m.emissive, emissiveIntensity: m.emissiveIntensity,
+          roughness: m.roughness, metalness: m.metalness, opacity: m.opacity, transparent: m.opacity < 1, flatShading: true, side: 2 },this.options.look);
         owner.materials.add(material); return [m.id, material];
       }));
       const nodes = new Map<string, NodeState>();

@@ -1,10 +1,12 @@
+import {surfaceMaterial,surfaceNormals} from "./materials.js";
+import type {WorldLook} from "./render-profile.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { indexGeometry } from "./index-geometry.js";
 import { CITIZEN_CAP, IDLE_MS, FADE_MS, inParade } from "../shared/limits.js";
 import { isChatCommand } from "../../server/commands.js";
 import {
   BufferGeometry, Float32BufferAttribute, Matrix4, Color, ConeGeometry, DynamicDrawUsage, Group, IcosahedronGeometry,
-  InstancedBufferAttribute, InstancedMesh, MeshStandardMaterial, Sphere, Vector3,
+  InstancedBufferAttribute, InstancedMesh, MeshStandardMaterial, SphereGeometry, Sphere, Vector3,
   type PerspectiveCamera,
 } from "three";
 import type { Citizen, WorldServices } from "./api.js";
@@ -34,18 +36,18 @@ export class Citizens {
   private readonly speakers = new Set<string>();
   private readonly body: {mesh:InstancedMesh;fade:InstancedBufferAttribute;bounce:InstancedBufferAttribute;fadeChanged:boolean;bounceChanged:boolean};
 
-  constructor(private readonly labels: HTMLElement, private readonly layout: LabelManager ) {
+  constructor(private readonly labels: HTMLElement, private readonly layout: LabelManager, look:WorldLook="new" ) {
     this.root.name = "citizens • 300 reserved creature slots";
     const pieces: BufferGeometry[] = [];
     const piece = (geometry: BufferGeometry, tint: boolean, color: string, x: number, y: number, z: number, sx: number, sy: number, sz: number, body=false) => {
-      const g=geometry.index ? geometry.toNonIndexed() : geometry.clone(); geometry.dispose();
+      const smooth=surfaceNormals(geometry,look);const g=smooth.index ? smooth.toNonIndexed() : smooth.clone();if(smooth!==geometry)smooth.dispose();geometry.dispose();
       g.applyMatrix4(new Matrix4().makeScale(sx,sy,sz));g.translate(x,y,z);
       const count=g.getAttribute("position").count,c=new Color(color),colors=new Float32Array(count*3);
       for(let i=0;i<count;i++){colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;}
       g.setAttribute("color",new Float32BufferAttribute(colors,3));g.setAttribute("aTint",new Float32BufferAttribute(new Float32Array(count).fill(Number(tint)),1));
       g.setAttribute("aBody",new Float32BufferAttribute(new Float32Array(count).fill(Number(body)),1));pieces.push(g);
     };
-    piece(new IcosahedronGeometry(1,1),true,"#ffffff",0,.31,0,.24,.3,.21,true);
+    piece(look==="classic"?new IcosahedronGeometry(1,1):new SphereGeometry(1,12,5),true,"#ffffff",0,.31,0,.24,.3,.21,true);
     piece(new IcosahedronGeometry(1,1),false,"#f4e6c5",0,.34,.16,.175,.145,.075);
     piece(new IcosahedronGeometry(1,0),true,"#ffffff",0,.22,-.23,.09,.09,.09);
     for(const side of [-1,1]){
@@ -56,11 +58,11 @@ export class Citizens {
     const combined=mergeGeometries(pieces)!;for(const g of pieces)g.dispose();
     // Flat shading reconstructs face normals in the fragment shader. Shared vertices cut
     // repeated instance/lighting transforms without changing triangles or silhouettes.
-    const normals=combined.getAttribute("normal");for(let i=0;i<normals.count;i++)normals.setXYZ(i,0,1,0);
+    const normals=combined.getAttribute("normal");if(look==="classic")for(let i=0;i<normals.count;i++)normals.setXYZ(i,0,1,0);
     const geometry=indexGeometry(combined);
     const fade=new InstancedBufferAttribute(new Float32Array(LIMIT).fill(1),1),bounce=new InstancedBufferAttribute(new Float32Array(LIMIT),1);
     fade.setUsage(DynamicDrawUsage);bounce.setUsage(DynamicDrawUsage);geometry.setAttribute("aFade",fade);geometry.setAttribute("aBounce",bounce);
-    const material=new MeshStandardMaterial({color:"#ffffff",vertexColors:true,roughness:.9,flatShading:true});
+    const material=surfaceMaterial({color:"#ffffff",vertexColors:true,roughness:.9,flatShading:true},look);
     material.onBeforeCompile=shader=>{
       shader.vertexShader=shader.vertexShader.replace("#include <common>","#include <common>\nattribute float aFade,aBounce,aTint,aBody; varying float vFade;")
         .replace("#include <begin_vertex>","#include <begin_vertex>\nvFade=aFade; transformed.y+=aBody*aBounce*(1.0+(position.y-0.31)/0.3);")
