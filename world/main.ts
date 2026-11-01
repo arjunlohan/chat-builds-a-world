@@ -5,7 +5,7 @@ import "./style.css";
 import { createRenderer } from "./engine/renderer.js";
 import type { WorldStats } from "./engine/stats.js";
 
-declare global { interface Window { __worldStats: WorldStats; __worldFrameTrace?: import("./engine/stats.js").FrameTrace } }
+declare global { interface Window { __worldStats: WorldStats; __worldBenchmark?:(frames:number)=>Promise<{frames:number;kind:string;frameMs:number;p95Ms:number;cpuSubmitMs:number}>; __worldProbePixels?:Uint8Array; __worldFrameTrace?: import("./engine/stats.js").FrameTrace } }
 
 const canvas = document.querySelector<HTMLCanvasElement>("#world");
 const status = document.querySelector<HTMLElement>("#status");
@@ -51,6 +51,7 @@ try {
       }
     },
   });
+  if(query.get("benchmark")==="1")window.__worldBenchmark=frames=>world.measureRender(frames);
   if(capturing){window.__capture=frameCapture(world,query);void window.__capture.ready.catch(()=>fail("The saved capture could not load."));}
   window.addEventListener("pagehide", () => world.dispose(), { once: true });
 } catch {

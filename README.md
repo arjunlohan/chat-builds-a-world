@@ -245,12 +245,14 @@ appear as raw speech bubbles. Guard rejections and failed builds retain the worl
   process group is killed on timeout/cancellation. Tokens are never logged.
 - Path/AST/type/resource checks precede a Chromium/SwiftShader gate with 300
   citizens. Seven adjacent pairs toggle only the candidate's visual roots on/off
-  in one-second slices, with the same camera, chat and running hooks. The median
+  in 24-frame slices, with the same camera, chat and running hooks. Cost uses a
+  fixed main-plus-shadow pipeline over the actual scene; full-look visibility uses
+  the production composer including AO, bloom and AA. The median
   paired throughput drop must not exceed 20%. Hook and render p95 are evidence;
   the host enforces its hook budget. Errors, frozen/black output, sustained collapse,
   unreadable geometry and props taller than the world tree envelope reject a build.
   Two early visibility misses reject immediately; a final probe must still pass.
-  The gate has a 35-second watchdog; the builder reserves time for it and self-checks.
+  The gate has a 45-second watchdog; the builder reserves time for it and self-checks.
   Custom commands from the spec and candidate source are exercised by ten synthetic
   players; built-in commands are excluded. Camera focus, player objects, win markers
   and reachable wins follow the [rendered rules](AGENTS.md#world-module-api-v1).

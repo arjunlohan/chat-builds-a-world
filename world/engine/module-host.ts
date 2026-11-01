@@ -1,3 +1,6 @@
+import {SIMULATION_MAX_DT} from "../shared/time.js";
+import {scaleVerdict} from "../shared/scale.js";
+import {moduleBounds} from "./module-bounds.js";
 import {FOCUS_LIMITS as F} from "../shared/chat-play.js";
 import { ACTIVE_MODULE_CAP, clampToWorld } from "../shared/limits.js";
 import { Group, Vector3 } from "three";
@@ -6,9 +9,9 @@ import type { Citizen, SpawnHandle, WorldModule, WorldModuleFactory, WorldServic
 import { emptyUsage, MODULE_CAP, ResourceLedger, ResourceOwner, type Usage } from "./resources.js";
 
 export const MODULE_BUDGET = Object.freeze({
-  maxActive: ACTIVE_MODULE_CAP, perModuleMs: 2, totalMs: 4, maxDtSeconds: 0.05,
+  maxActive: ACTIVE_MODULE_CAP, perModuleMs: 2, totalMs: 4, maxDtSeconds: SIMULATION_MAX_DT,
   overrunWindow: 60, disableAfterOverruns: 3, lifecycleMs: 8,
-  maxEvents: 128, eventsPerFrame: 16,
+  maxEvents: 128, eventsPerFrame: 16, auditIntervalMs:1000,
 });
 
 type Event = { kind: "onChat"; value: Readonly<ChatEvent> } |
@@ -134,6 +137,8 @@ export class ModuleHost {
       let total = raw[key]; for (const usage of record.spawnUsage.values()) total += usage[key];
       if (total > MODULE_CAP[key]) throw new Error(`${key} module limit exceeded`);
     }
+    const bounds=moduleBounds([record.root,...record.spawnRoots.values()]);
+    const scaleError=scaleVerdict(bounds.isEmpty()?0:bounds.max.y-bounds.min.y);if(scaleError)throw new Error(scaleError);
     // Materializer reservations already charge global usage; only raw scene resources go here.
     this.ledger.reserve(record.key, raw); record.auditDirty = false; record.lastAudit = this.clock();
   }
@@ -254,7 +259,7 @@ export class ModuleHost {
           elapsed += this.invoke(record, "update", () => record.module.update(seconds));
         }
         if (record.root.parent !== this.options.root) throw new Error("module group escaped ownership");
-        if (record.auditDirty || this.clock() - record.lastAudit >= 1000) this.audit(record);
+        if (record.auditDirty || this.clock() - record.lastAudit >= MODULE_BUDGET.auditIntervalMs) this.audit(record);
         record.overruns = record.overruns.filter(frame => frame > this.frame - MODULE_BUDGET.overrunWindow);
         if (elapsed > MODULE_BUDGET.perModuleMs) record.overruns.push(this.frame);
         if (record.overruns.length >= MODULE_BUDGET.disableAfterOverruns) throw new Error("three 2 ms overruns in 60 frames");

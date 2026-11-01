@@ -22,7 +22,7 @@ try{
   if(!host.load(module.default)||!host.ids.includes(item.id)){const reason=`${item.id}: ${status.at(-1)?.reason??"Module ID did not match manifest"}`;throw new GateError(item.id===request.candidateId?candidateRejected(reason):preconditionFailed(reason));}
   if(item.id!==request.candidateId)retained=ledger.usage();
  }
- for(let i=0;i<CANDIDATE_THRESHOLDS.sampleSeconds/MODULE_BUDGET.maxDtSeconds;i++){clock+=MODULE_BUDGET.maxDtSeconds*1000;host.update(MODULE_BUDGET.maxDtSeconds);if(host.activeCount!==request.modules.length){const fault=status.at(-1),reason=fault?.reason??"Module disabled during resource check";throw new GateError(fault?.id===request.candidateId?candidateRejected(reason):preconditionFailed(reason));}}
+ for(let i=0;i<CANDIDATE_THRESHOLDS.resourceSimulationSeconds/MODULE_BUDGET.maxDtSeconds;i++){clock+=MODULE_BUDGET.maxDtSeconds*1000;host.update(MODULE_BUDGET.maxDtSeconds);if(host.activeCount!==request.modules.length){const fault=status.at(-1),reason=fault?.reason??"Module disabled during resource check";throw new GateError(fault?.id===request.candidateId?candidateRejected(reason):preconditionFailed(reason));}}
  const usage=ledger.usage(),available=Object.fromEntries(usageKeys.map(k=>[k,Math.max(0,pool[k]-retained[k])])) as unknown as Usage;
  window.__resourceResult={ok:true,usage,pool,retained,available};
 }catch(error){window.__resourceResult={...(error instanceof GateError?error.verdict:infrastructureFailed(error instanceof Error?error.message:"Resource admission failed")),pool};}

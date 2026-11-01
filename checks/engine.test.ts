@@ -205,7 +205,13 @@ test("capture clocks and random streams are virtual while hook budgets keep real
  for(let i=0;i<3;i++){virtual+=1000/60;host.update(1/60);}assert.equal(host.activeCount,0,"real CPU overruns remain enforceable under a virtual clock");assert.equal(Math.random,original);host.dispose();
 });
 
-test("camera flights keep presentation duration at low FPS while module dt remains independently capped",async()=>{
- const {cameraPresentationDt}=await import('../world/engine/camera-director.js');const camera=new PerspectiveCamera(38,16/9,.1,300),director=new CameraDirector(camera);director.focus(new Vector3(1,2,1),{duration:1.5,priority:3});
- for(let i=0;i<8;i++)director.update(cameraPresentationDt(.2));const arrived=camera.position.clone();director.update(cameraPresentationDt(.2));assert.ok(camera.position.distanceTo(arrived)<1e-9);assert.equal(cameraPresentationDt(5),.25);assert.equal(cameraPresentationDt(-1),0);
+test("one simulation clock keeps hitches, camera flights and module time together",async()=>{
+ const {SimulationClock}=await import('../world/engine/clock.js');const clock=new SimulationClock(1000),camera=new PerspectiveCamera(38,16/9,.1,300),director=new CameraDirector(camera);director.focus(new Vector3(1,2,1),{duration:1.5,priority:3});
+ const before=camera.position.clone();assert.equal(clock.advance(1.2),.05);director.update(clock.dt);assert.equal(clock.now(),1050);assert.ok(camera.position.distanceTo(before)<.02);
+ for(let i=0;i<29;i++){director.update(clock.advance(.2));}const arrived=camera.position.clone();director.update(clock.advance(.2));assert.ok(camera.position.distanceTo(arrived)<1e-8);assert.equal(clock.advance(-1),0);
+});
+
+test("periodic host audits disable growth after wins and animated positions, including owned spawn roots",()=>{
+ const f=fixture(),mesh=new Mesh(new BoxGeometry(),new MeshBasicMaterial());f.host.load(()=>f.module('growth',{init(s){s.scene.add(mesh);},onChat(){mesh.scale.y=20;}}));f.host.onChat({id:'win',userId:'x',displayName:'x',color:'#ffffff',text:'!win',timestamp:0});f.host.update(.01);assert.equal(f.host.activeCount,1);f.advance(1001);f.host.update(.01);assert.equal(f.host.activeCount,0);assert.ok(f.status.some(s=>s.reason.includes('tallest tree')));
+ const root=new Group(),spawn=new Mesh(new BoxGeometry(),new MeshBasicMaterial());root.add(spawn);const host=new ModuleHost({root:new Group(),now:()=>0,clock:()=>2000,services:{...f.services,spawnSpec:()=>({id:'spec',root,dispose(){root.clear();}})}});assert.equal(host.load(()=>f.module('spawnGrowth',{init(s){spawn.scale.y=20;s.spawnSpec({} as never);}})),false);host.dispose();
 });

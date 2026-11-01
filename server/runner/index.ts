@@ -117,7 +117,7 @@ export class Runner {
           const discovered=await Promise.all(approved.files.map(async file=>inspectModule(await readFile(join(tree,file),"utf8"),file)));
           const commands=chatCommands(approved.spec,discovered.flatMap(found=>found.commands));
           if(discovered.some(found=>found.hasOnChatLogic)&&!commands.length)feed("check","Module has onChat logic but no testable custom !command; built-in commands are excluded.");
-          feed("check",`SwiftShader · ${CANDIDATE_THRESHOLDS.sampleSeconds}-second candidate gate · attempt ${attempt}.`);
+          feed("check",`SwiftShader · ${CANDIDATE_THRESHOLDS.slicePairs} paired ${CANDIDATE_THRESHOLDS.sliceFrames}-frame cost slices and full-look probes · attempt ${attempt}.`);
           requireGateTime(deadline-performance.now(),firstReason);
           check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal,commands,this.options.versions.renderLook??(sourceEnv.WORLD_LOOK==="classic"?"classic":"new"));
           // A background conflict copy or hostile edit stays fatal even when another gate fails.

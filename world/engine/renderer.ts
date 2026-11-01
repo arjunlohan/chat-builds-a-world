@@ -1,27 +1,23 @@
+import {measureRender} from "./render-timing.js";
+import {SimulationClock} from "./clock.js";
+import {worldPipeline} from "./render-pipeline.js";
 import {prepareModuleAssets} from "./asset-bank.js";
 import {capturePath,type CapturePath} from "./capture-path.js";
 import {random} from "./land.js";
 import type {WorldEvent} from "../../server/contracts.js";
 import {skyEnvironment} from "./environment.js";
-import {SelectiveBloomPass} from "./selective-bloom.js";
-import {ambientOcclusion} from "./ambient-occlusion.js";
-import {antialiasTarget} from "./antialias.js";
 import {moduleBounds} from "./module-bounds.js";
 import { contributionFootprint, VISIBILITY_PROBE } from "./visibility.js";
-import { PRODUCTION_PROFILE, shadowResolution, type RenderProfile } from "./render-profile.js";
+import { PRODUCTION_PROFILE, SHADOW_RESOLUTION, shadowResolution, type RenderProfile } from "./render-profile.js";
 import { SUMMON_POOL, modulePool, emptyUsage, RenderFailure } from "../shared/limits.js";
 import type { WorldVersion } from "../../server/versions/index.js";
 import type { WorldModuleFactory } from "./api.js";
 import { isChatCommand, hasPhysicalReaction } from "../../server/commands.js";
 import {
   ACESFilmicToneMapping, Group, PCFSoftShadowMap, PerspectiveCamera, Raycaster,
-  Scene, SRGBColorSpace, HalfFloatType, Vector2, WebGLRenderer, WebGLRenderTarget,
+  Scene, SRGBColorSpace, DataUtils, Vector2, WebGLRenderer,
 } from "three";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { CameraDirector, cameraPresentationDt } from "./camera-director.js";
+import { CameraDirector } from "./camera-director.js";
 import { createTerrain } from "./terrain.js";
 import { createGarden } from "./garden.js";
 import { createWater, createMotes } from "./water.js";
@@ -55,7 +51,7 @@ export interface RendererOptions {
 /** Fixed OBS framebuffer; CSS fits it into any viewport without extra DPR work. */
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions = {}) {
   const profile = options.profile ?? PRODUCTION_PROFILE;
-  let shadowDirty = true;
+  let shadowDirty = true;const clock=new SimulationClock(Date.now());let anchored=false;
   const clientId = crypto.randomUUID();
   const post = (url: string, data: object) => { if(options.playback)return;void fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, clientId }) }).catch(() => {}); };
   const reducedMotion = options.capture?{matches:false}:window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -68,7 +64,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = profile.shadows;
   renderer.shadowMap.type = PCFSoftShadowMap;
-  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.autoUpdate = profile.probe;
   renderer.shadowMap.needsUpdate = true;
   const scene = new Scene();
   canvas.dataset.look=profile.look??"new";canvas.dataset.resolution=`${profile.width}x${profile.height}`;
@@ -80,7 +76,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const garden = createGarden(profile.look);
   const water = createWater();
   const motes = createMotes();
-  const sky = createSky(scene, options.fixedTime,profile.look,shadowResolution(profile));
+  const sky = createSky(scene, options.fixedTime,profile.look,profile.probe?SHADOW_RESOLUTION.classic:shadowResolution(profile));
   const ibl=profile.look!=="classic"?skyEnvironment(renderer,scene,sky.sky):undefined;ibl?.update(sky.phase);
   canvas.dataset.shadow=String(sky.sunlight.shadow.mapSize.width);
   const effects = createEffects();
@@ -94,23 +90,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   resizeLabels.observe(canvas);
   environment.add(terrain, garden, water.root, motes.root, sky.root, effects.root, raidPortal.root, citizens.root);
 
-  const aa=antialiasTarget(renderer,profile);
-  const composer = new EffectComposer(renderer,aa.target);
-  const renderPass = new RenderPass(scene, camera);
-  const bloom = new UnrealBloomPass(new Vector2(profile.width / 2, profile.height / 2), 0.38, 0.65, 1.05);
-  const ao=profile.look!=="classic"?ambientOcclusion(scene,camera,profile.width,profile.height,aa.samples):undefined;
-  const selective=profile.look!=="classic"&&profile.bloom?new SelectiveBloomPass(renderer,scene,camera,profile.width,profile.height):undefined;
-  const output = new OutputPass();
-  composer.addPass(renderPass);
-  if(ao)composer.addPass(ao);
-  if(selective)composer.addPass(selective);else if (profile.bloom) composer.addPass(bloom);
-  if(aa.smaa)composer.addPass(aa.smaa);
-  composer.addPass(output);
-  canvas.dataset.aa=aa.samples?`msaa-${aa.samples}`:aa.smaa?"smaa":"none";
-  composer.setSize(profile.width, profile.height);
-  bloom.setSize(profile.width / 2, profile.height / 2);
-
-
+  const pipeline=worldPipeline(renderer,scene,camera,profile,profile.probe);
+  canvas.dataset.aa=pipeline.aa;canvas.dataset.pipeline=pipeline.passes.join(',');canvas.dataset.targets=JSON.stringify(pipeline.samples);
   const engineResources = new ResourceOwner();
   const base = engineResources.audit(environment);
   const ledger = new ResourceLedger(emptyUsage(), modulePool(base));
@@ -125,10 +106,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     effects: { play: effects.play }, camera: { focus: director.focus }, citizens: citizens.services };
   const materializer = new SpecMaterializer({ ...materializerOptions, ledger: summonLedger, onVisible: state => ack(state) });
   const moduleMaterializer = new SpecMaterializer({ ...materializerOptions, ledger });
-  let captureEpoch=0;const captureRandom=options.capture?random(options.capture.seed):undefined;
+  const captureRandom=options.capture?random(options.capture.seed):undefined;
   const hostOptions: ConstructorParameters<typeof ModuleHost>[0] = {
     ...(profile.probe?{onWork:(id:string,ms:number)=>{if(id===options.probeId)stats.value.moduleMs=ms;},onHook:(id:string,hook:string)=>{if(id===options.probeId&&hook==="onChat")stats.value.moduleChats++;},onFocus:(id:string)=>{if(id===options.probeId)stats.value.moduleFocuses++;}}:{}),
-    ...(options.capture?{clock:()=>elapsed*1000,random:captureRandom!}:{}),
+    clock:clock.now,...(captureRandom?{random:captureRandom}:{}),
     root: moduleRoot, ledger, onSceneChange: () => { shadowDirty = true; }, protectedResources: engineResources,
     services: { citizens: citizens.services, spawnSpec: spec => moduleMaterializer.spawn(spec), camera: { focus: director.focus }, effects: { play: effects.play }, log },
     onStatus: (event: ModuleStatus) => {
@@ -145,15 +126,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   let activeVersion: WorldVersion | null = null;
   const moduleReceipt = (version: WorldVersion, ok: boolean) => post("/modules/ack", { version: version.version, receipt: version.receipt, ok });
   const probe = profile.probe ? {
-    target: new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height),
-    hdr: new WebGLRenderTarget(VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,{type:HalfFloatType,samples:aa.samples}),
-    withPixels: new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),
-    withoutPixels: new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),
-    capture(pixels: Uint8Array) {
-      renderer.setRenderTarget(this.hdr);renderer.render(scene,camera);output.render(renderer,this.target,this.hdr,0,false);
-      renderer.readRenderTargetPixels(this.target,0,0,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,pixels);
-    },
-  } : undefined;
+    pipeline:worldPipeline(renderer,scene,camera,{...profile,width:VISIBILITY_PROBE.width,height:VISIBILITY_PROBE.height}),
+    halves:new Uint16Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),
+    withPixels:new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),withoutPixels:new Uint8Array(VISIBILITY_PROBE.width*VISIBILITY_PROBE.height*4),
+    capture(pixels:Uint8Array){this.pipeline.render(0,false);renderer.readRenderTargetPixels(this.pipeline.composer.readBuffer,0,0,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height,this.halves);for(let i=0;i<pixels.length;i++)pixels[i]=Math.max(0,Math.min(255,Math.round(DataUtils.fromHalfFloat(this.halves[i]!)*255)));},
+  }:undefined;
+  if(probe){canvas.dataset.probePipeline=probe.pipeline.passes.join(',');canvas.dataset.probeTargets=JSON.stringify(probe.pipeline.samples);}
   let activation = 0;
   async function activate(version: WorldVersion | null, celebrate=false) {
     const generation = ++activation; shadowDirty = true;
@@ -184,27 +162,26 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const stats = new FrameStats(profile.probe?2048:0);
   if(stats.trace)window.__worldFrameTrace=stats.trace;
   window.__worldStats = stats.value;
-  let elapsed = 0, disposed = false, ready = false, frameId = 0, uiTime = 0;
-  let serverOffset = 0;
+  let disposed = false, ready = false, frameId = 0, uiTime = 0;
   const onEvent=(event:WorldEvent)=>{
-    serverOffset = event.now - Date.now();
+    if(!anchored){clock.anchor(event.now);anchored=true;}
     switch (event.type) {
     case "snapshot": {
       post("/modules/budget",{base,look:profile.look??"new"});
       void activate(event.version);
-      citizens.sync(event.citizens, event.now); stats.value.raidCount = event.raids;
-      if(event.arrival)raidPortal.open(event.arrival.raid.broadcasterName,event.arrival.admitted,event.arrival.raid.viewerCount,elapsed-(event.now-event.arrival.at)/1000);
+      citizens.sync(event.citizens.map(c=>clock.citizen(c,event.now)), clock.now()); stats.value.raidCount = event.raids;
+      if(event.arrival)raidPortal.open(event.arrival.raid.broadcasterName,event.arrival.admitted,event.arrival.raid.viewerCount,clock.seconds-(event.now-event.arrival.at)/1000);
       for (const failure of materializer.sync(event.summons)) ack(failure.state, failure.code);
       break; }
     case "version": void activate(event.version,true); break;
     case "chat": {
-      const spawned = citizens.upsert(event.citizen, event.now);
+      const spawned = citizens.upsert(clock.citizen(event.citizen,event.now), clock.now());
       if (spawned) {
         host.onCitizenSpawn(spawned);
         effects.play("spawn", spawned.position);
         director.notice(spawned.position, 0);
       }
-      host.onChat(event.chat);
+      host.onChat({...event.chat,timestamp:event.chat.timestamp+clock.now()-event.now});
       if (isChatCommand(event.chat.text) && !hasPhysicalReaction(event.chat.text)) {
         const citizen = citizens.services.get(event.citizen.id);
         if (citizen && !reducedMotion.matches) { effects.play("sparkle", citizen.position); stats.value.commandReactions++; }
@@ -216,8 +193,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       break; }
     case "remove": citizens.remove(event.ids);break;
     case "raid": {
-      stats.value.raidCount++;effects.play("portal",raidPortal.root.position);raidPortal.open(event.raid.broadcasterName,event.citizens.length,event.raid.viewerCount,elapsed);
-      for(const state of event.citizens){const spawned=citizens.upsert(state,event.now);if(spawned)host.onCitizenSpawn(spawned);}
+      stats.value.raidCount++;effects.play("portal",raidPortal.root.position);raidPortal.open(event.raid.broadcasterName,event.citizens.length,event.raid.viewerCount,clock.seconds);
+      for(const state of event.citizens){const spawned=citizens.upsert(clock.citizen(state,event.now),clock.now());if(spawned)host.onCitizenSpawn(spawned);}
       director.focus(raidPortal.root.position,{priority:2,duration:2.8});host.onRaid(event.raid);break;
     }
     case "summon": {
@@ -235,11 +212,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   function frame(now: number,forcedDt?:number) {
     if (disposed || !options.capture&&document.hidden) return;
-    const sampled=stats.sample(now),realDt=forcedDt??sampled;
-    const dt = Math.min(0.05, realDt);
-    elapsed += dt;
+    const dt=clock.advance(forcedDt??stats.sample(now));if(forcedDt!==undefined)stats.sample(now);stats.value.simTime=clock.seconds;
     // Reduced motion keeps composition still but retains rendered, measurable frames.
-    const visualTime = reducedMotion.matches ? 0 : elapsed;
+    const visualTime = reducedMotion.matches ? 0 : clock.seconds;
     try {
       stats.value.citizenCount=citizens.count;
       renderer.info.reset();
@@ -247,14 +222,15 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       sky.update(visualTime);ibl?.update(sky.phase);if(profile.look!=="classic")renderer.toneMappingExposure=1.05+(1-sky.day)*.15;
       water.update(visualTime, sky.day);
       motes.update(visualTime, 1 - sky.day);
-      effects.update(elapsed);stats.value.raidPortalActive=raidPortal.update(elapsed,reducedMotion.matches);
-      if(!profile.probe||!stats.value.measureCameraLocked)director.update(options.capture?dt:cameraPresentationDt(realDt));
-      citizens.update(dt, elapsed, options.capture?captureEpoch+elapsed*1000:Date.now()+serverOffset, camera, reducedMotion.matches);
+      effects.update(clock.seconds);stats.value.raidPortalActive=raidPortal.update(clock.seconds,reducedMotion.matches);
+      if(!profile.probe||!stats.value.measureCameraLocked)director.update(dt);
+      citizens.update(dt, clock.seconds, clock.now(), camera, reducedMotion.matches);
       materializer.update(dt, camera, reducedMotion.matches); moduleMaterializer.update(dt, camera, reducedMotion.matches);
-      if(!options.capture)labelManager.update(Date.now() + serverOffset, camera, director.focusPoint);
+
       stats.value.cameraFocuses = director.automaticFocuses;
       stats.value.moduleMs=0;host.update(dt);
-      if(options.capture){const id=options.capture.moduleId??host.ids[0];capturePath(camera,options.capture.path,elapsed,moduleBounds(id?host.visualRoots(id):[]));labelManager.update(captureEpoch+elapsed*1000,camera,director.focusPoint);}
+      if(options.capture){const id=options.capture.moduleId??host.ids[0];capturePath(camera,options.capture.path,clock.seconds,moduleBounds(id?host.visualRoots(id):[]));}
+      labelManager.update(clock.now(),camera,director.focusPoint);
       if (pendingAck) {
         if (stats.value.moduleError) { moduleReceipt(pendingAck.version, false); pendingAck = null; }
         else if (++pendingAck.frames >= 8) { moduleReceipt(pendingAck.version, true); if(pendingAck.celebrate&&!reducedMotion.matches)effects.celebrate(); pendingAck = null; }
@@ -265,24 +241,25 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       // Checker-only A/B slices: hooks and chat keep running; only owned visual roots change.
       const hiddenRoots=profile.probe&&options.probeId&&!stats.value.measureCandidateVisible?host.visualRoots(options.probeId):[];
       const rootVisibility=hiddenRoots.map(root=>root.visible);
-      try{for(const root of hiddenRoots)root.visible=false;composer.render(dt);}
+      try{for(const root of hiddenRoots)root.visible=false;pipeline.render(dt);}
       finally{for(let i=0;i<hiddenRoots.length;i++)hiddenRoots[i]!.visible=rootVisibility[i]!;}
       stats.value.renderMs = performance.now() - renderStart; stats.value.triangles = renderer.info.render.triangles;
       materializer.rendered(camera);
       const probeStart=probe?performance.now():0;
       if (probe && options.probeId && stats.value.probeRequest>stats.value.probeCompleted) {
-        const roots=host.visualRoots(options.probeId),visible=roots.map(root=>root.visible),toScreen=output.renderToScreen;
+        const roots=host.visualRoots(options.probeId),visible=roots.map(root=>root.visible);
         try {
           const bounds=moduleBounds(roots);
           stats.value.moduleWorldHeight=bounds.isEmpty()?0:bounds.max.y-bounds.min.y;
-          output.renderToScreen=false;
           probe.capture(probe.withPixels);
           for(const root of roots)root.visible=false;
           probe.capture(probe.withoutPixels);
           const footprint=contributionFootprint(probe.withPixels,probe.withoutPixels,VISIBILITY_PROBE.width,VISIBILITY_PROBE.height);
           stats.value.modulePixels=footprint.hdPixels;stats.value.moduleProbePixels=footprint.probePixels;stats.value.moduleWidth=footprint.hdWidth;stats.value.moduleHeight=footprint.hdHeight;
+          let hash=2166136261,lit=0;for(let i=0;i<probe.withPixels.length;i+=20){if(probe.withPixels[i]!+probe.withPixels[i+1]!+probe.withPixels[i+2]!>24)lit++;for(let k=0;k<4;k++)hash=Math.imul(hash^probe.withPixels[i+k]!,16777619);}
+          stats.value.probeHash=hash;stats.value.probeLit=lit;window.__worldProbePixels=probe.withPixels;
           stats.value.probeCompleted=stats.value.probeRequest;
-        }finally{output.renderToScreen=toScreen;for(let i=0;i<roots.length;i++)roots[i]!.visible=visible[i]!;renderer.setRenderTarget(null);}
+        }finally{for(let i=0;i<roots.length;i++)roots[i]!.visible=visible[i]!;renderer.setRenderTarget(null);}
       }
       if(stats.trace)stats.recordWork(performance.now()-probeStart);
       if (!ready) { ready = true; options.onReady?.(); }
@@ -327,10 +304,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   if (!document.hidden&&!options.capture) frameId = requestAnimationFrame(frame);
 
   return {
-    async loadCapture(snapshot:Extract<WorldEvent,{type:"snapshot"}>){captureEpoch=snapshot.now;citizens.sync(snapshot.citizens,snapshot.now);stats.value.raidCount=snapshot.raids;
+    async loadCapture(snapshot:Extract<WorldEvent,{type:"snapshot"}>){clock.reset(snapshot.now);anchored=true;citizens.sync(snapshot.citizens,snapshot.now);stats.value.raidCount=snapshot.raids;
       if(snapshot.arrival)raidPortal.open(snapshot.arrival.raid.broadcasterName,snapshot.arrival.admitted,snapshot.arrival.raid.viewerCount,-(snapshot.now-snapshot.arrival.at)/1000);
       materializer.sync(snapshot.summons);await activate(snapshot.version);frame(0,0);renderer.getContext().finish();},
-    step(dt:number){if(renderer.getContext().isContextLost())throw new Error("Capture graphics context lost");if(!options.capture)throw new Error("Use ?capture=1");if(!Number.isFinite(dt)||dt<0||dt>.05)throw new Error("Capture dt must be 0..0.05 seconds");frame((elapsed+dt)*1000,dt);renderer.getContext().finish();return {time:elapsed,frame:stats.value.frame};},
+    step(dt:number){if(renderer.getContext().isContextLost())throw new Error("Capture graphics context lost");if(!options.capture)throw new Error("Use ?capture=1");if(!Number.isFinite(dt)||dt<0||dt>.05)throw new Error("Capture dt must be 0..0.05 seconds");frame((clock.seconds+dt)*1000,dt);renderer.getContext().finish();return {time:clock.seconds,frame:stats.value.frame};},
+    measureRender(frames=30){return measureRender(renderer,()=>pipeline.render(0,false),frames);},
     renderer, scene, camera, director, setVersion: activate, get host(){return host;}, citizens, materializer, stats: stats.value, baseUsage: base,
     dispose() {
       if (disposed) return;
@@ -342,8 +320,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       disconnect(); resizeLabels.disconnect(); citizens.dispose(); raidPortal.dispose(); labelManager.dispose();
       host.dispose(); materializer.dispose(); moduleMaterializer.dispose();
       engineResources.dispose(environment);
-      probe?.target.dispose();probe?.hdr.dispose();
-      ibl?.dispose();ao?.dispose();selective?.dispose();aa.smaa?.dispose(); bloom.dispose(); output.dispose(); renderPass.dispose(); composer.dispose(); renderer.dispose();
+      probe?.pipeline.dispose();pipeline.dispose();ibl?.dispose();renderer.dispose();
     },
   };
 }

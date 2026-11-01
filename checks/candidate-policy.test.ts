@@ -45,3 +45,7 @@ test("scale bounds refresh animated particle positions rather than cached geomet
  const geometry=new BufferGeometry().setAttribute('position',new Float32BufferAttribute([0,1,0,0,2,0],3)),cloud=new Points(geometry,new PointsMaterial());
  assert.equal(moduleBounds([cloud]).max.y,2);geometry.getAttribute('position').setY(1,20);assert.equal(moduleBounds([cloud]).max.y,20);assert.match(scaleVerdict(moduleBounds([cloud]).max.y-moduleBounds([cloud]).min.y)!,/tallest tree/);geometry.dispose();cloud.material.dispose();
 });
+
+test('rejection text gives the deciding paired median and every baseline/candidate rate',()=>{
+ const pairs=[60,50,45,40,35,30,25].map(fps=>({baseline:summary(frames(fps)),candidate:summary(frames(fps*.7))}));const result=frameVerdict(summary(frames(100)),summary(frames(99)),15,pairs);assert.equal(result.ok,false);assert.match(result.reason!,/Median paired drop 30.0%/);assert.match(result.reason!,/1:60.0\/42.0/);assert.match(result.reason!,/7:25.0\/17.5/);assert.equal(result.baselineFps,40);assert.ok(Math.abs(result.fps-28)<1e-9);
+});

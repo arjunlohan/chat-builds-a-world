@@ -3,9 +3,8 @@ import { MathUtils, Vector3, type PerspectiveCamera } from "three";
 import { clampToWorld } from "../shared/limits.js";
 import type { WorldServices } from "./api.js";
 
-/** Presentation flights keep their advertised duration even when module simulation dt is capped. */
-export const cameraPresentationDt=(seconds:number)=>Math.min(.25,Math.max(0,Number.isFinite(seconds)?seconds:0));
-const home = new Vector3(0, -0.25, 0);
+export const ESTABLISHING_POSE=Object.freeze({angle:-.65,radius:34,height:15.5,lookAt:[0,-.25,0] as const});
+const home = new Vector3(...ESTABLISHING_POSE.lookAt);
 const smooth = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 
 /** Slow establishing shot; focus transitions retarget from the current pose. */
@@ -47,8 +46,8 @@ export class CameraDirector {
   }
 
   private driftPosition() {
-    const angle = -0.65 + (this.reducedMotion ? 0 : Math.sin(this.time * 0.023) * 0.24);
-    this.drift.set(Math.sin(angle) * 34, 15.5 + Math.sin(this.time * 0.06) * (this.reducedMotion ? 0 : 0.6), Math.cos(angle) * 34);
+    const p=ESTABLISHING_POSE,angle = p.angle + (this.reducedMotion ? 0 : Math.sin(this.time * 0.023) * 0.24);
+    this.drift.set(Math.sin(angle) * p.radius, p.height + Math.sin(this.time * 0.06) * (this.reducedMotion ? 0 : 0.6), Math.cos(angle) * p.radius);
   }
 
   readonly focus: WorldServices["camera"]["focus"] = (position, options = {}) => {
