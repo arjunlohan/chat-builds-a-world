@@ -26,6 +26,7 @@ interface HostOptions {
   now?: () => number;
   onStatus?: (status: ModuleStatus) => void;
   onSceneChange?: () => void;
+  onWork?: (id:string,ms:number) => void;
 }
 const snapshot = (citizen: Citizen): Citizen => Object.isFrozen(citizen) && Object.isFrozen(citizen.position) ? citizen : Object.freeze({
   id: citizen.id, displayName: citizen.displayName, color: citizen.color,
@@ -252,7 +253,7 @@ export class ModuleHost {
             record.root.visible = false;
         this.status(record.id, "disabled", error instanceof Error ? error.message : "hook failed");
         disabled.push(record);
-      }
+      }finally{this.options.onWork?.(record.id,elapsed);}
     }
     this.cursor = records.length ? (this.cursor + 1) % records.length : 0;
     for (const record of disabled) { this.cleanup(record); this.records.delete(record.id); }

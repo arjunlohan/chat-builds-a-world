@@ -1,9 +1,9 @@
-export interface FrameTrace { frames: Uint32Array; times: Float64Array; intervals: Float32Array; cpu: Float32Array; render: Float32Array; probe: Float32Array; size: number; cursor: number }
-export interface WorldStats { fps: number; avgFps: number; frame: number; citizenCount: number; raidCount: number; raidPortalActive:boolean; cameraFocuses: number; summonCount: number; summonFocuses: number; commandReactions: number; moduleVersion: number; moduleCount: number; moduleSwaps: number; moduleError: string; modulePixels: number; updateMs: number; renderMs: number; triangles: number; maxFrameGap: number; lastFrameAt: number; probeRequest: number; probeCompleted: number; moduleProbePixels: number; moduleWidth: number; moduleHeight: number }
+export interface FrameTrace { frames: Uint32Array; times: Float64Array; intervals: Float32Array; cpu: Float32Array; module: Float32Array; render: Float32Array; probe: Float32Array; size: number; cursor: number }
+export interface WorldStats { fps: number; avgFps: number; frame: number; citizenCount: number; raidCount: number; raidPortalActive:boolean; cameraFocuses: number; summonCount: number; summonFocuses: number; commandReactions: number; moduleVersion: number; moduleCount: number; moduleSwaps: number; moduleError: string; modulePixels: number; updateMs: number; moduleMs: number; renderMs: number; triangles: number; maxFrameGap: number; lastFrameAt: number; probeRequest: number; probeCompleted: number; moduleProbePixels: number; moduleWidth: number; moduleHeight: number }
 
 /** Real presentation timing, not simulation dt. Pauses never count as slow frames. */
 export class FrameStats {
-  readonly value: WorldStats = { fps: 0, avgFps: 0, frame: 0, citizenCount: 0, raidCount: 0, raidPortalActive:false, cameraFocuses: 0, summonCount: 0, summonFocuses: 0, commandReactions: 0, moduleVersion: 0, moduleCount: 0, moduleSwaps: 0, moduleError: "", modulePixels: 0, updateMs: 0, renderMs: 0, triangles: 0, maxFrameGap: 0, lastFrameAt: 0, probeRequest: 0, probeCompleted: 0, moduleProbePixels: 0, moduleWidth: 0, moduleHeight: 0 };
+  readonly value: WorldStats = { fps: 0, avgFps: 0, frame: 0, citizenCount: 0, raidCount: 0, raidPortalActive:false, cameraFocuses: 0, summonCount: 0, summonFocuses: 0, commandReactions: 0, moduleVersion: 0, moduleCount: 0, moduleSwaps: 0, moduleError: "", modulePixels: 0, updateMs: 0, moduleMs: 0, renderMs: 0, triangles: 0, maxFrameGap: 0, lastFrameAt: 0, probeRequest: 0, probeCompleted: 0, moduleProbePixels: 0, moduleWidth: 0, moduleHeight: 0 };
   private last: number | undefined;
   private readonly samples = new Float64Array(120);
   private cursor = 0;
@@ -11,8 +11,8 @@ export class FrameStats {
   private total = 0;
 
   readonly trace: FrameTrace | undefined;
-  constructor(capture=0) { if(capture)this.trace={frames:new Uint32Array(capture),times:new Float64Array(capture),intervals:new Float32Array(capture),cpu:new Float32Array(capture),render:new Float32Array(capture),probe:new Float32Array(capture),size:0,cursor:0}; }
-  recordWork(probeMs=0) { const t=this.trace;if(!t)return;const i=(t.cursor+t.frames.length-1)%t.frames.length;t.cpu[i]=this.value.updateMs;t.render[i]=this.value.renderMs;t.probe[i]=probeMs; }
+  constructor(capture=0) { if(capture)this.trace={frames:new Uint32Array(capture),times:new Float64Array(capture),intervals:new Float32Array(capture),cpu:new Float32Array(capture),module:new Float32Array(capture),render:new Float32Array(capture),probe:new Float32Array(capture),size:0,cursor:0}; }
+  recordWork(probeMs=0) { const t=this.trace;if(!t)return;const i=(t.cursor+t.frames.length-1)%t.frames.length;t.cpu[i]=this.value.updateMs;t.module[i]=this.value.moduleMs;t.render[i]=this.value.renderMs;t.probe[i]=probeMs; }
 
   resetClock() { this.last = undefined; }
 

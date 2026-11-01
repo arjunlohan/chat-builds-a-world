@@ -22,7 +22,8 @@
     "sim:soak": "tsx checks/perf-soak.ts",
     "check:gate": "tsx checks/candidate.smoke.ts",
     "sim:reactions": "tsx server/sim/reactions.ts",
-    "check:reactions": "tsx checks/reactions.smoke.ts"
+    "check:reactions": "tsx checks/reactions.smoke.ts",
+    "check:gate-load": "tsx checks/candidate-load.smoke.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0",

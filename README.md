@@ -215,8 +215,10 @@ appear as raw speech bubbles. Guard rejections and failed builds retain the worl
   Plugin/app/hook discovery is disabled. Output is bounded and redacted; the
   process group is killed on timeout/cancellation. Tokens are never logged.
 - Path/AST/type/resource checks precede a 15-second Chromium/SwiftShader gate with
-  300 citizens. It rejects errors, <40 FPS, actual frame gaps >1s, frozen/black
-  output or an insufficient visible footprint. The gate has a 24-second watchdog.
+  300 citizens. It first samples the same retained world for 5 seconds, then rejects a candidate
+  costing over 20% throughput, over 2ms p95 hook CPU or added render time, errors,
+  frozen/black output, sustained collapse or an insufficient visible footprint.
+  Isolated scheduler gaps do not reject a module. The gate has a 40-second watchdog.
   It uses a 1920x1080 viewport and a reduced 160x90 framebuffer for software
   rendering, with separate visibility probes; it is not a full-HD GPU benchmark.
 - Checked modules require a live activation acknowledgement. Failed activations

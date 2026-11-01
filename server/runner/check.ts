@@ -1,10 +1,11 @@
+import {CANDIDATE_THRESHOLDS} from "../../checks/candidate-policy.js";
 import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {jsonWorker} from "../runtime/json-worker.js";
 import {isGateVerdict,infrastructureFailed,type GateVerdict} from "./verdict.js";
-export const CHECK_TIMEOUT_MS=24_000;
+export const CHECK_TIMEOUT_MS=CANDIDATE_THRESHOLDS.watchdogMs;
 export type CheckResult=GateVerdict&{fps?: number; avgFps?: number; samples?: number; durationMs?: number; evidence?: string};
 export async function candidateCheck(root: string, modules: { id: string; file: string; code: string }[], probeId: string, signal: AbortSignal): Promise<CheckResult> {
   const started = performance.now(), directory = join(root, "state/checks"); await mkdir(directory, { recursive: true });

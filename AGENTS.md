@@ -362,9 +362,9 @@ Top level: imports, function/interface/type declarations, literal or function va
 Forbidden identifiers: window, document, globalThis, self, global, process, require, fetch, XMLHttpRequest, WebSocket, Worker, navigator, location, eval, Function, setTimeout, setInterval, requestAnimationFrame, queueMicrotask, Promise, performance, Date, console, importScripts, Reflect, Proxy. Forbidden property names (including strings): constructor, __proto__, prototype, parent, onBeforeRender, onAfterRender, onBeforeCompile, addEventListener, removeEventListener.
 Resource admission: module nodes=64, triangles=50000, draws=64, lights=4, particles=512; global nodes=1024, triangles=200000, draws=256, lights=8, particles=2048. The base world plus reserved summon pool (nodes=512, triangles=70000, draws=128, lights=6, particles=1024) and retained modules reduce available capacity; use the attached live resource context, not just the per-module maximum. Points count allocated vertices even with a small drawRange/index. InstancedMesh charges allocated instance capacity as particles and geometry triangles times capacity. Nodes and draw calls count too. Materials have no independent numeric cap; reuse a small shared set, material/group draws still count. No local lights are in the import allowlist.
 Frame budget: 2 ms/module, 4 ms/all modules; dt <= 0.05 s; at most 8 active modules. Init/dispose <= 8 ms. 3 overruns in 60 frames disable the module. No per-frame allocations or nested roster scans.
-Candidate gate: 15 s with a full citizen crowd; both measured and rolling average FPS >= 40; actual frame gaps <= 1000 ms; no errors, frozen or black output. Visibility: contribute >= 4096 contrasted 1920x1080 pixel-equivalents AND a >= 64x64px footprint in 2 of 3 probes, including the final probe. Contrast must change a color channel by >= 12/255 against the same scene without your module. Keep it visible immediately, above terrain and clear of trees; use strong contrast and margin above the minima. Do not move the camera to game the check.
+Candidate gate: 15 s with a full citizen crowd; 5 s of the same retained world immediately precedes the candidate in the same browser. Trim 5% scheduler outliers at each tail; candidate throughput may drop at most 20% versus baseline. Candidate hook CPU p95 and added render p95 must each stay <= 2 ms. No errors, frozen or black output; 3 consecutive frames over 1000 ms are sustained collapse. External watchdog 40 s. Visibility: contribute >= 4096 contrasted 1920x1080 pixel-equivalents AND a >= 64x64px footprint in 2 of 3 probes, including the final probe. Contrast must change a color channel by >= 12/255 against the same scene without your module. Keep it visible immediately, above terrain and clear of trees; use strong contrast and margin above the minima. Do not move the camera to game the check.
 Compliant particle indexing: const positions = new Float32Array(96 * 3); for (let i=0; i<96; i++) { const x=i*3, y=x+1, z=x+2; positions[x]=Math.cos(i)*2; positions[y]=4+(i%12)/3; positions[z]=Math.sin(i)*2; } const geometry=new BufferGeometry(); geometry.setAttribute("position",new Float32BufferAttribute(positions,3)); const cloud=new Points(geometry,new PointsMaterial({color:"#fff2aa",size:0.4})); services.scene.add(cloud); // inside init; update only reuses/rotates cloud; dispose geometry/material.
-Run the provided locked self-check command, fix policy/type failures, and rerun before finishing. This sandbox-compatible command checks policy and TypeScript only; do not launch Chromium or try alternate commands. The runner independently repeats those checks, performs resource admission, and runs the unchanged FPS/visibility gate.
+Run the provided locked self-check command, fix policy/type failures, and rerun before finishing. This sandbox-compatible command checks policy and TypeScript only; do not launch Chromium or try alternate commands. The runner independently repeats those checks, performs resource admission, and runs the relative-cost/visibility gate.
 <!-- runtime-imports:end -->
 
 The authoritative TypeScript interfaces are `world/engine/api.ts`. A module's
@@ -440,10 +440,12 @@ failed activation disposes the candidate and keeps the previous version active.
   2,048 particles and 300 citizens. The engine reserves headroom for its base world;
   reject an allocation atomically if capacity is unavailable. Dispose releases it.
 - The Phase 7 gate uses Chromium/SwiftShader in a 1920×1080 viewport with a reduced
-  160×90 framebuffer, fixed seed, 300 citizens and 15 seconds after warmup. Both
-  measured and rolling average FPS must be >=40. Reject console/hook errors,
-  gaps >1 s, frozen/black pixels or a candidate with no visible pixels. The external
-  checker deadline is 24 s (whole check <25 s), including startup and cleanup.
+  160×90 framebuffer, fixed seed and 300 citizens. Measure a 5-second retained-world
+  baseline immediately before 15 seconds with the candidate in the same page.
+  Judge relative throughput and candidate hook/added-render cost from the rendered
+  rules above, not host FPS or isolated scheduler gaps. Reject console/hook errors,
+  frozen/black pixels, sustained collapse or insufficient visible contribution.
+  The external checker watchdog is 40 seconds, including startup and cleanup.
 - `?check=1` passes a production render profile with only reduced resolution and
   an owned-geometry visibility probe. Materials, full citizen geometry, lighting,
   shadows and bloom match normal /world. No cached island, simple materials or
@@ -970,8 +972,9 @@ Full JSON schema (keep identical to the canonical file):
   invocation. Generic process code has no Codex-home policy.
 - The gate measures actual RAF frame intervals, not Playwright polling gaps. Its
   check-only trace records frame timestamps and CPU/render/probe work. Visibility
-  probes happen outside the 15-second production-performance window. Keep the
-  24-second external watchdog and retain candidate source, incremental evidence,
+  probes happen outside the 15-second production-performance window. Use the paired same-page baseline to judge module cost; isolated scheduler
+  gaps are diagnostics. Keep the
+  40-second external watchdog and retain candidate source, incremental evidence,
   result and a responsive-page screenshot under ignored state/checks/.
 - Visibility uses paired normal HDR renders with/without candidate ownership,
   retaining world occlusion. A ship needs at least 4096 contrasted full-HD

@@ -107,6 +107,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const materializer = new SpecMaterializer({ ...materializerOptions, ledger: summonLedger, onVisible: state => ack(state) });
   const moduleMaterializer = new SpecMaterializer({ ...materializerOptions, ledger });
   const hostOptions: ConstructorParameters<typeof ModuleHost>[0] = {
+    ...(profile.probe?{onWork:(id:string,ms:number)=>{if(id===options.probeId)stats.value.moduleMs=ms;}}:{}),
     root: moduleRoot, ledger, onSceneChange: () => { shadowDirty = true; }, protectedResources: engineResources,
     services: { citizens: citizens.services, spawnSpec: spec => moduleMaterializer.spawn(spec), camera: { focus: director.focus }, effects: { play: effects.play }, log },
     onStatus: (event: ModuleStatus) => {
@@ -229,7 +230,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       materializer.update(dt, camera, reducedMotion.matches); moduleMaterializer.update(dt, camera, reducedMotion.matches);
       labelManager.update(Date.now() + serverOffset, camera, director.focusPoint);
       stats.value.cameraFocuses = director.automaticFocuses;
-      host.update(dt);
+      stats.value.moduleMs=0;host.update(dt);
       if (pendingAck) {
         if (stats.value.moduleError) { moduleReceipt(pendingAck.version, false); pendingAck = null; }
         else if (++pendingAck.frames >= 8) { moduleReceipt(pendingAck.version, true); if(pendingAck.celebrate&&!reducedMotion.matches)effects.celebrate(); pendingAck = null; }

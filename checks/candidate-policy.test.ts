@@ -1,18 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { frameVerdict, visibilityVerdict, type FrameEvidence } from "./candidate-policy.js";
+import { frameVerdict, summarizeFrames, visibilityVerdict, type FrameEvidence } from "./candidate-policy.js";
 import { contributionFootprint } from "../world/engine/visibility.js";
-const frames=():FrameEvidence[]=>Array.from({length:900},(_,i)=>({frame:i+1,time:(i+1)*1000/60,dt:1000/60,cpu:.4,render:.8}));
-test("delayed automation polls do not label steadily rendered frames frozen",()=>{
- // Even a 2400ms gap in Playwright samples is irrelevant when all RAF intervals stayed 16.67ms.
- const result=frameVerdict({frame:0,time:0},{frame:900,time:15000,avgFps:60},frames(),15,[0,1000,3400,4000]);assert.equal(result.ok,true);assert.ok(result.maxFrameGap<17);assert.equal(result.maxPollGap,2400);
+const frames=(fps=60):FrameEvidence[]=>Array.from({length:900},(_,i)=>({frame:i+1,time:(i+1)*1000/fps,dt:1000/fps,cpu:.4,render:.8,module:.1}));
+const summary=(values=frames(),time=15000)=>summarizeFrames({frame:0,time:0},{frame:900,time,avgFps:900000/time},values,[0,1000,3400,4000]);
+test("slow host and isolated scheduler/poll gaps do not reject cheap module work",()=>{
+ const base=summary(frames(31),900000/31),values=frames(30);values[100]!.dt=1300;
+ const candidate=summary(values,900000/30),result=frameVerdict(base,candidate,15);assert.equal(result.ok,true);assert.equal(result.maxPollGap,2400);assert.equal(result.maxFrameGap,1300);assert.ok(result.fpsDropRatio<.04);
 });
-test("a true rendered frame gap, absent frames, low FPS or frozen pixels still fail",()=>{
- const actual=frames();actual[100]!.dt=1300;actual[99]!.cpu=1250;
- const result=frameVerdict({frame:0,time:0},{frame:900,time:15000,avgFps:60},actual,15);assert.equal(result.ok,false);assert.match(result.reason!,/1300.*CPU 1250/);
- assert.equal(frameVerdict({frame:0,time:0},{frame:0,time:15000,avgFps:60},[],15).ok,false);
- assert.equal(frameVerdict({frame:0,time:0},{frame:900,time:30000,avgFps:30},frames(),15).ok,false);
- assert.equal(frameVerdict({frame:0,time:0},{frame:900,time:15000,avgFps:60},frames(),1).ok,false);
+test("relative cost, module CPU, added rendering, frozen pixels and sustained collapse still fail",()=>{
+ const base=summary();assert.match(frameVerdict(base,summary(frames(40),22500),15).reason!,/relative FPS/);
+ const cpu=frames();for(const f of cpu)f.module=3;assert.match(frameVerdict(base,summary(cpu),15).reason!,/hook CPU/);
+ const render=frames();for(const f of render)f.render=4;assert.match(frameVerdict(base,summary(render),15).reason!,/added render/);
+ const collapse=frames();for(let i=10;i<13;i++)collapse[i]!.dt=1200;assert.match(frameVerdict(base,summary(collapse),15).reason!,/Sustained/);
+ assert.match(frameVerdict(base,summary([]),15).reason!,/Frozen render/);assert.match(frameVerdict(base,base,1).reason!,/Frozen canvas/);
 });
 test("visibility uses explicit full-HD units, contrast and a readable footprint",()=>{
  const width=192,height=108,a=new Uint8Array(width*height*4),b=new Uint8Array(a.length);
