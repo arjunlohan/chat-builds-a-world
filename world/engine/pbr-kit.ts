@@ -1,4 +1,4 @@
-import {Color,MeshStandardMaterial,MeshBasicMaterial,MeshLambertMaterial,MeshPhongMaterial,Mesh,Texture,DataTexture,type PixelFormat,type MeshStandardMaterialParameters,type Material,type Object3D} from 'three';
+import {Color,MeshStandardMaterial,MeshBasicMaterial,MeshLambertMaterial,MeshPhongMaterial,Mesh,Texture,type MeshStandardMaterialParameters,type Material,type Object3D} from 'three';
 import {toCreasedNormals} from 'three/addons/utils/BufferGeometryUtils.js';
 import {MATERIAL_KIT,type MaterialPreset} from '../shared/material-kit.js';import {assetMaps} from './asset-bank.js';import type {WorldLook} from './render-profile.js';import type {ResourceOwner} from './resources.js';
 export function materialPreset(parameters:MeshStandardMaterialParameters):MaterialPreset{
@@ -11,11 +11,8 @@ export function materialPreset(parameters:MeshStandardMaterialParameters):Materi
  if(color.g>color.r*1.18&&color.g>color.b*1.15)return 'foliage';if(color.r>color.b*1.5&&color.r>color.g&&color.g>color.b*1.2&&Math.max(color.r,color.g,color.b)<.65)return 'wood';
  if((parameters.roughness??.8)>.8&&Math.max(color.r,color.g,color.b)-Math.min(color.r,color.g,color.b)<.1)return Math.max(color.r,color.g,color.b)>.75?'paper':'stone';return 'painted';
 }
-/** Independent Source/version keeps owner disposal and uploads from invalidating the base asset cache. */
-export function ownedTexture(source:Texture){
- const image=source.image,copy=source instanceof DataTexture?new DataTexture(source.image.data,source.image.width,source.image.height,source.format as PixelFormat,source.type):new Texture(image);
- copy.mapping=source.mapping;copy.wrapS=source.wrapS;copy.wrapT=source.wrapT;copy.magFilter=source.magFilter;copy.minFilter=source.minFilter;copy.anisotropy=source.anisotropy;copy.format=source.format;copy.type=source.type;copy.internalFormat=source.internalFormat;copy.generateMipmaps=source.generateMipmaps;copy.mipmaps=source.mipmaps.slice();copy.flipY=source.flipY;copy.premultiplyAlpha=source.premultiplyAlpha;copy.unpackAlignment=source.unpackAlignment;copy.colorSpace=source.colorSpace;copy.channel=source.channel;copy.offset.copy(source.offset);copy.repeat.copy(source.repeat);copy.center.copy(source.center);copy.rotation=source.rotation;copy.matrix.copy(source.matrix);copy.matrixAutoUpdate=source.matrixAutoUpdate;copy.needsUpdate=true;return copy;
-}
+/** Independent texture parameters/disposal; immutable bank pixels share one GPU Source. */
+export function ownedTexture(source:Texture){return source.clone();}
 /** Each owner gets texture objects it can dispose; immutable decoded images remain in the bank. */
 export function presetMaterial(parameters:MeshStandardMaterialParameters,preset:MaterialPreset=materialPreset(parameters),look:WorldLook='new'){
  if(look==='classic')return new MeshStandardMaterial(parameters);

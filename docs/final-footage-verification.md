@@ -4,27 +4,21 @@ November 1, 2026. Verification uses private ephemeral ports, no live provider
 calls and no access to the separate stream server on port 3000. The extra in-app
 world tab was closed before measurement. Gate thresholds and classic are retained.
 
-Before capture lighting is corrected in item 7, lighting stills are live 1080p
-frames with PMREM, rather than 4K capture frames with the known ambient fallback.
+Items 1-6 used live 1080p frames with PMREM while capture still had its known
+ambient fallback. Items 7-9 include native 4K capture with PMREM restored.
 The pre-lighting reference set is `state/visual/p26-before-{day,golden,dusk,night}.png`.
 
 | Item | Check | 150-raider FPS, day/golden/dusk/night | GPU ms, same order |
 | --- | --- | --- | --- |
 | 1. Twitch failure notice | 275 tests and browser checks pass | 60.13 / 59.97 / 59.97 / 60.16 | 17.63 / 13.04 / 12.46 / 12.28 |
-
 | 2. History autoplay | 275 tests and browser checks pass | 59.96 / 60.15 / 59.95 / 59.96 | 12.73 / 11.98 / 12.07 / 12.71 |
-
 | 3. Builder kit guidance | 276 tests and browser checks pass | 59.96 / 59.97 / 59.97 / 60.16 | 12.18 / 12.22 / 14.13 / 13.53 |
-
 | 4. Model preload and retry | 278 tests, computed-kind gate/live and recorded README pass | 59.95 / 59.94 / 59.95 / 59.96 | 22.18 / 22.21 / 22.58 / 22.14 |
-
 | 5. Golden-hour lighting | 279 tests and browser checks pass | 59.95 / 59.95 / 59.90 / 59.97 | 22.32 / 21.46 / 22.68 / 22.52 |
-
 | 6. Dusk, moonlight and sky band | 280 tests and browser checks pass | 60.05 / 59.95 / 59.97 / 60.16 | 21.18 / 20.89 / 20.10 / 20.47 |
-
 | 7. Capture image-based lighting | 281 tests and fresh-page capture comparisons pass | 59.96 / 59.97 / 59.96 / 60.16 | 14.65 / 14.06 / 13.89 / 12.76 |
-
 | 8. Canopy mip coverage | Full check and four-phase browser check pass | 59.98 / 59.95 / 59.98 / 59.97 | 12.84 / 13.10 / 12.42 / 12.21 |
+| 9. Shared texture sources and image-free LODs | 283 tests, recorded README and gate load check pass | 59.96 / 59.96 / 59.96 / 59.93 | 13.44 / 13.04 / 13.66 / 13.58 |
 
 ## 1. Twitch failure visibility
 
@@ -167,3 +161,68 @@ leaf-cluster detail. Matching crops are `p26-canopy-{before,after}-1080.png` and
 native-4K camera paths are under `state/visual/p26-8-*`.
 The fresh-page 4K capture repeat also passes both routes with zero differing
 pixels (`p26-8-capture-results.json`).
+
+## 9. Shared image sources and image-free LODs
+
+Owner textures now use `Texture.clone()`: independent sampler/UV parameters and
+disposal, with a shared immutable Source. Low LOD GLBs contain geometry, surface
+names and UVs, and borrow their paired high LOD's named materials after loading.
+Failed/ambiguous surface matching fails closed. The fetch pipeline reproduces
+image-free LODs. All 40 high/low model files retain their triangle/draw admission
+counts; checksums, exact file sizes and provenance are updated in ASSETS.md.
+
+This removes 11,925,368 bytes. World outputs are 31,309,937 bytes; all committed
+asset data/sources/media are 47,517,685 bytes, below the 120,000,000-byte budget.
+The closed model catalog's decoded image pixels halve from 536 to 268 MiB before
+mipmaps. The browser test loads the entire catalog, submits two real fixture
+summons through the pipeline and verifies render acknowledgements. GPU textures
+are 61 before, 64 after the first, and 64 after the second. Clearing one retains
+64 for the remaining owner; clearing both settles at 62. A second summon/clear
+cycle repeats the same 64 peak and 62 steady count without growth. Before this
+change the two-summon sequence was 71, 74, 77. Evidence:
+`state/visual/p26-texture-sharing{,-before}.json`.
+
+The full check passes (283 tests, browser/media/history). The 150-raider browser
+cold load is 1.519 seconds. All 12 four-phase/three-path native 4K stills are
+byte-identical to item 8 (`p26-lod-visual-parity.json`). Fresh-page capture repeats
+also match exactly for `/world` and `/capture` (`p26-9-capture-results.json`).
+The settled stills take 28.3-31.7 ms per GPU-complete native 4K frame.
+A final `CAPTURE_KIT=1 pnpm check:capture` also passes both routes with byte-identical
+fresh-page PNGs and no init-budget/browser errors. Its model-kit frames and
+metrics are saved as `p26-9-kit-{world,capture}-{a,b}.png` and
+`p26-9-kit-capture-results.json`.
+
+Final literal README run, in an owned fresh clone with the source patch committed
+there before running commands (no .env or live credentials copied):
+
+| Command/action | Result |
+| --- | --- |
+| `pnpm install --frozen-lockfile` | 1.19 s, passes |
+| `pnpm exec playwright install chromium` | 1.11 s, passes |
+| `pnpm check` | 69.29 s, all checks pass |
+| `SIMULATION_MODE=fixture SIMULATION_ALLOWED=1 pnpm dev` | HTTP ready in 1.75 s on private port 64550 |
+| Open world, overlay and history before sim | World/overlay ready; history says No versions yet |
+| Record the full 1080p world tab, VP9 target 2 Mbps | Held through build and ship |
+| `pnpm sim` | 75.05 s, v1 Lantern orchard for Comet04 on attempt 1; 184 events, 104 citizens, votes [1,9,2] |
+| `pnpm sim:raid --viewers=150 --channel=AuroraCrew --screenshot=state/demo-raid.png` | 20.63 s, 150 admitted, 254 total, 59.98 fps |
+| Open history | v1 chapter and closing credits; zero browser errors |
+
+The recorded gate takes 41.509 seconds, native warmup 15.078 seconds, leaving
+28.491 seconds on the unchanged watchdog. Build/activation total: 47.399 seconds
+with synthetic fixture token usage. Full logs, recording and copied evidence:
+`state/asset-cache/p26-9-readme-recording/`.
+
+The independent interleaved gate load check also passes all four cases:
+
+| Module | Host | Outcome | Gate seconds | Native warmup seconds |
+| --- | --- | --- | ---: | ---: |
+| Cheap | Idle | PASS | 35.138 | 12.243 |
+| Expensive | Idle | REJECT, hook overruns | 5.764 | n/a |
+| Cheap | Six workers | PASS | 43.346 | 12.815 |
+| Expensive | Six workers | REJECT, hook overruns | 6.547 | n/a |
+
+Both cheap gates retain seven pairs of 24-frame slices, fresh pages and all three
+visibility probes. No threshold changed. Evidence is copied to
+`state/visual/p26-9-gate-load-results.json`. The stream clone on port 3000 was
+untouched; the extra in-app world tab stayed closed. There were no live Bedrock
+rounds or pushes.

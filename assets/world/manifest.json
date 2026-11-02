@@ -1,7 +1,7 @@
 {
   "format": 1,
   "budgetBytes": 120000000,
-  "bytes": 59442673,
+  "bytes": 47517685,
   "assets": [
     {
       "name": "basalt",
@@ -234,8 +234,8 @@
         },
         {
           "file": "lantern-lod.glb",
-          "bytes": 828492,
-          "sha256": "4424328a5c1d16e78338af5a2249936c5cc4b78483236fb16819a107bc2a1601"
+          "bytes": 24828,
+          "sha256": "79a658a031c867f7da93bdc506dfb697bd4144784e507e50e63ead86f88673c2"
         }
       ],
       "lowDraws": 5
@@ -259,8 +259,8 @@
         },
         {
           "file": "bench-lod.glb",
-          "bytes": 501100,
-          "sha256": "e7f025db7cd2bc1e8799933893f39df02b49744bff5d3ad9d34db2fa974b6184"
+          "bytes": 5360,
+          "sha256": "0da3a01a947cd639e72ced07f2d298a1ab4734da054f69b3925d38c4234b3712"
         }
       ],
       "lowDraws": 1
@@ -284,8 +284,8 @@
         },
         {
           "file": "crate-lod.glb",
-          "bytes": 543696,
-          "sha256": "4c74631b813d850533b029cc05410db4208e30a533d5f2d4e8629528d9c901e5"
+          "bytes": 13128,
+          "sha256": "2ee3cf255317465137c1a73a4e952f39095df8984708bf64d71fdb9a492a1173"
         }
       ],
       "lowDraws": 3
@@ -309,8 +309,8 @@
         },
         {
           "file": "barrel-lod.glb",
-          "bytes": 458880,
-          "sha256": "5577c40d928bcd028b59fb1008bee62660a5fdf46513b418a811c14c6a785158"
+          "bytes": 5136,
+          "sha256": "768b47147769c6e550a7080bede19c7a1ab36516e57a8054889f1494cb7ddd03"
         }
       ],
       "lowDraws": 1
@@ -334,8 +334,8 @@
         },
         {
           "file": "bridge-planks-lod.glb",
-          "bytes": 855916,
-          "sha256": "80b5c7a7acf70132af1820ee362f7b2b758f60fa868c2636f420934d8bb698cc"
+          "bytes": 7972,
+          "sha256": "0ecb9762353fa969b0b4325bb7463cddd4414727dcf9ceac9e25f7fe81486dbb"
         }
       ],
       "lowDraws": 1
@@ -359,8 +359,8 @@
         },
         {
           "file": "plinth-lod.glb",
-          "bytes": 579856,
-          "sha256": "16e897ab773f09cf01ac7576e21c2516a299051bdc13949d88058f151e4004c7"
+          "bytes": 8076,
+          "sha256": "79a2b718c7f9a92d0b2ba4a8da667a1ba01e6a254a8440d9f8a57d888ff0ce91"
         }
       ],
       "lowDraws": 1
@@ -384,8 +384,8 @@
         },
         {
           "file": "campfire-lod.glb",
-          "bytes": 793584,
-          "sha256": "9b323521cf5f907604ab45464e8c67abef1b05cc8abbde36b2b3f51edfd8ac65"
+          "bytes": 5484,
+          "sha256": "1fb3380e5a56dfb2cdcfa6f2bf868cac43d7a7d5b1776e14d5e1222707fb09b4"
         }
       ],
       "lowDraws": 1
@@ -409,8 +409,8 @@
         },
         {
           "file": "bucket-lod.glb",
-          "bytes": 561532,
-          "sha256": "fa2a3a9f6347074a9c795589a9727e8d79833f0a7feae333ddcc0fcb5cac60c6"
+          "bytes": 13036,
+          "sha256": "40eccef69a5e45dfcc66f6c1348aea73a7eebfc6f621cfce538c2c9b6f0d61dc"
         }
       ],
       "lowDraws": 2
@@ -434,8 +434,8 @@
         },
         {
           "file": "pot-lod.glb",
-          "bytes": 388868,
-          "sha256": "7f2326c6ffeec41306b292e08cfbd93ae09d1739ebfdd26d5705e24524f39693"
+          "bytes": 4280,
+          "sha256": "f1459c8106406a1a71a84545ddc0c2f9c3c98800c673076f462126faf736ed07"
         }
       ],
       "lowDraws": 1
@@ -459,8 +459,8 @@
         },
         {
           "file": "flowers-lod.glb",
-          "bytes": 319608,
-          "sha256": "b82e1939b77788cbec8202e25fd1911ba1cc1f51ead51ebe275f32342839ad0c"
+          "bytes": 6184,
+          "sha256": "9ab0cee91c6a795a56ec0a572ece51bf07836b0afe3f47cdd7e21f0f468a2fd4"
         }
       ],
       "lowDraws": 1
@@ -484,8 +484,8 @@
         },
         {
           "file": "fern-lod.glb",
-          "bytes": 228508,
-          "sha256": "01cbee52fa268e46e81196688d64e3cff12c4a63b2e8601f2dfdf7c0e559d548"
+          "bytes": 4332,
+          "sha256": "228f7486877914fb8f3d388582d6b26b407c24909541f87d2fb1eaaa534945ac"
         }
       ],
       "lowDraws": 1
@@ -509,8 +509,8 @@
         },
         {
           "file": "rock-lod.glb",
-          "bytes": 461080,
-          "sha256": "5abee1cc2b7eaa8626076e6c66ef2fbdc3198361a1c15879691dfc88230ec66c"
+          "bytes": 3432,
+          "sha256": "6ab63f07618592ef8f590cb23eb6fb2972631c7e0b1aa31b1757f7f7197e881f"
         }
       ],
       "lowDraws": 1
@@ -534,8 +534,8 @@
         },
         {
           "file": "moss-rock-lod.glb",
-          "bytes": 447508,
-          "sha256": "3e6bd9b52627288df12cc205b8cf36fce40e059b1ca06707131acd2b41814f34"
+          "bytes": 4420,
+          "sha256": "6eaf08b01a70acbe15acc9e547ee4d3f0be9c0a22ab6a3ce21a433a424cb85c7"
         }
       ],
       "lowDraws": 1
@@ -559,8 +559,8 @@
         },
         {
           "file": "shrub-lod.glb",
-          "bytes": 419124,
-          "sha256": "12e9ec67a87dbbf2d6d972504df959db037e518bbe318a91604076ca3ed01bd3"
+          "bytes": 6628,
+          "sha256": "e30d8c82957565adf92e281194490d03ce4ecc69aea0d554d21a75862c9ad1d2"
         }
       ],
       "lowDraws": 1
@@ -584,8 +584,8 @@
         },
         {
           "file": "log-lod.glb",
-          "bytes": 1052760,
-          "sha256": "d34cb60f8059886f655a96824553509300ded61906d73207fde75c38dd297609"
+          "bytes": 5992,
+          "sha256": "f0a8390f97e7e36eefafacb6f22d4fb35f4f6b9ba12c5ca5806945d848a9f87f"
         }
       ],
       "lowDraws": 1
@@ -609,8 +609,8 @@
         },
         {
           "file": "ladder-lod.glb",
-          "bytes": 747264,
-          "sha256": "a82184e70727c64259457917d8511fd1c67fddf00214d3ffc55d48c03bf0433c"
+          "bytes": 25716,
+          "sha256": "75ca495824717b99d7653defe7aaf930d6e519e8b1e95c5186e11bb0b695f892"
         }
       ],
       "lowDraws": 2
@@ -634,8 +634,8 @@
         },
         {
           "file": "chair-lod.glb",
-          "bytes": 322152,
-          "sha256": "099f9fa2571bd3de6742282ddfbb314a1b206d0c03d46d5d83a55637551b175a"
+          "bytes": 9324,
+          "sha256": "3744d32860d418a0d5f9f4237acfbd3814af49cf820b078f6c11bf650deadd78"
         }
       ],
       "lowDraws": 1
@@ -659,8 +659,8 @@
         },
         {
           "file": "table-lod.glb",
-          "bytes": 237584,
-          "sha256": "8582f882649e131fc27b368a4a55ec8d4ef9df09409a545485f2a41942c255b8"
+          "bytes": 5612,
+          "sha256": "50981bd08b3b41bcbb8042e698fb877c6bcada899ac626e6fcc0cf779921796c"
         }
       ],
       "lowDraws": 1
@@ -729,8 +729,8 @@
         },
         {
           "file": "grass-lod.glb",
-          "bytes": 211492,
-          "sha256": "44bc71917158aa92f66db03e35eb1757837fa93b2e80201fa327eca962e2a760"
+          "bytes": 3648,
+          "sha256": "a5f4b326240fbed915096f5bc74f5624231d291d9ef5b3beedf4a602941877f8"
         }
       ],
       "lowDraws": 2
@@ -754,8 +754,8 @@
         },
         {
           "file": "scanned-tree-lod.glb",
-          "bytes": 2150328,
-          "sha256": "30934ccb9543dbeb930dc206d63eea6c3bb0b47958b408681729815901f15c4b"
+          "bytes": 21376,
+          "sha256": "0c5c25099b508860e7da31d21632396b80dd02858736ff43bad1521d2107f25c"
         }
       ],
       "lowDraws": 4
