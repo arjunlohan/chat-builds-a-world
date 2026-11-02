@@ -1,3 +1,5 @@
+import {bundledModelKinds} from "../runner/model-kinds.js";
+import type {ModelName} from "../../world/shared/model-kit.js";
 import type {WorldLook} from "../../world/engine/render-profile.js";
 import {historyCredits} from "./credits.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -5,7 +7,7 @@ import {atomicJson,readJson} from "../persistence/atomic.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {GLOBAL_CAP,usageKeys,type Usage} from "../../world/shared/limits.js";
-export interface ModuleArtifact { id: string; url: string; hash: string; file: string }
+export interface ModuleArtifact { id: string; url: string; hash: string; file: string; modelKinds?:readonly ModelName[] }
 export interface WorldVersion { version: number; tag: string; commit: string; title: string; requester: string; modules: ModuleArtifact[]; receipt: string; healthy?: boolean; restoredFrom?: string }
 export type HistoryEntry = Pick<WorldVersion,"version"|"tag"|"commit"|"title"|"requester"|"modules">;
 interface Stored { renderLook?:WorldLook;baseUsage?:Usage;baseline?: string; counter: number; current: WorldVersion | null; history: WorldVersion[]; pending?: { path: string; base: string; version: number;process?:number;owner?:number } }
@@ -22,15 +24,16 @@ export class Versions {
   private data: Stored = { counter: 0, current: null, history: [] };
   private replayJson:string|undefined;
   private readonly bundles = new Map<string, string>();
+  private readonly modelCatalog=new Map<string,readonly ModelName[]>();
   private waiters = new Map<string, { resolve(ok: boolean): void; timer: ReturnType<typeof setTimeout> }>();
   constructor(readonly root: string, private publish: (version: WorldVersion | null) => void) {}
   async init() {
     this.data = await readJson<Stored>(join(this.root,"state/versions.json")) ?? this.data;
-    for (const version of this.data.history) for (const module of version.modules) {
+    for (const version of [...this.data.history,...(this.data.current?[this.data.current]:[])]) for (const module of version.modules) {
       if (!/^[a-f0-9]{64}$/.test(module.hash) || module.url !== `/modules/${module.hash}.js`) throw new Error("Invalid persisted module artifact.");
       const code = await readFile(join(this.root, "state/modules", `${module.hash}.js`), "utf8");
       if (createHash("sha256").update(code).digest("hex") !== module.hash) throw new Error("Persisted module hash mismatch.");
-      this.bundles.set(module.hash, code);
+      module.modelKinds??=bundledModelKinds(code,module.file);this.modelCatalog.set(module.hash,module.modelKinds);this.bundles.set(module.hash, code);
     }
   }
   get baseline() { return this.data.baseline; }
@@ -50,12 +53,13 @@ export class Versions {
   }
   async reserve(minimum = 1) { return Math.max(this.data.counter + 1, minimum); }
   async setPending(value?: Stored["pending"]) { if (value) this.data.pending = value; else delete this.data.pending; await this.save(); }
-  async artifact(id: string, file: string, code: string): Promise<ModuleArtifact> {
-    const hash = createHash("sha256").update(code).digest("hex"); this.bundles.set(hash, code);
+  async artifact(id: string, file: string, code: string,modelKinds:readonly ModelName[]=bundledModelKinds(code,file)): Promise<ModuleArtifact> {
+    const hash = createHash("sha256").update(code).digest("hex"); this.bundles.set(hash, code);this.modelCatalog.set(hash,modelKinds);
     await mkdir(join(this.root, "state/modules"), { recursive: true });
     await writeFile(join(this.root, "state/modules", `${hash}.js`), code, { mode: 0o600 });
-    return { id, file, hash, url: `/modules/${hash}.js` };
+    return { id, file, hash, modelKinds:[...new Set(modelKinds)].sort(), url: `/modules/${hash}.js` };
   }
+  modelsFor(hash:string){return [...(this.modelCatalog.get(hash)??[])];}
   bundle(hash: string) { return /^[a-f0-9]{64}$/.test(hash) ? this.bundles.get(hash) : undefined; }
   async activate(version: Omit<WorldVersion, "receipt">, wait = true) {
     this.data.counter = Math.max(this.data.counter, version.version);

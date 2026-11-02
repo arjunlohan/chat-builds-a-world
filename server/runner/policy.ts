@@ -1,4 +1,5 @@
 import ts from "typescript-api";
+import {modelKinds} from "./model-kinds.js";
 import { readFile } from "node:fs/promises";
 import { resolve, dirname, relative, posix } from "node:path";
 import { build } from "esbuild";
@@ -40,7 +41,7 @@ export function inspectModule(source: string, file: string) {
     ts.forEachChild(node, visit);
   }
   visit(ast);
-  return {commands:[...new Set(commands)],hasOnChatLogic};
+  return {commands:[...new Set(commands)],hasOnChatLogic,modelKinds:modelKinds(ast)};
 }
 export async function compileModule(root: string, file: string, id: string, nodeModules: string, files: readonly string[] = [file]) {
   const path = resolve(root, file); if (!relative(root, path).startsWith("world/modules/")) throw new Error("Invalid entrypoint.");
@@ -53,5 +54,6 @@ export async function compileModule(root: string, file: string, id: string, node
   const program = ts.createProgram(files.map(file => resolve(root, file)), options);
   const diagnostics = ts.getPreEmitDiagnostics(program);
   if (diagnostics.length) throw new CandidateCodeError(`Candidate TypeScript check failed: ${ts.flattenDiagnosticMessageText(diagnostics[0]!.messageText, " ").slice(0, 120)}`);
-  return { id, code };
+  const kinds=[...new Set(files.flatMap(name=>modelKinds(program.getSourceFile(resolve(root,name))!,program.getTypeChecker())))].sort();
+  return { id, code, modelKinds:kinds };
 }

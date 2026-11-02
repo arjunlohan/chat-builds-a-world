@@ -138,7 +138,7 @@ export class Runner {
       const message = `v${version}: ${approved.title} (requested by @${requester})`;
       const commit = await commitTree(tree, message);
       if (signal.aborted) throw new Error("Build timed out or was cancelled.");
-      const artifacts = await Promise.all(modules.map(m => this.options.versions.artifact(m.id, m.file, m.code)));
+      const artifacts = await Promise.all(modules.map(m => this.options.versions.artifact(m.id, m.file, m.code,m.modelKinds)));
       await promote(this.root, base, commit, `v${version}`); merged = true;
       if (signal.aborted) throw new Error("Build timed out or was cancelled.");
       feed("ship", `v${version} checked; activating without a page reload.`);

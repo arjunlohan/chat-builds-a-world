@@ -1,3 +1,4 @@
+import type {ModelName} from "../../world/shared/model-kit.js";
 import {readFile,writeFile,mkdir} from "node:fs/promises";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -11,7 +12,7 @@ import {CandidateCodeError,isGateVerdict,candidateRejected,infrastructureFailed,
 export const SELF_CHECK_TIMEOUT_MS=12_000;
 /** Compilation and cold Chromium startup precede the bounded allocation probe. */
 export const RESOURCE_STARTUP_TIMEOUT_MS=30_000;
-export interface ResourceContext {base?:Usage;retained:{id:string;file:string;code:string}[]}
+export interface ResourceContext {base?:Usage;retained:{id:string;file:string;code:string;modelKinds?:readonly ModelName[]}[]}
 export interface SelfCheckInput extends ResourceContext {file:string;id:string;files:string[]}
 export type SelfCheckResult=GateVerdict&{usage?:Usage;pool?:Usage;retained?:Usage;available?:Usage};
 export async function resourceCheck(input:ResourceContext,modules:ResourceContext["retained"],signal:AbortSignal,candidateId?:string):Promise<SelfCheckResult>{

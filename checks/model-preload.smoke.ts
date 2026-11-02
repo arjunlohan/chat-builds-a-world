@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';import {readFile,writeFile,mkdir} from 'node:fs/promises';import {join} from 'node:path';
+import {fixtureServer} from './fixture-server.js';import {compileModule} from '../server/runner/policy.js';import {candidateCheck} from '../server/runner/check.js';
+import {Versions} from '../server/versions/index.js';import {WorldPipeline} from '../server/pipeline.js';import {createWorldServer} from '../server/http.js';import {launchWorldPage} from './browser.js';
+const fixture=await fixtureServer(process.cwd(),{prefix:'model-preload-'}),file='world/modules/computed-kind.ts',id='computed-kind';
+let world:Awaited<ReturnType<typeof launchWorldPage>>|undefined,app:Awaited<ReturnType<typeof createWorldServer>>|undefined,versions:Versions|undefined;
+try{
+ const source=(await readFile('checks/fixtures/modules/computed-kind.ts','utf8')).replace('../../../world/engine/api.js','../engine/api.js').replace('FIXTURE_ID',id);await writeFile(join(fixture.root,file),source);
+ const compiled=await compileModule(fixture.root,file,id,join(process.cwd(),'node_modules'));assert.deepEqual(compiled.modelKinds,['lantern']);assert.ok(!/['"]lantern['"]/.test(compiled.code),'Bundled code must not retain the complete kind literal');
+ const checked=await candidateCheck(process.cwd(),[{...compiled,file}],id,new AbortController().signal);assert.equal(checked.ok,true,checked.reason);
+ const pipeline=new WorldPipeline();versions=new Versions(fixture.root,v=>pipeline.publish({type:'version',version:v}));const module=await versions.artifact(id,file,compiled.code,compiled.modelKinds);app=await createWorldServer(pipeline,undefined,undefined,versions);await new Promise<void>(r=>app!.server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${(app.server.address() as {port:number}).port}`;
+ world=await launchWorldPage(base,'overlay=1&time=day');let failures=0;await world.page.route('**/world-assets/lantern.glb?*',async route=>{if(!failures++){await route.abort('failed');}else await route.continue();});
+ const version={version:1,tag:'v1',commit:'fixture',title:'Computed lanterns',requester:'Viewer',modules:[module]};
+ const rejected=world.page.waitForRequest(r=>r.url().endsWith('/modules/ack')&&r.postDataJSON()?.ok===false);await versions.activate(version,false);await rejected;assert.equal(await world.page.evaluate(()=>window.__worldStats.moduleVersion),0);
+ assert.ok(world.errors.every(error=>/Failed to load resource.*ERR_FAILED/.test(error)),world.errors.join('\n'));world.errors.length=0;
+ await versions.activate(version,false);await world.page.waitForFunction(()=>window.__worldStats.moduleVersion===1);await world.page.waitForTimeout(500);assert.equal(await world.page.evaluate(()=>window.__worldStats.moduleError),'');assert.ok(failures>=2);assert.deepEqual(world.errors,[]);
+ await mkdir('state/visual',{recursive:true});await world.page.screenshot({path:'state/visual/p26-computed-model.png'});await writeFile('state/model-preload-results.json',JSON.stringify({metadata:compiled.modelKinds,gate:checked,fetchAttempts:failures,liveVersion:1,errors:world.errors},null,2));console.log(JSON.stringify({modelKinds:compiled.modelKinds,gateMs:checked.durationMs,liveVersion:1,fetchAttempts:failures,errors:world.errors}));
+}finally{await world?.browser.close();versions?.close();if(app){app.closeStreams();app.server.closeAllConnections();await new Promise<void>(r=>app!.server.close(()=>r()));}await fixture.dispose();}

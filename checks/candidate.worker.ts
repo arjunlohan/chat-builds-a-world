@@ -1,3 +1,4 @@
+import type {ModelName} from "../world/shared/model-kit.js";
 import {COST_MATERIAL_POLICY} from "../world/engine/measurement-materials.js";
 import sharp from "sharp";
 import {scaleVerdict} from "../world/shared/scale.js";
@@ -12,9 +13,9 @@ import {Versions} from "../server/versions/index.js";
 import {frameVerdict,summarizeFrames,visibilityVerdict,percentile,CANDIDATE_THRESHOLDS as C,type FrameEvidence} from "./candidate-policy.js";
 import {VISIBILITY_PROBE,type Footprint} from "../world/engine/visibility.js";
 import {GateError,candidateRejected,infrastructureFailed} from "../server/runner/verdict.js";
-const path=process.argv[2]!,directory=dirname(path),input=JSON.parse(await readFile(path,"utf8")) as {modules:{id:string;file:string;code:string}[];probeId:string;commands?:string[];look?:"classic"|"new";browserEndpoint?:string;browserPort?:number};
+const path=process.argv[2]!,directory=dirname(path),input=JSON.parse(await readFile(path,"utf8")) as {modules:{id:string;file:string;code:string;modelKinds?:readonly ModelName[]}[];probeId:string;commands?:string[];look?:"classic"|"new";browserEndpoint?:string;browserPort?:number};
 const pipeline=new WorldPipeline(),versions=new Versions(join(directory,"runtime"),v=>pipeline.publish({type:"version",version:v}));
-const modules=await Promise.all(input.modules.map(m=>versions.artifact(m.id,m.file,m.code))),retained=modules.filter(m=>m.id!==input.probeId);
+const modules=await Promise.all(input.modules.map(m=>versions.artifact(m.id,m.file,m.code,m.modelKinds))),retained=modules.filter(m=>m.id!==input.probeId);
 await versions.activate({version:1,tag:"baseline",commit:"baseline",title:"Baseline",requester:"check",modules:retained},false);
 for(let i=0;i<300;i++)pipeline.roster.accept({id:`check-${i}`,userId:`check-${i}`,displayName:`Neighbor${i}`,color:"#79D7CF",text:"hello",timestamp:Date.now()},Date.now());
 const commands=chatCommands({description:(input.commands??[]).join(" "),steps:[],checks:[]}),sent:{text:string;userId:string;burst:number}[]=[];let burst=0;

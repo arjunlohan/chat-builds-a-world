@@ -1,3 +1,4 @@
+import type {ModelName} from "../../world/shared/model-kit.js";
 import type {WorldLook} from "../../world/engine/render-profile.js";
 import {CANDIDATE_THRESHOLDS} from "../../checks/candidate-policy.js";
 import { writeFile, mkdir } from "node:fs/promises";
@@ -9,7 +10,7 @@ import {isGateVerdict,infrastructureFailed,type GateVerdict} from "./verdict.js"
 import {GateBrowser} from './gate-browser.js';
 export const CHECK_TIMEOUT_MS=CANDIDATE_THRESHOLDS.watchdogMs;
 export type CheckResult=GateVerdict&{fps?: number; rawFps?:number; baselineFps?:number;fpsDropRatio?:number;moduleP95Ms?:number;addedRenderMs?:number; avgFps?: number; samples?: number; durationMs?: number; evidence?: string;nativeWarmupMs?:number;browserWarmupMs?:number;browserWaitMs?:number};
-export async function candidateCheck(root: string, modules: { id: string; file: string; code: string }[], probeId: string, signal: AbortSignal, commands:readonly string[]=[],look:WorldLook=process.env.WORLD_LOOK==="classic"?"classic":"new",shared?:GateBrowser): Promise<CheckResult> {
+export async function candidateCheck(root: string, modules: { id: string; file: string; code: string;modelKinds?:readonly ModelName[] }[], probeId: string, signal: AbortSignal, commands:readonly string[]=[],look:WorldLook=process.env.WORLD_LOOK==="classic"?"classic":"new",shared?:GateBrowser): Promise<CheckResult> {
   const started = performance.now(), directory = join(root, "state/checks"); await mkdir(directory, { recursive: true });
   const evidence=join(directory,randomUUID());await mkdir(evidence,{recursive:true});
   const pool=shared??new GateBrowser();let browserWarmupMs=0,browserWaitMs=0;

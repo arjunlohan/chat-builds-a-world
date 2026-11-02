@@ -10,7 +10,7 @@ export function captureStore(pipeline:WorldPipeline,versions?:Versions){
   const history=versions?.replay()??[],entry=version==="latest"?history.at(-1):history.find(v=>v.tag===version);
   if(version!=="latest"&&version!=="v0"&&!entry)throw new Error("Capture version is not a shipped version");
   const key=`${entry?.tag??"v0"}-${take}`;let job=pending.get(key);
-  if(!job){job=(async()=>{const path=versions?join(versions.root,"state/captures",`${key}.json`):undefined,saved=path?await readJson<ReturnType<WorldPipeline["snapshot"]>>(path):undefined;if(saved)return saved;
+  if(!job){job=(async()=>{const path=versions?join(versions.root,"state/captures",`${key}.json`):undefined,saved=path?await readJson<ReturnType<WorldPipeline["snapshot"]>>(path):undefined;if(saved){for(const module of saved.version?.modules??[])module.modelKinds??=versions?.modelsFor(module.hash)??[];return saved;}
    const snapshot=structuredClone(pipeline.snapshot());snapshot.version=entry?{...entry,receipt:"capture-playback"}:null;if(path)await atomicJson(path,snapshot);return snapshot;
   })();pending.set(key,job);if(pending.size>32)pending.delete(pending.keys().next().value!);void job.catch(()=>pending.delete(key));}return structuredClone(await job);
  };

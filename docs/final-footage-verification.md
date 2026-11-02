@@ -16,6 +16,8 @@ The pre-lighting reference set is `state/visual/p26-before-{day,golden,dusk,nigh
 
 | 3. Builder kit guidance | 276 tests and browser checks pass | 59.96 / 59.97 / 59.97 / 60.16 | 12.18 / 12.22 / 14.13 / 13.53 |
 
+| 4. Model preload and retry | 278 tests, computed-kind gate/live and recorded README pass | 59.95 / 59.94 / 59.95 / 59.96 | 22.18 / 22.21 / 22.58 / 22.14 |
+
 ## 1. Twitch failure visibility
 
 Configured Twitch starts disconnected, becomes connected after subscriptions
@@ -49,3 +51,33 @@ props, and reserves unlit materials for glow/particle accents. Solid surfaces
 use named PBR presets. AGENTS.md is generated from the same text. No admission
 threshold or renderer behavior changed. The prompt/contract test and full check
 pass, as do the settled four-phase stills and 150-raider check (`p26-3-*`).
+
+## 4. Checked model preload metadata
+
+The source AST and TypeScript type facts produce model-kind metadata alongside
+the compiled module. The metadata passes through resource checks, the candidate
+worker, immutable version manifests, restart/history and pinned capture snapshots.
+The browser prepares named models before synchronous activation without searching
+bundled code. Broad/opaque dynamic kinds conservatively name the finite catalog;
+ordinary typed kinds remain selective. Legacy bundles are inspected as ASTs on
+the server. Unconditional catalog preload was rejected: both current LOD sets
+decode to about 536 MiB of image pixels before mipmaps.
+
+Failed model promises are evicted. The computed-kind fixture builds its name
+from pieces and has no complete kind literal after bundling. It passed policy,
+types and the candidate gate in 40.296 seconds. In a live page, an intentionally
+aborted first fetch failed activation; a second activation fetched again and
+succeeded. Unit tests also cover failed-load eviction and metadata restart.
+Evidence: `state/model-preload-results.json`, `p26-computed-model.png`.
+
+The private-port recorded README run shipped v1 on attempt 1 in 93.470 seconds
+of simulation (gate 57.791 seconds, native warmup 18.967 seconds). It admitted
+150 more raiders to 254 total at 59.98 fps; history/credits and browser errors
+passed. It encoded the complete 1080p tab at a 2 Mbps VP9 target throughout the
+build. Logs and evidence: `state/asset-cache/p26-4-readme-recording/` and
+`p26-4-readme-recording-final.log`. A preceding run also shipped, but its gate
+took 64.941 seconds (19.973 native warmup), leaving only 5.059 seconds on the
+unchanged 70-second watchdog and failing the inherited P25 ten-second margin
+assertion. This timing limitation is retained rather than hidden or fixed by
+changing thresholds. The source full check and settled four-phase performance
+check pass (`p26-4-*`).

@@ -15,7 +15,7 @@ async function loadModel(a:typeof manifest.assets[number]){
  for(const scene of [high!.scene,low!.scene])scene.traverse(o=>{if(o instanceof Mesh){o.castShadow=true;o.receiveShadow=true;for(const m of (Array.isArray(o.material)?o.material:[o.material]) as MeshStandardMaterial[]){m.flatShading=false;if(m.alphaTest>0||["scanned-tree","grass","fern","shrub","flowers"].includes(a.name)&&m.transparent){m.alphaTest=m.alphaTest||.35;m.alphaToCoverage=true;m.transparent=false;m.depthWrite=true;}if(m.map)m.map.anisotropy=8;}}});
  models.set(a.name,{root:high!.scene,low:low!.scene,triangles:('triangles' in a?a.triangles:0)??0,draws:('draws' in a?a.draws:0)??0});
 }
-function ensureModel(a:typeof manifest.assets[number]){let load=modelLoads.get(a.name);if(!load){load=loadModel(a);modelLoads.set(a.name,load);}return load;}
+function ensureModel(a:typeof manifest.assets[number]){let load=modelLoads.get(a.name);if(!load){load=loadModel(a).catch(error=>{modelLoads.delete(a.name);throw error;});modelLoads.set(a.name,load);}return load;}
 export const assetMaps=(name:string)=>textures.get(name);
 export const assetModel=(name:string)=>models.get(name);
 export const assetSky=()=>hdr;
@@ -23,7 +23,7 @@ export const assetClouds=()=>clouds;
 /** Same finite, local input set in live pages, saved-version playback and the gate. */
 export function prepareWorldAssets(look:WorldLook='new'){
  if(look==='classic')return Promise.resolve();
- return pending??=load();
+ return pending??=load().catch(error=>{pending=undefined;throw error;});
 }
 async function load(){
  const textureLoader=new TextureLoader();

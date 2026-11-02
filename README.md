@@ -135,7 +135,9 @@ See [ASSETS.md](ASSETS.md) for sources, compression and sizes, and
 Scene Specs can use the 20 named model kinds and 17 material presets listed in
 the [rendered builder rules](AGENTS.md#world-module-api-v1). Model sizes are fitted
 bounding boxes; detail 0 selects the low LOD. Referenced models load locally before
-activation. Scanned model parts keep their PBR maps and accept color tint. Primitive
+activation. Model-kind metadata comes from the checked TypeScript source and types,
+so computed kinds retain their preload requirements after bundling. Failed model
+loads are evicted and a later activation retries them. Scanned model parts keep their PBR maps and accept color tint. Primitive
 parts use `material.preset`; plain runtime mesh materials map to the same kit.
 Custom shaders and particles retain their authored materials. Classic uses bounded
 procedural substitutes for kit models, so saved versions still load in the fallback.
