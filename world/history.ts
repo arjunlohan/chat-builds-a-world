@@ -11,7 +11,8 @@ const profile=pageProfile(new URLSearchParams(location.search),documentLook());a
 const world=createRenderer(canvas,{profile,playback:true,onReady(){canvas.dataset.ready="true";},onError(text){showError(text);}});
 const credits=historyCredits(byId("history-credits"));
 let contributors:HistoryCredits={entries:[],viewers:0};
-let entries:HistoryEntry[]=[],index=0,playing=!matchMedia("(prefers-reduced-motion: reduce)").matches,loading=false,elapsed=0,sequence=0,last=performance.now();
+const autoplay=new URLSearchParams(location.search).get("autoplay")==="1";
+let entries:HistoryEntry[]=[],index=0,playing=autoplay||!matchMedia("(prefers-reduced-motion: reduce)").matches,loading=false,elapsed=0,sequence=0,last=performance.now();
 let progress="";
 function setProgress(value:number){const next=`scaleX(${Math.min(1,value)})`;if(next!==progress){progress=next;byId("progress").style.transform=next;}}
 const chapterMs=()=>8000/Number(speed.value);

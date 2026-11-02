@@ -89,7 +89,10 @@ Create two Browser Sources at **1920x1080**, in this order:
 | World | `http://127.0.0.1:3000/world?overlay=1` |
 | Overlay, above world | `http://127.0.0.1:3000/overlay` |
 | Combined recording source | `http://127.0.0.1:3000/capture` |
-| Optional history scene | `http://127.0.0.1:3000/history` |
+| Optional history scene | `http://127.0.0.1:3000/history?autoplay=1` |
+
+`/history?autoplay=1` starts at the first chapter and rolls credits without clicks,
+including when reduced motion is enabled. `/history` keeps its existing controls.
 
 The overlay is transparent and keeps panels at the edges. `?overlay=1` hides the
 world's title/hint. `?debug=1` adds an FPS readout; `window.__worldStats` exposes
