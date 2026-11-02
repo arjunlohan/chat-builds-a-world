@@ -296,9 +296,7 @@ appear as raw speech bubbles. Guard rejections and failed builds retain the worl
 
 ## How Codex was used
 
-Codex, **GPT-6.1 Sol at High effort**, wrote all code in this repository in one build
-session. A Claude Code harness pasted the phase prompts, ran verification and
-forwarded review findings. It did not write repository files.
+Codex, **GPT-6.1 Sol at High effort**, wrote all code in this repository in one build session.
 
 There are two runtime Codex uses, both through `codex exec`:
 
