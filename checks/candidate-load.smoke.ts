@@ -14,7 +14,7 @@ for(const loaded of (process.argv.includes("--idle-only")?[false]:[false,true]))
  const browser=new GateBrowser();
  try{
   if(loaded)await new Promise(r=>setTimeout(r,600));
-  await browser.prepare("new");
+  await browser.prepare();
   for(const kind of ["good","slow"]){
    const id=`cost-${kind}`,source=(await readFile(`checks/fixtures/modules/${kind}.ts`,"utf8")).replace("FIXTURE_ID",id);
    const code=(await build({stdin:{contents:source,loader:"ts",resolveDir:process.cwd()},bundle:true,format:"esm",platform:"browser",write:false,plugins:[{name:"shared-three",setup(b){b.onResolve({filter:/^three$/},()=>({path:"/assets/three.js",external:true}));}}]})).outputFiles[0]!.text;

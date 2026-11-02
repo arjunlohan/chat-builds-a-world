@@ -6,26 +6,26 @@ import {CHAT_PLAY as P} from "../world/shared/chat-play.js";
 import {chatCommands} from "../server/runner/chat-play.js";
 import {readFile,writeFile} from "node:fs/promises";
 import {join,dirname} from "node:path";
-import {chromium,type Page} from "@playwright/test";
+import {chromium,type Page,type Browser} from "@playwright/test";
 import {createWorldServer} from "../server/http.js";
 import {WorldPipeline} from "../server/pipeline.js";
 import {Versions} from "../server/versions/index.js";
-import {frameVerdict,summarizeFrames,visibilityVerdict,percentile,CANDIDATE_THRESHOLDS as C,type FrameEvidence} from "./candidate-policy.js";
+import {frameVerdict,summarizeFrames,visibilityVerdict,percentile,CANDIDATE_THRESHOLDS as C} from "./candidate-policy.js";
 import {VISIBILITY_PROBE,type Footprint} from "../world/engine/visibility.js";
 import {GateError,candidateRejected,infrastructureFailed,worldHealth} from "../server/runner/verdict.js";
-const path=process.argv[2]!,directory=dirname(path),input=JSON.parse(await readFile(path,"utf8")) as {modules:{id:string;file:string;code:string;modelKinds?:readonly ModelName[]}[];probeId:string;commands?:string[];look?:"classic"|"new";browserEndpoint?:string;browserPort?:number};
+const path=process.argv[2]!,directory=dirname(path),input=JSON.parse(await readFile(path,"utf8")) as {modules:{id:string;file:string;code:string;modelKinds?:readonly ModelName[]}[];probeId:string;commands:string[];look:"classic"|"new";browserEndpoint:string;browserPort:number};
 const pipeline=new WorldPipeline(),versions=new Versions(join(directory,"runtime"),v=>pipeline.publish({type:"version",version:v}));
 const modules=await Promise.all(input.modules.map(m=>versions.artifact(m.id,m.file,m.code,m.modelKinds))),retained=modules.filter(m=>m.id!==input.probeId);
 await versions.activate({version:1,tag:"baseline",commit:"baseline",title:"Baseline",requester:"check",modules:retained},false);
 for(let i=0;i<300;i++)pipeline.roster.accept({id:`check-${i}`,userId:`check-${i}`,displayName:`Neighbor${i}`,color:"#79D7CF",text:"hello",timestamp:Date.now()},Date.now());
-const commands=chatCommands({description:(input.commands??[]).join(" "),steps:[],checks:[]}),sent:{text:string;userId:string;burst:number}[]=[];let burst=0;
-const errors:string[]=[],footprints:Footprint[]=[],evidence:Record<string,unknown>={status:"starting",profile:"production",viewport:[1920,1080],framebuffer:[160,90],probe:[192,108],measurement:"fixed main + classic-cost shadows; full live composer for visibility",costMaterials:COST_MATERIAL_POLICY,probeId:input.probeId,retained:retained.map(m=>m.id),look:input.look??"new",commands,sent,footprints,errors};
+const commands=chatCommands({description:input.commands.join(" "),steps:[],checks:[]}),sent:{text:string;userId:string;burst:number}[]=[];let burst=0;
+const errors:string[]=[],footprints:Footprint[]=[],evidence:Record<string,unknown>={status:"starting",profile:"production",viewport:[1920,1080],framebuffer:[160,90],probe:[VISIBILITY_PROBE.width,VISIBILITY_PROBE.height],measurement:"fixed main + classic-cost shadows; full live composer for visibility",costMaterials:COST_MATERIAL_POLICY,probeId:input.probeId,retained:retained.map(m=>m.id),look:input.look,commands,sent,footprints,errors};
 const canvasSamples:{hash:number;lit:number}[]=[];evidence.canvasSamples=canvasSamples;
 const save=()=>writeFile(join(directory,"evidence.json"),JSON.stringify(evidence,null,2),{mode:0o600});
 await save();
 async function probe(page:Page,cold=false){const started=performance.now();if(cold){evidence.status="native visibility warmup";await save();}const request=await page.evaluate(()=>++window.__worldStats.probeRequest);await page.waitForFunction(request=>window.__worldStats.probeCompleted>=request||!!window.__worldStats.moduleError,request,{timeout:cold?C.watchdogMs:C.warmupTimeoutMs,polling:50});if(cold)evidence.nativeWarmupMs=performance.now()-started;await requireHealthy(page);const f=await page.evaluate(()=>({probePixels:window.__worldStats.moduleProbePixels,hdPixels:window.__worldStats.modulePixels,hdWidth:window.__worldStats.moduleWidth,hdHeight:window.__worldStats.moduleHeight}));const height=await page.evaluate(()=>window.__worldStats.moduleWorldHeight);evidence.moduleWorldHeight=height;const scaleError=scaleVerdict(height);if(scaleError)throw new GateError(candidateRejected(scaleError));footprints.push({...f,probeWidth:VISIBILITY_PROBE.width,probeHeight:VISIBILITY_PROBE.height,qualifies:f.hdPixels>=VISIBILITY_PROBE.minPixels&&f.hdWidth>=VISIBILITY_PROBE.minWidth&&f.hdHeight>=VISIBILITY_PROBE.minHeight}); const pixels=await page.evaluate(()=>({frame:window.__worldStats.frame,time:window.__worldStats.lastFrameAt,error:window.__worldStats.moduleError,hash:window.__worldStats.probeHash,lit:window.__worldStats.probeLit,avg:window.__worldStats.avgFps}));
  canvasSamples.push(pixels);if(!pixels.lit)throw new GateError(candidateRejected("Black canvas."));
-const fullPixels=await page.evaluate(()=>Array.from(window.__worldProbePixels??[]));if(fullPixels.length)await sharp(Buffer.from(fullPixels),{raw:{width:192,height:108,channels:4}}).flip().png().toFile(join(directory,"full-look-probe.png"));
+const fullPixels=await page.evaluate(()=>Array.from(window.__worldProbePixels??[]));if(fullPixels.length)await sharp(Buffer.from(fullPixels),{raw:{width:VISIBILITY_PROBE.width,height:VISIBILITY_PROBE.height,channels:4}}).flip().png().toFile(join(directory,"full-look-probe.png"));
 await save();}
 async function frames(page:Page){return page.evaluate(()=>{const t=window.__worldFrameTrace!,result=[];for(let n=0;n<t.size;n++){const i=(t.cursor-t.size+n+t.frames.length)%t.frames.length;result.push({frame:t.frames[i]!,time:t.times[i]!,dt:t.intervals[i]!,cpu:t.cpu[i]!,render:t.render[i]!,module:t.module[i]!,probe:t.probe[i]!});}return result;});}
 async function sendCommands(page:Page){
@@ -51,15 +51,15 @@ async function sample(page:Page,count:number,stage:string){
  if(summary.frames<C.minimumSliceFrames)throw new Error("Too few rendered measurement frames.");
  evidence[stage]={start,end,summary};await save();return {summary,trace};
 }
-let app:Awaited<ReturnType<typeof createWorldServer>>|undefined,browserServer:Awaited<ReturnType<typeof chromium.launchServer>>|undefined,browser:Awaited<ReturnType<typeof chromium.connect>>|undefined,page:Page|undefined;
+let app:Awaited<ReturnType<typeof createWorldServer>>|undefined,browser:Browser|undefined,page:Page|undefined;
 try{
- app=await createWorldServer(pipeline,undefined,undefined,versions,{worldLook:input.look??"new",live:false,async fault(){}});await new Promise<void>(r=>app!.server.listen(input.browserPort??0,"127.0.0.1",r));const port=(app.server.address() as {port:number}).port;
- if(input.browserEndpoint){browser=await chromium.connectOverCDP(input.browserEndpoint);const context=browser.contexts()[0];if(!context)throw new Error('Warm gate context is unavailable.');page=await context.newPage();await page.setViewportSize({width:1920,height:1080});}
- else{browserServer=await chromium.launchServer({timeout:8000,headless:true,args:["--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});console.log(JSON.stringify({browserPid:browserServer.process().pid}));browser=await chromium.connect(browserServer.wsEndpoint());page=await browser.newPage({viewport:{width:1920,height:1080}});}
+ app=await createWorldServer(pipeline,undefined,undefined,versions,{worldLook:input.look,live:false,async fault(){}});await new Promise<void>(r=>app!.server.listen(input.browserPort,"127.0.0.1",r));const port=(app.server.address() as {port:number}).port;
+ browser=await chromium.connectOverCDP(input.browserEndpoint);const context=browser.contexts()[0];if(!context)throw new Error('Warm gate context is unavailable.');page=await context.newPage();await page.setViewportSize({width:1920,height:1080});
  await page.bringToFront();const identity=await page.context().newCDPSession(page);evidence.targetId=(await identity.send("Target.getTargetInfo")).targetInfo.targetId;await identity.detach();
  page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});
+ const fresh=page.url()==='about:blank'&&await page.evaluate(()=>!document.hidden&&typeof window.__worldStats==='undefined');if(!fresh)throw new Error('Candidate page is not a fresh visible document.');evidence.freshPage=true;
  evidence.status="loading";await save();await page.goto(`http://127.0.0.1:${port}/world?check=1&overlay=1&time=day&probe=${encodeURIComponent(input.probeId)}`);
- const isolated=await page.evaluate(()=>!document.hidden&&!("__gateSse" in window));if(!isolated)throw new Error('Candidate page inherited cache-primer state.');evidence.freshPage=true;
+
  await page.waitForFunction(()=>window.__worldStats?.moduleVersion===1||!!window.__worldStats?.moduleError||!!window.__worldBootError,undefined,{timeout:8000,polling:100});await requireHealthy(page,true);await page.waitForSelector('canvas[data-ready="true"]');
  const rendererName=await page.evaluate(()=>{const gl=document.querySelector("canvas")!.getContext("webgl2")!,info=gl.getExtension("WEBGL_debug_renderer_info");return info?String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)):"";});if(!/swiftshader/i.test(rendererName))throw new Error("Candidate did not use SwiftShader.");evidence.renderer=rendererName;evidence.shadowMap=await page.locator("canvas").getAttribute("data-shadow");evidence.costPipeline=await page.locator("canvas").getAttribute("data-pipeline");evidence.visibilityPipeline=await page.locator("canvas").getAttribute("data-probe-pipeline");evidence.costTargets=await page.locator("canvas").getAttribute("data-targets");evidence.visibilityTargets=await page.locator("canvas").getAttribute("data-probe-targets");
  await warm(page,C.warmupFrames,"baseline");
@@ -105,4 +105,4 @@ try{
  await requireHealthy(page);if(errors.length)throw new Error("Checker console error.");
  evidence.status="passed";await save();console.log(JSON.stringify({...timing,nativeWarmupMs:evidence.nativeWarmupMs,framesPerSlice:C.sliceFrames,slicePairs:C.slicePairs,modulePixels:visibility.best?.hdPixels,visibility,citizens:300}));await page.screenshot({path:join(directory,"canvas.png"),timeout:1000}).catch(()=>{});
 }catch(error){evidence.status="failed";evidence.reason=error instanceof Error?error.message.slice(0,500):"Candidate check failed.";await save().catch(()=>{});if(page){const last=await Promise.race([Promise.all([frames(page),page.evaluate(()=>window.__worldStats)]).then(([frames,stats])=>({frames,stats})),new Promise<null>(r=>setTimeout(()=>r(null),600))]).catch(()=>null);evidence.failure=last;await save().catch(()=>{});await page.screenshot({path:join(directory,"canvas.png"),timeout:600}).catch(()=>{});}console.log(JSON.stringify(error instanceof GateError?error.verdict:infrastructureFailed(String(evidence.reason))));process.exitCode=1;
-}finally{await browser?.close();await browserServer?.close();app?.closeStreams();versions.close();if(app)await new Promise<void>(r=>app!.server.close(()=>r()));}
+}finally{await browser?.close();app?.closeStreams();versions.close();if(app)await new Promise<void>(r=>app!.server.close(()=>r()));}

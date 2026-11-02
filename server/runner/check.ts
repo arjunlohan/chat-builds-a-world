@@ -15,7 +15,7 @@ export async function candidateCheck(root: string, modules: { id: string; file: 
   const evidence=join(directory,randomUUID());await mkdir(evidence,{recursive:true});
   const pool=shared??new GateBrowser();let browserWarmupMs=0,browserWaitMs=0;
   try{
-  const prepared=await pool.prepare(look);browserWarmupMs=prepared.warmupMs;browserWaitMs=performance.now()-started;
+  const prepared=await pool.prepare();browserWarmupMs=prepared.warmupMs;browserWaitMs=performance.now()-started;
   const input = join(evidence, "input.json"); await writeFile(input, JSON.stringify({ modules, probeId, commands, look,browserEndpoint:prepared.endpoint,browserPort:prepared.port }), { mode: 0o600 });
   // Evidence is deliberately retained on success, failure, cancellation and watchdog termination.
     const raw=await jsonWorker<CheckResult>({script:fileURLToPath(new URL("../../checks/candidate.worker.ts",import.meta.url)),args:[input],signal,timeoutMs:Math.max(1,Math.max(CHECK_TIMEOUT_MS,watchdogMs)-(performance.now()-started)),verdict:isGateVerdict});

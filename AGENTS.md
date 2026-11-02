@@ -322,8 +322,10 @@ never add credentials or populated values.
   asynchronous hooks and unchecked/dynamic capabilities. Type-check every approved
   source against the locked API. Static policy is conservative, not a JS sandbox.
 - Run `checks/candidate.worker.ts` in an independent process with an external
-  watchdog; kill both the worker and its separately tracked Chromium process group
-  on freeze/cancellation. Probe the candidate's own geometry/spawnSpec pixels so an
+  watchdog; kill the worker and reset the server-owned gate browser on
+  freeze/cancellation. Each candidate gets a fresh page in that browser; resource
+  workers retain separately tracked Chromium process-group cleanup. Probe the
+  candidate's own geometry/spawnSpec pixels so an
   empty module cannot pass on island/crowd pixels. Shared Three.js is bundled
   locally once; modules load only by host-generated immutable SHA-256 asset URLs.
 - Successful checks precede a worktree commit, fast-forward master and tag, then

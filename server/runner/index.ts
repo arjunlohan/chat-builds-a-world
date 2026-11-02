@@ -14,7 +14,7 @@ import { auditDiff, discardUnshippedTag, cleanMaster, commitTree, createTree, gi
 import { runCodex, runnerPrompt, BUILD_TIMEOUT_MS } from "./codex.js";
 import { candidateCheck, CHECK_TIMEOUT_MS, type CheckResult } from "./check.js";
 import {selfCheck,selfCheckCommand,selfCheckManifest,resourceCheck,SELF_CHECK_TIMEOUT_MS,RESOURCE_STARTUP_TIMEOUT_MS,type ResourceContext} from "./self-check.js";
-import {GateBrowser} from './gate-browser.js';import type {WorldLook} from '../../world/engine/render-profile.js';
+import {GateBrowser} from './gate-browser.js';
 import {CANDIDATE_THRESHOLDS} from "../../checks/candidate-policy.js";
 import type { Usage } from "./events.js";
 export interface BuildRequest { decision: GuardResult; requester: string; signal: AbortSignal }
@@ -39,7 +39,7 @@ export class Runner {
   private readonly record: NonNullable<Options["record"]>;
   readonly root: string;
   constructor(private options: Options) { this.root = resolve(options.root); this.record = options.record ?? metricWriter(join(this.root, "state"), "runner-metrics.jsonl"); }
-  async prepareChecks(look:WorldLook){await this.gateBrowser.prepare(look);}
+  async prepareChecks(){await this.gateBrowser.prepare();}
   async close(){await this.queue.close();await this.gateBrowser.close();}
   async recover() {
 
