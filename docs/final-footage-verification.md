@@ -14,6 +14,8 @@ The pre-lighting reference set is `state/visual/p26-before-{day,golden,dusk,nigh
 
 | 2. History autoplay | 275 tests and browser checks pass | 59.96 / 60.15 / 59.95 / 59.96 | 12.73 / 11.98 / 12.07 / 12.71 |
 
+| 3. Builder kit guidance | 276 tests and browser checks pass | 59.96 / 59.97 / 59.97 / 60.16 | 12.18 / 12.22 / 14.13 / 13.53 |
+
 ## 1. Twitch failure visibility
 
 Configured Twitch starts disconnected, becomes connected after subscriptions
@@ -38,3 +40,12 @@ browser smoke verifies both paths and credits after the final chapter.
 pass. The settled option waits for arrival focus to return to the home shot;
 it changes verification only. These unchanged-world frames are also copied to
 `p26-before-*` for subsequent lighting comparisons.
+
+## 3. Builder material and prop guidance
+
+The shared kit guidance now prefers named models before raw geometry, gives a
+citizen-relative lantern size, asks for small clusters rather than inflated
+props, and reserves unlit materials for glow/particle accents. Solid surfaces
+use named PBR presets. AGENTS.md is generated from the same text. No admission
+threshold or renderer behavior changed. The prompt/contract test and full check
+pass, as do the settled four-phase stills and 150-raider check (`p26-3-*`).

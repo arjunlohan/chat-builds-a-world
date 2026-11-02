@@ -16,3 +16,7 @@ test("builder and AGENTS render the actual gate rules, including numeric indexin
  const example=rule.split("Compliant particle indexing: ")[1]!.split("\nRun the provided")[0]!;
  assert.doesNotThrow(()=>inspectModule(`export default () => ({init(services) { ${example}\n}});`,"world/modules/test.ts"));
 });
+
+test("builder look guidance prefers citizen-scale kit props, PBR surfaces and emissive-only unlit accents",()=>{
+ const rule=builderRules();assert.ok(rule.includes("Use kind=lantern"));assert.ok(rule.includes("0.45 x 0.8 x 0.45"));assert.ok(rule.includes("Cluster several small props"));assert.ok(rule.includes("MeshBasicMaterial only for emissive glow"));assert.ok(rule.includes("MeshStandardMaterial with material.name"));
+});
