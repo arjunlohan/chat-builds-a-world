@@ -1,3 +1,4 @@
+import {loadAssets,AssetLoadError} from "./engine/asset-load.js";
 import {prepareWorldAssets} from "./engine/asset-bank.js";
 import {pageProfile,documentLook} from "./engine/render-profile.js";
 import {historyCredits} from "./history-credits.js";
@@ -7,7 +8,8 @@ import { createRenderer } from "./engine/renderer.js";
 import type { HistoryEntry } from "../server/versions/index.js";
 const byId=<T extends HTMLElement>(id:string)=>document.getElementById(id)! as T;
 const canvas=byId<HTMLCanvasElement>("history-world"),message=byId("history-message"),player=byId("player"),play=byId<HTMLButtonElement>("play"),speed=byId<HTMLSelectElement>("speed");
-const profile=pageProfile(new URLSearchParams(location.search),documentLook());await prepareWorldAssets(profile.look);
+async function boot(){
+const profile=pageProfile(new URLSearchParams(location.search),documentLook());await loadAssets(()=>prepareWorldAssets(profile.look));
 const world=createRenderer(canvas,{profile,playback:true,onReady(){canvas.dataset.ready="true";},onError(text){showError(text);}});
 const credits=historyCredits(byId("history-credits"));
 let contributors:HistoryCredits={entries:[],viewers:0};
@@ -38,3 +40,6 @@ async function init(){
 play.onclick=()=>{playing=!playing;if(playing&&index===entries.length-1&&!loading)void show(0);status();};byId("replay").onclick=()=>{playing=true;void show(0);};byId("retry").onclick=()=>location.reload();
 const timer=setInterval(()=>{const now=performance.now(),dt=now-last;last=now;if(!playing||loading||document.hidden||!entries.length)return;elapsed+=dt;if(elapsed>=chapterMs()){if(index+1<entries.length)void show(index+1);else{playing=false;credits.show(contributors);status();}}setProgress(elapsed/chapterMs());},100);
 window.addEventListener("pagehide",()=>{clearInterval(timer);credits.hide();world.dispose();},{once:true});void init();
+
+}
+void boot().catch(error=>{message.hidden=false;player.hidden=true;message.querySelector('h1')!.textContent="History couldn’t load";byId('message-detail').textContent=error instanceof AssetLoadError?error.message:'Graphics could not start. Enable WebGL 2 and graphics acceleration, then retry.';const retry=byId('retry');retry.hidden=false;retry.onclick=()=>location.reload();});

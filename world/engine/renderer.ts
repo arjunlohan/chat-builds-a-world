@@ -1,3 +1,4 @@
+import {loadAssets,AssetLoadError} from "./asset-load.js";
 import {ShadowClock} from "./shadow-clock.js";
 import {captureFence} from "./gpu-fence.js";
 import {measureRender} from "./render-timing.js";
@@ -139,17 +140,17 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   if(probe){canvas.dataset.probePipeline=probe.pipeline.passes.join(',');canvas.dataset.probeTargets=JSON.stringify(probe.pipeline.samples);}
   let activation = 0;
   async function activate(version: WorldVersion | null, celebrate=false) {
-    const generation = ++activation; shadowDirty = true;
+    const generation = ++activation; shadowDirty = true;let loading=true;stats.value.moduleLoadError="";
     try {
       const oldHashes=new Map(activeVersion?.modules.map(m=>[m.id,m.hash])??[]);
       const changed=(version?.modules??[]).filter(m=>oldHashes.get(m.id)!==m.hash||!host.ids.includes(m.id));
       const factories = await Promise.all(changed.map(async module => {
         if (!/^\/modules\/[a-f0-9]{64}\.js$/.test(module.url)) throw new Error("Invalid module asset");
-        if(profile.look!=="classic")await prepareModuleAssets(module.modelKinds??[],profile.look);
+        if(profile.look!=="classic")await loadAssets(()=>prepareModuleAssets(module.modelKinds??[],profile.look));
         const loaded = await import(/* @vite-ignore */ module.url) as { default: WorldModuleFactory };
         return { factory: loaded.default, id: module.id };
       }));
-      if (generation !== activation) return;
+      if (generation !== activation) return;loading=false;
       const candidate = new ModuleHost({ ...hostOptions, root:new Group() });
       stats.value.moduleError = "";staging=true;
       try{
@@ -160,7 +161,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       stats.value.moduleVersion = version?.version ?? 0; stats.value.moduleCount = host.activeCount; stats.value.moduleSwaps++;
       const isNew=celebrate && !!version && version.version>(activeVersion?.version??0);
       activeVersion = version; pendingAck = version ? { version, frames: 0, celebrate: isNew && !version.restoredFrom } : null;
-    } catch {
+    } catch(error) {
+      if(generation!==activation)return;
+      if(loading){stats.value.moduleLoadError=error instanceof AssetLoadError?error.message:"Module assets could not load. Check the local server, then retry.";stats.value.moduleError=stats.value.moduleLoadError;}
+      else if(!stats.value.moduleError)stats.value.moduleError=error instanceof Error?error.message.slice(0,240):"Module activation failed.";
       if (version) moduleReceipt(version, false);
     }
   }

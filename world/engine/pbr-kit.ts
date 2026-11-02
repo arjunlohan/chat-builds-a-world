@@ -12,7 +12,7 @@ export function materialPreset(parameters:MeshStandardMaterialParameters):Materi
  if((parameters.roughness??.8)>.8&&Math.max(color.r,color.g,color.b)-Math.min(color.r,color.g,color.b)<.1)return Math.max(color.r,color.g,color.b)>.75?'paper':'stone';return 'painted';
 }
 /** Independent texture parameters/disposal; immutable bank pixels share one GPU Source. */
-export function ownedTexture(source:Texture){return source.clone();}
+export function ownedTexture(source:Texture){const version=source.source.version,copy=source.clone();source.source.version=version;return copy;}
 /** Each owner gets texture objects it can dispose; immutable decoded images remain in the bank. */
 export function presetMaterial(parameters:MeshStandardMaterialParameters,preset:MaterialPreset=materialPreset(parameters),look:WorldLook='new'){
  if(look==='classic')return new MeshStandardMaterial(parameters);

@@ -1,3 +1,4 @@
+import {loadAssets,AssetLoadError} from "./engine/asset-load.js";
 import {skyPreset} from "./shared/sky-cycle.js";
 import {prepareWorldAssets} from "./engine/asset-bank.js";
 import {captureQuery,frameCapture} from "./engine/capture.js";
@@ -6,7 +7,7 @@ import "./style.css";
 import { createRenderer } from "./engine/renderer.js";
 import type { WorldStats } from "./engine/stats.js";
 
-declare global { interface Window { __worldStats: WorldStats; __worldBenchmark?:(frames:number)=>Promise<{frames:number;kind:string;frameMs:number;p95Ms:number;cpuSubmitMs:number}>; __worldProbePixels?:Uint8Array; __worldFrameTrace?: import("./engine/stats.js").FrameTrace } }
+declare global { interface Window { __worldStats: WorldStats; __worldBootError?:string; __worldBenchmark?:(frames:number)=>Promise<{frames:number;kind:string;frameMs:number;p95Ms:number;cpuSubmitMs:number}>; __worldProbePixels?:Uint8Array; __worldFrameTrace?: import("./engine/stats.js").FrameTrace } }
 
 const canvas = document.querySelector<HTMLCanvasElement>("#world");
 const status = document.querySelector<HTMLElement>("#status");
@@ -27,7 +28,7 @@ function fail(message: string) {
 }
 try {
   if (!canvas) throw new Error("World canvas is missing");
-  await prepareWorldAssets(profile.look);
+  await loadAssets(()=>prepareWorldAssets(profile.look),fail);
   const world = createRenderer(canvas, {
     profile,
     ...(capturing?{capture:captureQuery(query),playback:true}:{}),
@@ -54,6 +55,7 @@ try {
   if(query.get("benchmark")==="1")window.__worldBenchmark=frames=>world.measureRender(frames);
   if(capturing){window.__capture=frameCapture(world,query);void window.__capture.ready.catch(()=>fail("The saved capture could not load."));}
   window.addEventListener("pagehide", () => world.dispose(), { once: true });
-} catch {
-  fail("This world needs WebGL 2. Enable graphics acceleration, then reload.");
+} catch(error) {
+  if(error instanceof AssetLoadError)window.__worldBootError=error.message;
+  fail(error instanceof AssetLoadError?error.message:"Graphics could not start. This world requires WebGL 2 and graphics acceleration.");
 }

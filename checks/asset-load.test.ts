@@ -1,0 +1,6 @@
+import{test}from'node:test';import assert from'node:assert/strict';import{loadAssets,AssetLoadError,ASSET_LOAD_ATTEMPTS}from'../world/engine/asset-load.js';
+test('asset loading retries transient failures and reports a bounded asset-specific failure',async()=>{
+ let calls=0;const notices:string[]=[];await loadAssets(async()=>{if(++calls<3)throw new Error('fixture');},message=>notices.push(message));assert.equal(calls,ASSET_LOAD_ATTEMPTS);assert.equal(notices.length,2);calls=0;await assert.rejects(loadAssets(async()=>{calls++;throw new Error('fixture');}),error=>error instanceof AssetLoadError&&error.message.includes('World assets'));assert.equal(calls,3);
+});
+
+test('asset and boot failures are infrastructure errors while hook failures remain repairable',async()=>{const {worldHealth}=await import('../server/runner/verdict.js');assert.deepEqual(worldHealth({moduleLoadError:'Model fetch failed'}),{ok:false,reason:'Model fetch failed',category:'infrastructure',retryable:false});assert.equal(worldHealth({bootError:'World assets failed'})?.category,'infrastructure');assert.equal(worldHealth({moduleError:'bad update'})?.category,'candidate');assert.equal(worldHealth({moduleError:'bad baseline'},true)?.category,'infrastructure');assert.equal(worldHealth({}),undefined);});

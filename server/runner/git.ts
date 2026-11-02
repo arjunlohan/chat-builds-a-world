@@ -1,9 +1,11 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { lstat, mkdtemp, rm, readFile, realpath, readdir } from "node:fs/promises";
+import { lstat, mkdtemp, rm, open, realpath, readdir } from "node:fs/promises";
 import { join, resolve, relative, dirname, basename } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
+import {constants} from "node:fs";
+export const INVENTORY_FILE_LIMIT=64*1024*1024;
 const execute = promisify(execFile);
 const executeGit=(root:string,args:string[])=>execute("git",["-c","core.hooksPath=/dev/null",...args],{cwd:root,timeout:12000,maxBuffer:4194304,env:{PATH:process.env.PATH??"/usr/bin:/bin",HOME:process.env.HOME??""}});
 export async function git(root: string, ...args: string[]) {
@@ -70,9 +72,14 @@ export async function inventory(root: string) {
       if (entry.isSymbolicLink()) throw new Error("Symlinks are forbidden in candidate trees.");
       if (entry.isDirectory()) await walk(path);
       else if (entry.isFile()) {
-        const stat = await lstat(path); if (stat.nlink > 1) throw new Error("Hard-linked files are forbidden.");
-        const { createHash } = await import("node:crypto");
-        files.set(name, `${stat.mode & 0o777}:${createHash("sha256").update(await readFile(path)).digest("hex")}`);
+        const handle=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW);
+        try{
+          const stat=await handle.stat();if(!stat.isFile()||stat.nlink>1)throw new Error("Hard-linked or unsupported files are forbidden.");
+          if(stat.size>INVENTORY_FILE_LIMIT)throw new Error("Inventory file exceeds 64 MiB.");
+          const hash=createHash("sha256");let bytes=0;
+          for await(const chunk of handle.createReadStream({autoClose:false,highWaterMark:65536})){bytes+=chunk.length;if(bytes>INVENTORY_FILE_LIMIT)throw new Error("Inventory file exceeds 64 MiB.");hash.update(chunk);}
+          files.set(name,`${stat.mode & 0o777}:${hash.digest("hex")}`);
+        }finally{await handle.close();}
       } else throw new Error("Unsupported candidate filesystem entry.");
     }
   }

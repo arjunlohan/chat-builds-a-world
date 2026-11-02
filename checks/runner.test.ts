@@ -3,10 +3,10 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, rename, readdir, realpath } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, rename, readdir, realpath, open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
-import { git, inventory, auditDiff, cleanMaster, createTree, removeTree, commitTree, promote, validateTree } from "../server/runner/git.js";
+import { git, inventory, INVENTORY_FILE_LIMIT, auditDiff, cleanMaster, createTree, removeTree, commitTree, promote, validateTree } from "../server/runner/git.js";
 import { inspectModule } from "../server/runner/policy.js";
 import { readableEvent } from "../server/runner/events.js";
 import { runnerPrompt, runCodex } from "../server/runner/codex.js";
@@ -68,6 +68,9 @@ test("inventory accepts the real committed asset tree, while writes keep the 2 M
   await writeFile(join(tree,"assets/world/sky.hdr"),Buffer.alloc(2_097_153));
   await assert.rejects(auditDiff(tree,base,before,[]),/exceeds 2 MiB/);
  }finally{if(tree)await removeTree(root,tree);}
+});
+test("inventory hashes streamed bytes and refuses oversized sparse files before reading them",async()=>{
+ const root=await mkdtemp(join(tmpdir(),"inventory-limit-"));try{await writeFile(join(root,"small"),"abc");const files=await inventory(root);assert.ok(files.get("small")!.endsWith("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));const file=await open(join(root,"huge"),"w");await file.truncate(INVENTORY_FILE_LIMIT+1);await file.close();await assert.rejects(inventory(root),/exceeds 64 MiB/);}finally{await rm(root,{recursive:true,force:true});}
 });
 test("dirty session state and an advanced master block promotion without checkout, stash or reset",async()=>{
  const root=await repository();let tree="";
@@ -298,6 +301,7 @@ test("runner forwards only approved spec command names into the candidate gate",
 test("builder time reserves the full self-check and gate; gate cannot start late",async()=>{
  const {builderAllowance,requireGateTime,BUILD_CHECK_RESERVE_MS}=await import('../server/runner/index.js');
  assert.equal(builderAllowance(240000),240000-BUILD_CHECK_RESERVE_MS);assert.ok(builderAllowance(240000)>=110000);assert.equal(BUILD_CHECK_RESERVE_MS,30000+12000+70000+2000);assert.equal(builderAllowance(BUILD_CHECK_RESERVE_MS-1),0);
+ assert.equal(requireGateTime(90000),88000);assert.equal(requireGateTime(70000),70000);
  assert.throws(()=>requireGateTime(1,'Original visibility rejection'),{message:'Original visibility rejection'});
  assert.throws(()=>requireGateTime(1),/complete candidate gate/);
 });

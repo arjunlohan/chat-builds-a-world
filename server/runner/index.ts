@@ -21,9 +21,10 @@ export interface BuildRequest { decision: GuardResult; requester: string; signal
 export interface RunResult { ok: boolean; outcome: "SHIPPED" | "REVERTED" | "ROLLED BACK"; reason: string; durationMs: number; builderMs?: number; attempts?:number;firstReason?:string;tokens: Usage; version?: number; tag?: string; check?: CheckResult }
 class RepairableRejection extends Error {}
 export const BUILD_ATTEMPTS=2;
-export const BUILD_CHECK_RESERVE_MS=RESOURCE_STARTUP_TIMEOUT_MS+SELF_CHECK_TIMEOUT_MS+CHECK_TIMEOUT_MS+2000;
+export const BUILD_HANDOFF_MS=2000;
+export const BUILD_CHECK_RESERVE_MS=RESOURCE_STARTUP_TIMEOUT_MS+SELF_CHECK_TIMEOUT_MS+CHECK_TIMEOUT_MS+BUILD_HANDOFF_MS;
 export function builderAllowance(remainingMs:number){return Math.max(0,remainingMs-BUILD_CHECK_RESERVE_MS);}
-export function requireGateTime(remainingMs:number,firstReason?:string){if(remainingMs<CHECK_TIMEOUT_MS)throw new Error(firstReason??"Insufficient time remaining for the complete candidate gate.");}
+export function requireGateTime(remainingMs:number,firstReason?:string){if(remainingMs<CHECK_TIMEOUT_MS)throw new Error(firstReason??"Insufficient time remaining for the complete candidate gate.");return Math.max(CHECK_TIMEOUT_MS,remainingMs-BUILD_HANDOFF_MS);}
 interface Options {
   root: string; versions: Versions; bin?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number;
   feed(kind: "plan" | "edit" | "check" | "ship" | "error", text: string): void;
@@ -121,8 +122,8 @@ export class Runner {
           const commands=chatCommands(approved.spec,discovered.flatMap(found=>found.commands));
           if(discovered.some(found=>found.hasOnChatLogic)&&!commands.length)feed("check","Module has onChat logic but no testable custom !command; built-in commands are excluded.");
           feed("check",`SwiftShader · ${CANDIDATE_THRESHOLDS.slicePairs} paired ${CANDIDATE_THRESHOLDS.sliceFrames}-frame cost slices and full-look probes · attempt ${attempt}.`);
-          requireGateTime(deadline-performance.now(),firstReason);
-          check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal,commands,this.options.versions.renderLook??(sourceEnv.WORLD_LOOK==="classic"?"classic":"new"),this.gateBrowser);
+          const watchdogMs=requireGateTime(deadline-performance.now(),firstReason);
+          check=await (this.options.check??candidateCheck)(this.root,modules,approved.spec.moduleId,signal,commands,this.options.versions.renderLook??(sourceEnv.WORLD_LOOK==="classic"?"classic":"new"),this.gateBrowser,watchdogMs);
           // A background conflict copy or hostile edit stays fatal even when another gate fails.
           await auditDiff(tree,base,before,approved.files);
           if(!check.ok){if(check.category!=="candidate"||check.retryable!==true)throw new Error(check.reason);throw new RepairableRejection(check.reason);}

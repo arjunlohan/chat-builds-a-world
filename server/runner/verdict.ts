@@ -10,3 +10,5 @@ export const isGateVerdict=(value:unknown):value is GateVerdict=>{
  if(!value||typeof value!=="object")return false;const v=value as Record<string,unknown>;
  return v.ok===true||v.ok===false&&typeof v.reason==="string"&&typeof v.retryable==="boolean"&&["candidate","infrastructure","precondition"].includes(String(v.category))&&(v.retryable===false||v.category==="candidate");
 };
+
+export function worldHealth(state:{moduleError?:string|undefined;moduleLoadError?:string|undefined;bootError?:string|undefined},baseline=false){const infrastructure=state.bootError||state.moduleLoadError;return infrastructure?infrastructureFailed(infrastructure):state.moduleError?(baseline?infrastructureFailed(state.moduleError):candidateRejected(state.moduleError)):undefined;}

@@ -12,7 +12,7 @@ import {WorldPipeline} from "../server/pipeline.js";
 import {Versions} from "../server/versions/index.js";
 import {frameVerdict,summarizeFrames,visibilityVerdict,percentile,CANDIDATE_THRESHOLDS as C,type FrameEvidence} from "./candidate-policy.js";
 import {VISIBILITY_PROBE,type Footprint} from "../world/engine/visibility.js";
-import {GateError,candidateRejected,infrastructureFailed} from "../server/runner/verdict.js";
+import {GateError,candidateRejected,infrastructureFailed,worldHealth} from "../server/runner/verdict.js";
 const path=process.argv[2]!,directory=dirname(path),input=JSON.parse(await readFile(path,"utf8")) as {modules:{id:string;file:string;code:string;modelKinds?:readonly ModelName[]}[];probeId:string;commands?:string[];look?:"classic"|"new";browserEndpoint?:string;browserPort?:number};
 const pipeline=new WorldPipeline(),versions=new Versions(join(directory,"runtime"),v=>pipeline.publish({type:"version",version:v}));
 const modules=await Promise.all(input.modules.map(m=>versions.artifact(m.id,m.file,m.code,m.modelKinds))),retained=modules.filter(m=>m.id!==input.probeId);
@@ -35,17 +35,17 @@ async function sendCommands(page:Page){
   for(let i=0;i<P.players;i++){const userId=`check-${i}`,result=pipeline.chat({id:`command-${currentBurst}-${index}-${i}`,userId,displayName:`Neighbor${i}`,color:"#79D7CF",text});if(!result.accepted)throw new Error(`Synthetic chat rejected: ${result.reason}`);sent.push({text,userId,burst:currentBurst});}
  }
  await page.waitForFunction(count=>window.__worldStats.moduleChats>=count||!!window.__worldStats.moduleError,sent.length,{timeout:3000});
- const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(candidateRejected(error));await save();
+ await requireHealthy(page);await save();
 }
-async function warm(page:Page,count:number,stage="candidate"){const frame=await page.evaluate(()=>window.__worldStats.frame);await page.waitForFunction(target=>window.__worldStats.frame>=target||!!window.__worldStats.moduleError,frame+count,{timeout:C.warmupTimeoutMs});const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(stage==="baseline"?infrastructureFailed(error):candidateRejected(error));}
-async function requireHealthy(page:Page){const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(candidateRejected(error));}
+async function warm(page:Page,count:number,stage="candidate"){const frame=await page.evaluate(()=>window.__worldStats.frame);await page.waitForFunction(target=>window.__worldStats.frame>=target||!!window.__worldStats.moduleError,frame+count,{timeout:C.warmupTimeoutMs});await requireHealthy(page,stage==="baseline");}
+async function requireHealthy(page:Page,baseline=false){const failure=worldHealth(await page.evaluate(()=>({moduleError:window.__worldStats?.moduleError,moduleLoadError:window.__worldStats?.moduleLoadError,bootError:window.__worldBootError})),baseline);if(failure)throw new GateError(failure);}
 async function waitSim(page:Page,seconds:number){const start=await page.evaluate(()=>window.__worldStats.simTime);await page.waitForFunction(target=>window.__worldStats.simTime>=target||!!window.__worldStats.moduleError,start+seconds,{polling:50,timeout:C.warmupTimeoutMs});await requireHealthy(page);}
 async function sample(page:Page,count:number,stage:string){
  const start=await page.evaluate(()=>({frame:window.__worldStats.frame,time:window.__worldStats.lastFrameAt,simTime:window.__worldStats.simTime})),target=start.frame+1+count;
  evidence.status=stage;await save();
  await page.waitForFunction(target=>window.__worldStats.frame>=target||!!window.__worldStats.moduleError,target,{polling:50,timeout:C.warmupTimeoutMs});
  const end=await page.evaluate(()=>({...window.__worldStats,time:window.__worldStats.lastFrameAt})),trace=await frames(page);
- if(errors.length)throw new Error("Checker console error.");if(end.moduleError)throw new GateError(candidateRejected(end.moduleError));
+ if(errors.length)throw new Error("Checker console error.");await requireHealthy(page);
  const first=trace.find(f=>f.frame===start.frame+1),last=trace.find(f=>f.frame===target);if(!first||!last)throw new Error("Missing measurement frames.");
  const summary=summarizeFrames({frame:first.frame,time:first.time},{frame:last.frame,time:last.time,avgFps:end.avgFps},trace,[]);
  if(summary.frames<C.minimumSliceFrames)throw new Error("Too few rendered measurement frames.");
@@ -60,12 +60,12 @@ try{
  page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});
  evidence.status="loading";await save();await page.goto(`http://127.0.0.1:${port}/world?check=1&overlay=1&time=day&probe=${encodeURIComponent(input.probeId)}`);
  const isolated=await page.evaluate(()=>!document.hidden&&!("__gateSse" in window));if(!isolated)throw new Error('Candidate page inherited cache-primer state.');evidence.freshPage=true;
- await page.waitForFunction(()=>window.__worldStats?.moduleVersion===1,undefined,{timeout:8000,polling:100});await page.waitForSelector('canvas[data-ready="true"]');
+ await page.waitForFunction(()=>window.__worldStats?.moduleVersion===1||!!window.__worldStats?.moduleError||!!window.__worldBootError,undefined,{timeout:8000,polling:100});await requireHealthy(page,true);await page.waitForSelector('canvas[data-ready="true"]');
  const rendererName=await page.evaluate(()=>{const gl=document.querySelector("canvas")!.getContext("webgl2")!,info=gl.getExtension("WEBGL_debug_renderer_info");return info?String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)):"";});if(!/swiftshader/i.test(rendererName))throw new Error("Candidate did not use SwiftShader.");evidence.renderer=rendererName;evidence.shadowMap=await page.locator("canvas").getAttribute("data-shadow");evidence.costPipeline=await page.locator("canvas").getAttribute("data-pipeline");evidence.visibilityPipeline=await page.locator("canvas").getAttribute("data-probe-pipeline");evidence.costTargets=await page.locator("canvas").getAttribute("data-targets");evidence.visibilityTargets=await page.locator("canvas").getAttribute("data-probe-targets");
  await warm(page,C.warmupFrames,"baseline");
  // Same page, citizen roster, renderer and retained instances. Only the candidate is added.
  await versions.activate({version:2,tag:"candidate",commit:"candidate",title:"Candidate",requester:"check",modules},false);
- await page.waitForFunction(()=>window.__worldStats.moduleVersion===2||!!window.__worldStats.moduleError,undefined,{timeout:6500});const error=await page.evaluate(()=>window.__worldStats.moduleError);if(error)throw new GateError(candidateRejected(error));
+ await page.waitForFunction(()=>window.__worldStats.moduleVersion===2||!!window.__worldStats.moduleError,undefined,{timeout:6500});await requireHealthy(page);
  const initialFocuses=await page.evaluate(()=>window.__worldStats.moduleFocuses);
  await sendCommands(page);await warm(page,C.candidateWarmupFrames);
  // The first full-look render is both cold shader startup and the first qualified
