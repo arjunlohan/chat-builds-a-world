@@ -12,6 +12,7 @@ const app=await createWorldServer(pipeline,undefined,undefined,undefined,{simula
 const browser=await chromium.launch({headless:true});const errors:string[]=[];
 try{
  const page=await browser.newPage({viewport:{width:1920,height:1080}});page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});await page.goto(base+"/overlay");await page.waitForFunction(()=>document.querySelector(".connection")?.textContent==="CONNECTED");
+ assert.ok(await page.locator('.twitch-notice').isHidden());pipeline.setTwitchStatus('disconnected');await page.locator('.twitch-notice').waitFor({state:'visible'});assert.equal(await page.locator('.twitch-notice').textContent(),'Twitch chat disconnected: check the server log');await page.reload();await page.locator('.twitch-notice').waitFor({state:'visible'});pipeline.setTwitchStatus('connected');await page.locator('.twitch-notice').waitFor({state:'hidden'});pipeline.setTwitchStatus('disabled');assert.ok(await page.locator('.twitch-notice').isHidden());
  const requested=process.argv[2];if(requested&&!CLIPS.some(c=>c.id===requested))throw new Error("Unknown clip");
  const results=[];
  for(const c of CLIPS.filter(c=>!requested||c.id===requested)){

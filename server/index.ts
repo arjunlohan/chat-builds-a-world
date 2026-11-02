@@ -39,7 +39,7 @@ async function start(){
   checkpoint.changed();await checkpoint.flush();
   const app=await createWorldServer(pipeline,summons,rounds,versions,{worldLook:config.worldLook,durable,broadcasterId:config.broadcasterId,simulationAllowed:config.simulationAllowed,...(simulation?{setOutcome:simulation.setOutcome}:{}),live:!!config.summon.key&&!simulation,fault:async()=>{if(versions.current)await versions.invalidate(versions.current.version);rounds.cancelForRevert();rounds.externalResult(await runner.rollback("system",true));}});
   await new Promise<void>((resolve,reject)=>{app.server.once("error",reject);app.server.listen(config.port,config.host,resolve);});
-  twitch=connectTwitch({onChat:(event,authority)=>{pipeline.chat(event,{...authority,source:"twitch"});},onRaid:event=>{pipeline.raid(event);}},config.twitch);
+  twitch=connectTwitch({onStatus:status=>pipeline.setTwitchStatus(status),onChat:(event,authority)=>{pipeline.chat(event,{...authority,source:"twitch"});},onRaid:event=>{pipeline.raid(event);}},config.twitch);
   const timers=[setInterval(()=>{rounds.tick();reactions.tick();},250),setInterval(()=>{pipeline.prune();summons.prune();},1000)];let closing=false;
   async function stop(){if(closing)return;closing=true;for(const timer of timers)clearInterval(timer);twitch?.stop();rounds.dispose();versions.close();app.closeStreams();const closed=new Promise<void>(r=>app.server.close(()=>r()));app.server.closeIdleConnections();await runner.close();await closed;checkpoint.changed();await checkpoint.flush();unsubscribe();await release();}
   for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{void stop().catch(()=>{console.error("Shutdown could not finish; recovery will run on restart.");process.exitCode=1;});});

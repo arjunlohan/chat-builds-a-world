@@ -1,11 +1,12 @@
 import WebSocket from "ws";
-import type { ChatEvent, RaidEvent } from "../contracts.js";
+import type { ChatEvent, RaidEvent, TwitchStatus } from "../contracts.js";
 import { TwitchAuth, TwitchError, tokenStore, type TokenStore, type TwitchConfig } from "./auth.js";
 import { incomingRaid } from "./raid.js";
 import { parseChat } from "../pipeline.js";
 
 export const EVENTSUB_URL = "wss://eventsub.wss.twitch.tv/ws";
 export interface TwitchHandlers {
+  onStatus?(status:TwitchStatus):void;
   onChat(event: ChatEvent, authority: { moderator: boolean }): void;
   onRaid(event: RaidEvent): void;
 }
@@ -42,6 +43,8 @@ export class TwitchClient {
   private attempt = 0;
   private loaded = false;
   private booting = false;
+  private status:TwitchStatus|undefined;
+  private report(status:TwitchStatus){if(status!==this.status){this.status=status;this.handlers.onStatus?.(status);}}
 
   constructor(private readonly config: TwitchConfig, private readonly handlers: TwitchHandlers, private readonly options: TwitchOptions = {}) {
     this.now = options.now ?? Date.now;
@@ -52,7 +55,7 @@ export class TwitchClient {
   }
   async start() {
     if (this.stopped || this.booting || this.connections.size) return;
-    this.booting = true;
+    this.booting = true;this.report("disconnected");
     try {
       if (!this.loaded) { await this.auth.load(); this.loaded = true; }
       await this.auth.validate();
@@ -108,7 +111,7 @@ export class TwitchClient {
   }
   private failed(error: unknown) {
     if (this.stopped) return;
-    this.teardown();
+    this.teardown();this.report("disconnected");
     if (this.retryTimer) return;
     if (error instanceof TwitchError && (error.status === 400 || error.status === 401 || error.status === 403)) {
       this.log("Twitch authorization/scopes are unavailable; sim-only mode remains active. Update credentials and restart.");
@@ -144,7 +147,7 @@ export class TwitchClient {
         }));
         if (!this.connections.has(connection) || this.stopped) return;
       }
-      return;
+      this.report("connected");return;
     }
     if (!connection.welcomed) return;
     if (type === "session_keepalive" || type === "notification") {
@@ -186,7 +189,7 @@ export class TwitchClient {
     return body.data[0].message_id;
   }
   stop() {
-    this.stopped = true;
+    this.stopped = true;this.report("disconnected");
     if (this.retryTimer) this.clearTimer(this.retryTimer);
     this.teardown();
   }
@@ -195,6 +198,7 @@ export class TwitchClient {
 /** A missing Twitch configuration is expected during local development. */
 export function connectTwitch(handlers: TwitchHandlers, config?: TwitchConfig, options: TwitchOptions = {}) {
   if (!config) {
+    handlers.onStatus?.("disabled");
     (options.log ?? console.warn)("Twitch env vars are missing; running in sim-only mode. Set TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, TWITCH_ACCESS_TOKEN, TWITCH_REFRESH_TOKEN and TWITCH_BROADCASTER_ID to connect.");
     return { stop() {}, sendChat: async (_message: string): Promise<string | undefined> => { throw new TwitchError(503, "sim-only chat"); } };
   }

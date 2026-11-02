@@ -96,6 +96,9 @@ world's title/hint. `?debug=1` adds an FPS readout; `window.__worldStats` expose
 fps, avgFps, frame and citizenCount regardless of that flag. `/world` defaults to a
 1920x1080 framebuffer. Portrait pages retain the scene with readable page text.
 
+If configured Twitch chat disconnects, the overlay shows a persistent notice.
+Re-authorize using the token steps below, update `.env` and restart the server.
+
 ## Rendering and frame capture
 
 The new look is the default: scanned CC0 ground, trees and props, HDR sky lighting,

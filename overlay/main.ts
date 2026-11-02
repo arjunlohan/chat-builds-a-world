@@ -18,7 +18,8 @@ const phaseCopy = el("div", "phase-copy"); phaseCopy.append(kicker, title, comma
 const ideaQueue = queue(), voteBars = votes(), feed = codexFeed(), history = timeline(), moments = toasts();
 const left = el("div", "rail left-rail"), right = el("div", "rail right-rail");
 const reactions=reactionOverlay(capturing?{now,frameExact:true}:{});
-left.append(phase, ideaQueue.root, voteBars.root, reactions.root); right.append(feed.root, history.root);
+const twitchNotice=el("p","twitch-notice","Twitch chat disconnected: check the server log");twitchNotice.hidden=true;twitchNotice.setAttribute("role","status");
+left.append(twitchNotice,phase, ideaQueue.root, voteBars.root, reactions.root); right.append(feed.root, history.root);
 root.append(left, right, moments.root,reactions.video);
 let phaseAnimation: Animation|undefined;
 let state: RoundState | null = null, received = 0, toastKey = "";
@@ -55,7 +56,8 @@ events.onerror = () => { connection.textContent = "RECONNECTING"; connection.cla
 events.onmessage = message => {
   try {
     const event = JSON.parse(message.data) as WorldEvent;
-    if (event.type === "snapshot") {if(event.rounds)update(event.rounds);if(event.reactions)reactions.update(event.reactions);}
+    if (event.type === "snapshot") {if(event.rounds)update(event.rounds);if(event.reactions)reactions.update(event.reactions);twitchNotice.hidden=event.twitch!=="disconnected";}
+    if(event.type==="twitch")twitchNotice.hidden=event.status!=="disconnected";
     if(event.type==="reactions")reactions.update(event.state);
     if (event.type === "rounds") update(event.state);
   } catch { connection.textContent = "WAITING FOR WORLD STATE"; }

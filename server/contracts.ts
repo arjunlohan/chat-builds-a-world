@@ -41,9 +41,10 @@ export interface CitizenState {
 export interface SummonState {
   id: string; spec: SceneSpec; requester: string; requestedAt: number; receipt: string; mode: "fixture" | "live";
 }
-export type LaneEvent = {type:"reactions";state:ReactionState} | { type: "version"; version: WorldVersion | null } | { type: "rounds"; state: RoundState } | { type: "summon"; summon: SummonState } | { type: "summon-remove"; ids: string[] } | { type: "reply"; message: string };
+export type TwitchStatus = "disabled" | "disconnected" | "connected";
+export type LaneEvent = {type:"twitch";status:TwitchStatus} | {type:"reactions";state:ReactionState} | { type: "version"; version: WorldVersion | null } | { type: "rounds"; state: RoundState } | { type: "summon"; summon: SummonState } | { type: "summon-remove"; ids: string[] } | { type: "reply"; message: string };
 export type WorldEvent = (LaneEvent & { revision: number; now: number }) |
-  { type: "snapshot"; revision: number; now: number; citizens: CitizenState[]; paused: boolean; raids: number; arrival: {raid:RaidEvent;admitted:number;at:number}|null; summons: SummonState[]; rounds: RoundState | null; version: WorldVersion | null; reactions?:ReactionState|null } |
+  { type: "snapshot"; revision: number; now: number; citizens: CitizenState[]; paused: boolean; raids: number; arrival: {raid:RaidEvent;admitted:number;at:number}|null; summons: SummonState[]; rounds: RoundState | null; version: WorldVersion | null; reactions?:ReactionState|null; twitch?:TwitchStatus } |
   { type: "chat"; revision: number; now: number; chat: ChatEvent; citizen: CitizenState; spawned: boolean } |
   { type: "remove"; revision: number; now: number; ids: string[] } |
   { type: "raid"; revision: number; now: number; raid: RaidEvent; citizens: CitizenState[] } |

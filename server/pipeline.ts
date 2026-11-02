@@ -3,7 +3,7 @@ import type {Reactions,ReactionCheckpoint} from "./reactions/index.js";
 import { inParade } from "../world/shared/limits.js";
 import { contentPolicy, DEFAULT_BLOCKLIST } from "./content-policy.js";
 import type { WorldVersion } from "./versions/index.js";
-import type { ChatEvent, RaidEvent, WorldEvent, LaneEvent } from "./contracts.js";
+import type { ChatEvent, RaidEvent, WorldEvent, LaneEvent, TwitchStatus } from "./contracts.js";
 import type { SummonService } from "./summon/index.js";
 import type { Rounds } from "./rounds/index.js";
 import { CitizenRoster } from "./citizens/index.js";
@@ -47,6 +47,8 @@ export class WorldPipeline {
     if (event.type === "summon") this.rounds?.toast("summon", event.summon.spec.name, `Summoned by ${event.summon.requester}`);
     if (event.type === "summon-remove") this.rounds?.toast("notice", "Summon cleared", "Summon removed.");
   }
+  private twitch:TwitchStatus="disabled";
+  setTwitchStatus(status:TwitchStatus){if(this.twitch===status)return;this.twitch=status;this.publish({type:"twitch",status});}
   private revision = 0;
   private paused = false;
   private raids = 0;
@@ -74,7 +76,7 @@ export class WorldPipeline {
     if(saved.reactions)this.reactions?.restore(saved.reactions,savedAt);else this.reactions?.setPaused(this.paused);
   }
   snapshot(): Extract<WorldEvent, { type: "snapshot" }> {
-    return { type: "snapshot", revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, arrival:this.arrival&&inParade(this.arrival.at,this.now())?this.arrival:null, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null, version: this.version, reactions:this.reactions?.snapshot()??null };
+    return { type: "snapshot", twitch:this.twitch, revision: this.revision, now: this.now(), citizens: this.roster.list(), paused: this.paused, raids: this.raids, arrival:this.arrival&&inParade(this.arrival.at,this.now())?this.arrival:null, summons: this.summonLane?.active() ?? [], rounds: this.rounds?.snapshot() ?? null, version: this.version, reactions:this.reactions?.snapshot()??null };
   }
   private duplicate(key: string, now: number) {
     if (this.seen.has(key)) return true;

@@ -31,7 +31,7 @@ function fixture() {
     requests.push({ path, body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined });
     return path.endsWith("validate") ? validation() : path.endsWith("messages") ? reply({ data: [{ is_sent: true, message_id: "sent" }] }) : reply({}, 202);
   };
-  const client = new TwitchClient(config, { onChat: (event, authority) => { world.chat(event, authority); }, onRaid: event => { world.raid(event); } }, {
+  const client = new TwitchClient(config, { onStatus:status=>world.setTwitchStatus(status),onChat: (event, authority) => { world.chat(event, authority); }, onRaid: event => { world.raid(event); } }, {
     fetch: fetcher, store: { load: async () => undefined, save: async () => {} }, log: line => logs.push(line), now: () => now, random: () => 0.5,
     socket: url => { urls.push(url); const socket = new Socket(); sockets.push(socket); return socket as unknown as WebSocket; },
     setTimer: (callback, ms) => { const id = ++sequence; timers.set(id, { at: now + ms, callback }); return id as unknown as ReturnType<typeof setTimeout>; },
@@ -152,4 +152,12 @@ test("rotated credentials persist privately, restore on restart and invalidate w
     assert.equal(await tokenStore({ ...config, refreshToken: "changed-env" }, directory).load(), undefined);
     assert.equal(await tokenStore({ ...config, broadcasterId: "different-account" }, directory).load(), undefined);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("configured Twitch stays visibly disconnected after an invalid refresh; no credentials stay disabled",async()=>{
+ const world=new WorldPipeline(),statuses:string[]=[];
+ const client=new TwitchClient(config,{onChat(){},onRaid(){},onStatus:status=>{statuses.push(status);world.setTwitchStatus(status);}},{fetch:async url=>String(url).endsWith("/token")?reply({},400):reply({},401),store:{load:async()=>undefined,save:async()=>{}},log(){}});
+ await client.start();assert.deepEqual(statuses,["disconnected"]);assert.equal(world.snapshot().twitch,"disconnected");client.stop();
+ connectTwitch({onChat(){},onRaid(){},onStatus:status=>world.setTwitchStatus(status)},undefined,{log(){}});assert.equal(world.snapshot().twitch,"disabled");
+ const f=fixture();await f.client.start();assert.equal(f.world.snapshot().twitch,"disconnected");f.sockets[0]!.welcome();await settle();assert.equal(f.world.snapshot().twitch,"connected");f.sockets[0]!.emit("error");assert.equal(f.world.snapshot().twitch,"disconnected");f.client.stop();
 });
