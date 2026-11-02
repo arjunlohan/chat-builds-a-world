@@ -22,6 +22,8 @@ The pre-lighting reference set is `state/visual/p26-before-{day,golden,dusk,nigh
 
 | 6. Dusk, moonlight and sky band | 280 tests and browser checks pass | 60.05 / 59.95 / 59.97 / 60.16 | 21.18 / 20.89 / 20.10 / 20.47 |
 
+| 7. Capture image-based lighting | 281 tests and fresh-page capture comparisons pass | 59.96 / 59.97 / 59.96 / 60.16 | 14.65 / 14.06 / 13.89 / 12.76 |
+
 ## 1. Twitch failure visibility
 
 Configured Twitch starts disconnected, becomes connected after subscriptions
@@ -119,3 +121,28 @@ fades with daylight so dusk stays cool.
 The full check and settled four-phase 150-raider check pass. Before/after:
 `p26-before-{dusk,night}.png` and `p26-6-{dusk,night}.png`. All frames/crops and
 GPU timings are under `state/visual/p26-6-*`.
+
+## 7. Capture retains image-based lighting
+
+Capture now uses the same sky PMREM as live rendering. Fresh 4K pages at the
+same take, seed and frame compare pixels with a maximum channel delta of 1/255
+and at most 0.5% differing pixels. The test rejects either excess separately;
+PNG hashes remain diagnostic. Both `/world` and `/capture`, including an active
+alpha reaction, actually matched byte for byte (zero differing pixels). The
+capture-mode fence and lifecycle budgets are unchanged.
+
+A metal/brass/glass fixture also verifies that live and capture both have a
+PMREM environment, one bake, no module error and the same home camera. See
+`p26-capture-vs-live-{live,capture}-4k.png` and the side-by-side
+`p26-capture-vs-live.png`. This comparison is visual evidence, not the determinism
+test: live reduced motion and fixed-step capture sample foliage/water differently.
+The fresh-page repeat test is the determinism boundary.
+
+`pnpm check`, `pnpm check:capture`, `checks/capture-lighting.smoke.ts` and the
+settled 150-raider check pass. Native 4K capture frames took 67.1-82.0 ms in the
+repeat test, excluding 468-552 ms PNG capture/encoding. This is offline rendering.
+A kit-specific repeat encountered an init-budget rejection under load; its
+independent first pair was exact. No budget was relaxed. The full default repeat
+passed both routes. All four lighting phases and three camera paths are saved
+under `state/visual/p26-7-*-*-4k.png`; metrics are in `p26-7-stills.json`.
+The settled 12-shot set took 28.0-30.4 ms per GPU-complete frame on this run.

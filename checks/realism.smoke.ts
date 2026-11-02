@@ -22,7 +22,7 @@ let world:Awaited<ReturnType<typeof launchWorldPage>>|undefined;
 try{
  const start=performance.now();world=await launchWorldPage(base,'overlay=1&time=day&benchmark=1');if(process.argv.includes('--kit'))await world.page.waitForFunction(()=>window.__worldStats.moduleVersion===1);const coldMs=performance.now()-start;assert.ok(coldMs<8000,`Cold page took ${coldMs.toFixed(0)}ms`);
  await world.page.emulateMedia({reducedMotion:'reduce'});await world.page.reload();await world.page.waitForSelector('canvas[data-ready="true"]');
- const raid=incomingRaid(raidFixture('local',150,'AuroraCrew','visual-raid'),'local')!;pipeline.raid(raid);await world.page.waitForTimeout(16000);
+ const raid=incomingRaid(raidFixture('local',150,'AuroraCrew','visual-raid'),'local')!;pipeline.raid(raid);await world.page.waitForTimeout(process.argv.includes("--settled")?26000:16000);
  const results=[];for(const phase of ['day','golden','dusk','night']){await world.page.goto(base+`/world?overlay=1&time=${phase}&benchmark=1`);await world.page.waitForSelector('canvas[data-ready="true"]');await world.page.waitForTimeout(process.argv.includes("--settled")?8000:2000);
  if(process.argv.includes('--kit'))await world.page.waitForFunction(()=>window.__worldStats.moduleVersion===1);await world.page.screenshot({path:out+`/${stage}-${phase}.png`});if(phase==='day'){for(const [name,x,y] of [['edge',1160,400],['citizens',680,480]] as const)await world.page.screenshot({path:out+`/${stage}-${name}-crop.png`,clip:{x,y,width:400,height:360}});}
  const timing=await measureFps(world.page,5000),render=await world.page.evaluate(()=>window.__worldBenchmark!(30));results.push({phase,...timing,gpuMs:render.frameMs,gpuP95Ms:render.p95Ms,cpuSubmitMs:render.cpuSubmitMs});}

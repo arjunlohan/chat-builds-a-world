@@ -58,20 +58,21 @@ benchmark.
 
 ## Determinism boundary
 
-`pnpm check:capture` compares fresh-page PNG hashes at the same version, take,
-seed and frame, including an active alpha reaction video. It also checks native
+`pnpm check:capture` compares fresh-page PNG pixels at the same version, take,
+seed and frame, including an active alpha reaction video. Maximum channel delta
+is 1/255, with at most 0.5% of pixels differing; larger changes fail. Hashes are
+retained as diagnostics. It also checks native
 4K dimensions and browser errors. Images and timings are saved to `state/visual/`.
 
 Normal GPU page compositing can vary alpha/color by one channel value. Use the
-provided driver flags for byte comparisons. Hashes are verified on this Mac and
+provided driver flags for comparisons. Tolerances are verified on this Mac and
 Chromium build; different GPUs, browser versions or system-font rasterizers may
 produce different pixels. Real hook watchdogs remain active, so machine overload
 can abort a capture. Module code must use dt/the host clock and the seeded random
 stream, rather than unapproved external sources of time or entropy.
 
-Capture mode pins ambient fill to the hemisphere light and omits the dynamic
-HDR PMREM. Live pages retain sky-driven environment reflections. This deliberate
-capture fallback avoids one-byte GPU rounding differences from HDR convolution;
-it does not change the virtual sky, sun, shadows or module clock. `step()` waits
-for a WebGL fence, so it resolves only after that frame has finished on the GPU.
+Capture retains the same sky-driven PMREM environment as live pages, including
+metal, glass and surface reflections. It does not replace image-based lighting
+with ambient fill. `step()` waits for a WebGL fence, so it resolves only after
+that frame has finished on the GPU.
 The 4K capture path is offline rendering, not a 60 fps real-time promise.

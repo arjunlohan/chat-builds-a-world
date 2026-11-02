@@ -10,7 +10,7 @@ const code=(await build({stdin:{contents:source,loader:'ts',resolveDir:process.c
 await versions.activate({version:1,tag:'v1',commit:'fixture',title:process.argv.includes('--kit')?'Lantern orchard':'Amber floating stone',requester:'Comet04',modules:[await versions.artifact('capture-fixture','world/modules/capture-fixture.ts',code)]},false);
 pipeline.raid(incomingRaid(raidFixture('local',150,'AuroraCrew','capture-raid'),'local')!);
 const app=await createWorldServer(pipeline,undefined,undefined,versions);await new Promise<void>(r=>app.server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${(app.server.address() as {port:number}).port}`,browser=await captureBrowser(),results=[],errors:string[]=[];
-try{for(const time of ['day','golden'])for(const path of ['orbit','push-in','flyover']){
+try{for(const time of (process.argv.includes('--all-times')?['day','golden','dusk','night']:['day','golden']))for(const path of ['orbit','push-in','flyover']){
  const page=await browser.newPage({viewport:{width:1920,height:1080},deviceScaleFactor:2});page.on('pageerror',e=>errors.push(e.message));page.on('console',e=>{if(e.type()==='error')errors.push(e.text());});
  await page.goto(`${base}/world?capture=1&resolution=4k&version=v1&take=${stage}&seed=42&path=${path}&time=${time}&overlay=1`);await page.waitForFunction(()=>!!window.__capture);await page.evaluate(()=>window.__capture!.ready);
  const timing=await page.evaluate(async steps=>{const start=performance.now();for(let i=0;i<steps;i++)await window.__capture!.step(.05);return {elapsedMs:performance.now()-start,stats:window.__worldStats};},steps);

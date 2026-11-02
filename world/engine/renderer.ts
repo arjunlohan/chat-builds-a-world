@@ -80,9 +80,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const water = createWater(profile.look);
   const motes = createMotes();
   const sky = createSky(scene, options.fixedTime,profile.look,profile.probe?SHADOW_RESOLUTION.classic:shadowResolution(profile));
-  // Capture pins ambient fill: HDR-derived PMREM caused one-bit cross-page GPU variance.
-  canvas.dataset.captureEnvironment=options.capture?"fixed-ambient":"sky-pmrem";
-  const ibl=profile.look!=="classic"&&!options.capture?skyEnvironment(renderer,scene,sky.sky):undefined;ibl?.update(sky.lighting);
+  // Capture and live share image-based lighting; screenshot checks bound GPU rounding.
+  canvas.dataset.captureEnvironment=profile.look==="classic"?"classic-hemisphere":"sky-pmrem";
+  const ibl=profile.look!=="classic"?skyEnvironment(renderer,scene,sky.sky):undefined;ibl?.update(sky.lighting);
   canvas.dataset.shadow=String(sky.sunlight.shadow.mapSize.width);
   const effects = createEffects();
   const labelLayer = options.labels ?? document.createElement("div");
