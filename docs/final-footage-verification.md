@@ -18,6 +18,8 @@ The pre-lighting reference set is `state/visual/p26-before-{day,golden,dusk,nigh
 
 | 4. Model preload and retry | 278 tests, computed-kind gate/live and recorded README pass | 59.95 / 59.94 / 59.95 / 59.96 | 22.18 / 22.21 / 22.58 / 22.14 |
 
+| 5. Golden-hour lighting | 279 tests and browser checks pass | 59.95 / 59.95 / 59.90 / 59.97 | 22.32 / 21.46 / 22.68 / 22.52 |
+
 ## 1. Twitch failure visibility
 
 Configured Twitch starts disconnected, becomes connected after subscriptions
@@ -81,3 +83,16 @@ unchanged 70-second watchdog and failing the inherited P25 ten-second margin
 assertion. This timing limitation is retained rather than hidden or fixed by
 changing thresholds. The source full check and settled four-phase performance
 check pass (`p26-4-*`).
+
+## 5. Golden hour
+
+Warmth is concentrated in the low sun and horizon, with blue overhead scattering
+and photographed cloud structure retained. Cloud tops stay white-gold instead of
+receiving an overall brown grade. Grazing sunlight has additional sky/hemisphere
+fill so the green ground and citizen colors remain legible. Shared authored
+constants define this look; normal day and night use their prior zero-warmth
+settings. No geometry or gate limit changed.
+
+`pnpm check` and the settled four-phase 150-raider check pass. Before/after:
+`p26-before-golden.png` and `p26-5-golden.png`. Day/golden/dusk/night frames,
+crops and GPU measurements are in `state/visual/p26-5-*`.

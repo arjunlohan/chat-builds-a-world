@@ -14,3 +14,5 @@ export function skyCycle(phase:number):SkyLighting{
 }
 export const ENVIRONMENT_EPSILON=Object.freeze({day:.06,warmth:.08,sunRadians:.08});
 export function environmentChanged(a:SkyLighting|undefined,b:SkyLighting){return !a||Math.abs(a.day-b.day)>=ENVIRONMENT_EPSILON.day||Math.abs(a.warmth-b.warmth)>=ENVIRONMENT_EPSILON.warmth||a.sun.reduce((n,x,i)=>n+x*b.sun[i]!,0)<Math.cos(ENVIRONMENT_EPSILON.sunRadians);}
+/** Low sun warms direct light and the horizon while overhead/cloud illumination stays neutral. */
+export const GOLDEN_LIGHT=Object.freeze({skyTintMix:.12,fogTintMix:.18,hemisphereFill:.16,environmentFill:.18,sunReduction:.4,sunTintMix:.48});
