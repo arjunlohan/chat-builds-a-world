@@ -24,6 +24,8 @@ The pre-lighting reference set is `state/visual/p26-before-{day,golden,dusk,nigh
 
 | 7. Capture image-based lighting | 281 tests and fresh-page capture comparisons pass | 59.96 / 59.97 / 59.96 / 60.16 | 14.65 / 14.06 / 13.89 / 12.76 |
 
+| 8. Canopy mip coverage | Full check and four-phase browser check pass | 59.98 / 59.95 / 59.98 / 59.97 | 12.84 / 13.10 / 12.42 / 12.21 |
+
 ## 1. Twitch failure visibility
 
 Configured Twitch starts disconnected, becomes connected after subscriptions
@@ -146,3 +148,22 @@ independent first pair was exact. No budget was relaxed. The full default repeat
 passed both routes. All four lighting phases and three camera paths are saved
 under `state/visual/p26-7-*-*-4k.png`; metrics are in `p26-7-stills.json`.
 The settled 12-shot set took 28.0-30.4 ms per GPU-complete frame on this run.
+
+## 8. Canopy filtering
+
+Cutout maps receive a progressive, coverage-preserving mip chain once when the
+asset loads. The adjustment never lowers filtered alpha, preserving thin tips.
+MSAA alpha-to-coverage remains enabled; there are no added draws, geometry or
+passes. The canvas base image is also installed as the texture source so WebGL
+sets the right upload orientation for canvas mips. Owned copies retain the mip
+chain. Classic skips asset preparation and is unchanged.
+
+Numeric tests cover thin coverage, transparent texels, color retention and empty
+or fully covered input. The full check and settled four-phase 150-raider check
+pass. The change is modest: it reduces thin-leaf dropout, not the authored scan's
+leaf-cluster detail. Matching crops are `p26-canopy-{before,after}-1080.png` and
+`p26-canopy-{before,after}-4k.png`, with side-by-side
+`p26-canopy-{1080,4k}-comparison.png`. The complete four-phase sets and three
+native-4K camera paths are under `state/visual/p26-8-*`.
+The fresh-page 4K capture repeat also passes both routes with zero differing
+pixels (`p26-8-capture-results.json`).
