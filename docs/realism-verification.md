@@ -375,7 +375,7 @@ The base remains 121,155 triangles at all 300 allocated citizen slots, retaining
 8,845 module triangles after the summon reserve. Assets total 59,443,090 bytes
 including source scripts/media/manifest; world payloads alone are 43,235,305 bytes.
 
-The final fixed cost pipeline uses a 256px shadow target and engine-only unlit
+The final fixed cost pipeline uses a classic-resolution 1024px shadow target and engine-only unlit
 proxies. Module geometry/materials remain native. Full-look visibility restores
 all materials and uses the complete live composer. Final interleaved results:
 

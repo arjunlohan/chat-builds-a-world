@@ -11,7 +11,7 @@ class SceneInput extends Pass{
  private quad=new FullScreenQuad(this.material);
  constructor(private scene:Scene,private camera:Camera,readonly target:WebGLRenderTarget,private cost?:MeasurementMaterials){super();this.needsSwap=false;}
  override setSize(w:number,h:number){this.target.setSize(w,h);}
- override render(renderer:WebGLRenderer,_write:WebGLRenderTarget,read:WebGLRenderTarget){renderer.setRenderTarget(this.target);renderer.clear();this.cost?.enter();try{renderer.render(this.scene,this.camera);}finally{this.cost?.leave();}this.material.uniforms.map!.value=this.target.texture;renderer.setRenderTarget(read);this.quad.render(renderer);}
+ override render(renderer:WebGLRenderer,_write:WebGLRenderTarget,read:WebGLRenderTarget){renderer.setRenderTarget(this.target);this.cost?.enter();try{renderer.render(this.scene,this.camera);}finally{this.cost?.leave();}this.material.uniforms.map!.value=this.target.texture;renderer.setRenderTarget(read);this.quad.render(renderer);}
  override dispose(){this.cost?.dispose();this.target.dispose();this.material.dispose();this.quad.dispose();}
 }
 export function pipelinePasses(profile:Readonly<RenderProfile>,measurement=false){const passes=['main'];if(!measurement&&profile.look!=='classic')passes.push('gtao');if(!measurement&&profile.bloom)passes.push(profile.look==='classic'?'bloom':'emissive-bloom');passes.push('output');return passes;}

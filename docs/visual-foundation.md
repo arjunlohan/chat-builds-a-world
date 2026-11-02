@@ -16,8 +16,9 @@ P21 is closed separately in [its verification report](p21-verification.md).
 | 5 Escape hatch | Done | `WORLD_LOOK=classic` or `?look=classic`; world, capture and gate use the selected pipeline. |
 | 6 Frame capture | Done | Pinned version/take, virtual clock and seeded module hooks, three moving camera paths plus fixed; native 4K export and fresh-page hash checks. |
 
-No requested step was skipped. The candidate profile keeps MSAA, environment,
-GTAO, emissive bloom and tone mapping, at reduced image/256px shadow resolution.
+No requested step was skipped. Candidate cost slices use the main pass and classic 1024px shadows. Full-look
+visibility keeps MSAA, environment, GTAO, emissive bloom and tone mapping at
+probe resolution with that same shadow map.
 Production new-look shadows remain 2048px. No admission or rejection thresholds
 were relaxed.
 

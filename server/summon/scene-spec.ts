@@ -1,6 +1,6 @@
 import {isModelKind,type GeometryKind} from "../../world/shared/model-kit.js";
 import type {MaterialPreset} from "../../world/shared/material-kit.js";
-import {TALLEST_TREE_HEIGHT} from "../../world/shared/scale.js";
+import {scaleVerdict} from "../../world/shared/scale.js";
 import { MODULE_CAP, fitsBounds, clampToWorld, SPEC_LIMITS } from "../../world/shared/limits.js";
 export { SPEC_LIMITS } from "../../world/shared/limits.js";
 import type { ValidateFunction } from "ajv";
@@ -76,7 +76,7 @@ export function specUsage(spec: SceneSpec) {
     particles: spec.emitters.reduce((n, emitter) => n + emitter.maxParticles, 0) };
 }
 function checkEnvelope(spec: SceneSpec) {
-  if(spec.geometries.some(g=>isModelKind(g.kind))){const bounds=new Box3();for(const node of spec.nodes){const extent=nodeEnvelope(spec,node),center=new Vector3(...node.position);bounds.expandByPoint(center.clone().sub(extent));bounds.expandByPoint(center.add(extent));}for(const emitter of spec.emitters){const r=emitter.size+emitter.lifetime*.2;bounds.expandByPoint(new Vector3(...emitter.position).addScalar(r));bounds.expandByPoint(new Vector3(...emitter.position).addScalar(-r));}if(bounds.max.y-bounds.min.y>TALLEST_TREE_HEIGHT)throw new Error("Kit scene exceeds tallest tree envelope");}
+  if(spec.geometries.some(g=>isModelKind(g.kind))){const bounds=new Box3();for(const node of spec.nodes){const extent=nodeEnvelope(spec,node),center=new Vector3(...node.position);bounds.expandByPoint(center.clone().sub(extent));bounds.expandByPoint(center.add(extent));}for(const emitter of spec.emitters){const r=emitter.size+emitter.lifetime*.2;bounds.expandByPoint(new Vector3(...emitter.position).addScalar(r));bounds.expandByPoint(new Vector3(...emitter.position).addScalar(-r));}const error=bounds.isEmpty()?undefined:scaleVerdict(bounds.max.y-bounds.min.y);if(error)throw new Error(error);}
   for (const node of spec.nodes) {
     const e = nodeEnvelope(spec, node);
     if (!fitsBounds(new Vector3(...node.position), e)) throw new Error("Transformed or animated node exceeds world bounds");

@@ -1,3 +1,4 @@
+import {SIMULATION_MAX_DT} from "../shared/time.js";
 import {loadAssets,AssetLoadError} from "./asset-load.js";
 import {ShadowClock} from "./shadow-clock.js";
 import {captureFence} from "./gpu-fence.js";
@@ -12,7 +13,7 @@ import type {WorldEvent} from "../../server/contracts.js";
 import {skyEnvironment} from "./environment.js";
 import {moduleBounds} from "./module-bounds.js";
 import { contributionFootprint, VISIBILITY_PROBE } from "./visibility.js";
-import { PRODUCTION_PROFILE, SHADOW_RESOLUTION, shadowResolution, type RenderProfile } from "./render-profile.js";
+import { PRODUCTION_PROFILE, shadowResolution, type RenderProfile } from "./render-profile.js";
 import { SUMMON_POOL, modulePool, emptyUsage, RenderFailure } from "../shared/limits.js";
 import type { WorldVersion } from "../../server/versions/index.js";
 import type { WorldModuleFactory } from "./api.js";
@@ -80,7 +81,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const garden = createGarden(profile.look);
   const water = createWater(profile.look);
   const motes = createMotes();
-  const sky = createSky(scene, options.fixedTime,profile.look,profile.probe?SHADOW_RESOLUTION.classic:shadowResolution(profile));
+  const sky = createSky(scene, options.fixedTime,profile.look??"new",shadowResolution(profile));
   // Capture and live share image-based lighting; screenshot checks bound GPU rounding.
   canvas.dataset.captureEnvironment=profile.look==="classic"?"classic-hemisphere":"sky-pmrem";
   const ibl=profile.look!=="classic"?skyEnvironment(renderer,scene,sky.sky):undefined;ibl?.update(sky.lighting);
@@ -231,7 +232,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   function frame(now: number,forcedDt?:number) {
     if (disposed || !options.capture&&document.hidden) return;
-    const dt=clock.advance(forcedDt??stats.sample(now));if(forcedDt!==undefined)stats.sample(now);stats.value.simTime=clock.seconds;
+    const sampled=stats.sample(now),dt=clock.advance(forcedDt??sampled);stats.value.simTime=clock.seconds;
     // Reduced motion keeps composition still but retains rendered, measurable frames.
     const visualTime = reducedMotion.matches ? 0 : clock.seconds;
     try {
@@ -296,7 +297,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   }
   function visibility() {
     if(options.capture)return;
-    host.setPaused(options.capture?false:document.hidden);
+    host.setPaused(document.hidden);
     stats.resetClock();
     cancelAnimationFrame(frameId);
     if (!document.hidden && !disposed) frameId = requestAnimationFrame(frame);
@@ -327,7 +328,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     async loadCapture(snapshot:Extract<WorldEvent,{type:"snapshot"}>){clock.reset(snapshot.now);anchored=true;citizens.sync(snapshot.citizens,snapshot.now);stats.value.raidCount=snapshot.raids;
       if(snapshot.arrival)raidPortal.open(snapshot.arrival.raid.broadcasterName,snapshot.arrival.admitted,snapshot.arrival.raid.viewerCount,-(snapshot.now-snapshot.arrival.at)/1000);
       await Promise.all(snapshot.summons.map(s=>prepareSpecAssets(s.spec,profile.look)));materializer.sync(snapshot.summons);await activate(snapshot.version);frame(0,0);await captureFence(renderer.getContext() as WebGL2RenderingContext);},
-    async step(dt:number){if(renderer.getContext().isContextLost())throw new Error("Capture graphics context lost");if(!options.capture)throw new Error("Use ?capture=1");if(!Number.isFinite(dt)||dt<0||dt>.05)throw new Error("Capture dt must be 0..0.05 seconds");frame((clock.seconds+dt)*1000,dt);await captureFence(renderer.getContext() as WebGL2RenderingContext);return {time:clock.seconds,frame:stats.value.frame};},
+    async step(dt:number){if(renderer.getContext().isContextLost())throw new Error("Capture graphics context lost");if(!options.capture)throw new Error("Use ?capture=1");if(!Number.isFinite(dt)||dt<0||dt>SIMULATION_MAX_DT)throw new Error("Capture dt must be 0..0.05 seconds");frame((clock.seconds+dt)*1000,dt);await captureFence(renderer.getContext() as WebGL2RenderingContext);return {time:clock.seconds,frame:stats.value.frame};},
     measureRender(frames=30){return measureRender(renderer,()=>pipeline.render(0,false),frames);},
     renderer, scene, camera, director, setVersion: activate, get host(){return host;}, citizens, materializer, stats: stats.value, baseUsage: base,
     dispose() {

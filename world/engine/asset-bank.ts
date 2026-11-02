@@ -1,4 +1,4 @@
-import {TextureLoader,SRGBColorSpace,RepeatWrapping,Mesh,Box3,Vector3,Group,type Texture,type MeshStandardMaterial} from 'three';
+import {TextureLoader,SRGBColorSpace,RepeatWrapping,Mesh,type Group,type Texture,type MeshStandardMaterial} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {HDRLoader} from 'three/addons/loaders/HDRLoader.js';
 import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
@@ -7,7 +7,7 @@ import {coverageMips} from './coverage-mips.js';
 import {shareLodMaterials} from './lod-materials.js';
 import type {WorldLook} from './render-profile.js';
 export interface PbrMaps {color:Texture;normal:Texture;arm:Texture}
-export interface ModelAsset {root:Group;low:Group;triangles:number;draws:number}
+export interface ModelAsset {root:Group;low:Group}
 const textures=new Map<string,PbrMaps>(),models=new Map<string,ModelAsset>();let clouds:Texture|undefined,hdr:Texture|undefined,pending:Promise<void>|undefined;
 const coreModels=new Set(['rock','moss-rock','scanned-tree','fern','grass','flowers','shrub']);
 const modelLoads=new Map<string,Promise<void>>(),gltf=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
@@ -16,7 +16,7 @@ async function loadModel(a:typeof manifest.assets[number]){
  const [high,low]=await Promise.all(a.outputs.map(o=>gltf.loadAsync(url(o))));
  shareLodMaterials(high!.scene,low!.scene);
  for(const scene of [high!.scene,low!.scene])scene.traverse(o=>{if(o instanceof Mesh){o.castShadow=true;o.receiveShadow=true;for(const m of (Array.isArray(o.material)?o.material:[o.material]) as MeshStandardMaterial[]){m.flatShading=false;if(m.alphaTest>0||["scanned-tree","grass","fern","shrub","flowers"].includes(a.name)&&m.transparent){m.alphaTest=m.alphaTest||.35;m.alphaToCoverage=true;m.transparent=false;m.depthWrite=true;if(m.map)coverageMips(m.map,m.alphaTest);}if(m.map)m.map.anisotropy=8;}}});
- models.set(a.name,{root:high!.scene,low:low!.scene,triangles:('triangles' in a?a.triangles:0)??0,draws:('draws' in a?a.draws:0)??0});
+ models.set(a.name,{root:high!.scene,low:low!.scene});
 }
 function ensureModel(a:typeof manifest.assets[number]){let load=modelLoads.get(a.name);if(!load){load=loadModel(a).catch(error=>{modelLoads.delete(a.name);throw error;});modelLoads.set(a.name,load);}return load;}
 export const assetMaps=(name:string)=>textures.get(name);
@@ -39,13 +39,6 @@ async function load(){
   }else if(a.type==='image'){clouds=await textureLoader.loadAsync(url(a.outputs[0]!));clouds.colorSpace=SRGBColorSpace;}else hdr=await new HDRLoader().loadAsync(url(a.outputs[0]!));
  }));
 }
-/** Clone the scene graph only. Engine instances may borrow immutable asset resources. */
-export function fittedModel(name:string,size:Vector3,low=false){
- const asset=models.get(name);if(!asset)throw new Error(`Missing committed model: ${name}`);
- const root=(low?asset.low:asset.root).clone(true),box=new Box3().setFromObject(root),extent=box.getSize(new Vector3()),center=box.getCenter(new Vector3());
- const wrapper=new Group();wrapper.add(root);root.position.sub(center);wrapper.scale.set(size.x/Math.max(.001,extent.x),size.y/Math.max(.001,extent.y),size.z/Math.max(.001,extent.z));return wrapper;
-}
-
 /** Closed local names only; called before a synchronous module factory or Scene Spec allocation. */
 export async function prepareNamedModels(names:readonly string[],look:WorldLook='new'){
  if(look==='classic')return;

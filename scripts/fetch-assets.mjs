@@ -1,7 +1,7 @@
 /** Data-only offline pipeline. Powered by Poly Haven (https://polyhaven.com). */
 import {execFile} from 'node:child_process';import {promisify} from 'node:util';
 import {mkdir,readFile,writeFile,readdir,stat} from 'node:fs/promises';
-import {join,resolve,dirname,extname} from 'node:path';
+import {join,resolve,dirname} from 'node:path';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {HDRLoader} from 'three/addons/loaders/HDRLoader.js';

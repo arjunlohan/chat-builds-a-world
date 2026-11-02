@@ -1,6 +1,5 @@
 import {createRealSky} from "./real-sky.js";
 import type {SkyLighting} from "../shared/sky-cycle.js";
-import {SHADOW_RESOLUTION} from "./render-profile.js";
 import type {WorldLook} from "./render-profile.js";
 import { indexGeometry } from "./index-geometry.js";
 import {
@@ -11,13 +10,13 @@ import {
 import { random } from "./terrain.js";
 
 /** Ten-minute day, authored in linear color; no image textures or external skybox. */
-export function createSky(scene: Scene, fixedTime?: number,look:WorldLook="new",shadowSize:number=look==="classic"?SHADOW_RESOLUTION.classic:SHADOW_RESOLUTION.new) {
+export function createSky(scene: Scene, fixedTime:number|undefined,look:WorldLook,shadowSize:number) {
   if(look!=="classic")return createRealSky(scene,fixedTime,shadowSize);
   const root = new Group();
   const top = new Color(), horizon = new Color(), sunColor = new Color();
   const nightTop = new Color("#13223c"), dayTop = new Color("#286b9b");
   const nightHorizon = new Color("#37475e"), dayHorizon = new Color("#ffc48c"), duskHorizon = new Color("#f59d79");
-  const warmSun = new Color("#ffc69b"),moonColor=new Color("#a8c8ec");
+  const warmSun = new Color("#ffc69b");
   const sunDir = new Vector3(-0.6, 0.35, -0.7).normalize();
   const uniforms = {
     uTop: { value: top }, uHorizon: { value: horizon }, uSunColor: { value: sunColor },
@@ -52,10 +51,10 @@ export function createSky(scene: Scene, fixedTime?: number,look:WorldLook="new",
   sunlight.position.set(-9, 18, 8);
   sunlight.castShadow = true;
   sunlight.shadow.mapSize.set(shadowSize,shadowSize);
-  sunlight.shadow.camera.left = look==="classic"?-15:-13;
-  sunlight.shadow.camera.right = look==="classic"?15:13;
-  sunlight.shadow.camera.top = look==="classic"?15:13;
-  sunlight.shadow.camera.bottom = look==="classic"?-15:-13;
+  sunlight.shadow.camera.left = -15;
+  sunlight.shadow.camera.right = 15;
+  sunlight.shadow.camera.top = 15;
+  sunlight.shadow.camera.bottom = -15;
   sunlight.shadow.camera.near = 1;
   sunlight.shadow.camera.far = 60;
   sunlight.shadow.normalBias = 0.035;
@@ -106,9 +105,9 @@ export function createSky(scene: Scene, fixedTime?: number,look:WorldLook="new",
     sunColor.set("#ffdbad");
     sunDir.set(-0.6, Math.max(0.12, elevation * 0.6), -0.7).normalize();
     uniforms.uNight.value = 1 - day;
-    hemisphere.intensity = look==="classic"?0.7+day*1.1:1.3+day*.5;
-    sunlight.intensity = look==="classic"?.15+day*2.8:.55+day*2.4;
-    sunlight.color.set("#ffe2bd").lerp(warmSun, warmth * 0.5);if(look!=="classic")sunlight.color.lerp(moonColor,1-day);
+    hemisphere.intensity = 0.7+day*1.1;
+    sunlight.intensity = .15+day*2.8;
+    sunlight.color.set("#ffe2bd").lerp(warmSun, warmth * 0.5);
     cloudUniforms.uColor.value.copy(horizon);
     cloudUniforms.uOpacity.value = 0.1 + day * 0.12;
     fog.color.copy(horizon);return false;

@@ -1,4 +1,4 @@
-import {Mesh,MeshNormalMaterial,type Material,type Scene,type Texture,type IUniform,type WebGLRenderer,type BufferGeometry,type WebGLRenderTarget} from 'three';
+import {Mesh,MeshNormalMaterial,type Material,type Scene,type Texture,type IUniform,type WebGLRenderer,type WebGLRenderTarget} from 'three';
 import type {GTAOPass} from 'three/addons/postprocessing/GTAOPass.js';
 /** Keep leaf holes in GTAO's normal/depth pass instead of occluding rectangular cards. */
 export function cutoutNormals(ao:GTAOPass,scene:Scene){

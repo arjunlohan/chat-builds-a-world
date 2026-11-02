@@ -1,3 +1,4 @@
+import {SIMULATION_MAX_DT} from "../world/shared/time.js";
 import {captureUrl} from "../world/engine/capture.js";
 import {reactionOverlay} from "./reactions.js";
 import "./style.css";
@@ -64,5 +65,5 @@ events.onmessage = message => {
 };
 }
 const timer = capturing?undefined:setInterval(clock, 100);
-if(capturing){const ready=(async()=>{const response=await fetch(captureUrl(query));if(!response.ok)throw new Error("Saved capture unavailable");const event=await response.json() as Extract<WorldEvent,{type:"snapshot"}>;if(event.rounds)update(event.rounds);if(event.reactions)reactions.update(event.reactions);connection.classList.add("connected");await reactions.renderFrame();})();window.__capture={ready,get frame(){return captureFrame;},get time(){return virtualNow/1000;},async step(dt){await ready;if(!Number.isFinite(dt)||dt<0||dt>.05)throw new Error("Capture dt must be 0..0.05 seconds");virtualNow+=dt*1000;captureFrame++;clock();await reactions.renderFrame();}};}
+if(capturing){const ready=(async()=>{const response=await fetch(captureUrl(query));if(!response.ok)throw new Error("Saved capture unavailable");const event=await response.json() as Extract<WorldEvent,{type:"snapshot"}>;if(event.rounds)update(event.rounds);if(event.reactions)reactions.update(event.reactions);connection.classList.add("connected");await reactions.renderFrame();})();window.__capture={ready,get frame(){return captureFrame;},get time(){return virtualNow/1000;},async step(dt){await ready;if(!Number.isFinite(dt)||dt<0||dt>SIMULATION_MAX_DT)throw new Error("Capture dt must be 0..0.05 seconds");virtualNow+=dt*1000;captureFrame++;clock();await reactions.renderFrame();}};}
 window.addEventListener("pagehide", () => { clearInterval(timer); events?.close(); reactions.dispose(); }, { once: true });
