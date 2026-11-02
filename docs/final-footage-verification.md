@@ -20,6 +20,8 @@ The pre-lighting reference set is `state/visual/p26-before-{day,golden,dusk,nigh
 
 | 5. Golden-hour lighting | 279 tests and browser checks pass | 59.95 / 59.95 / 59.90 / 59.97 | 22.32 / 21.46 / 22.68 / 22.52 |
 
+| 6. Dusk, moonlight and sky band | 280 tests and browser checks pass | 60.05 / 59.95 / 59.97 / 60.16 | 21.18 / 20.89 / 20.10 / 20.47 |
+
 ## 1. Twitch failure visibility
 
 Configured Twitch starts disconnected, becomes connected after subscriptions
@@ -96,3 +98,24 @@ settings. No geometry or gate limit changed.
 `pnpm check` and the settled four-phase 150-raider check pass. Before/after:
 `p26-before-golden.png` and `p26-5-golden.png`. Day/golden/dusk/night frames,
 crops and GPU measurements are in `state/visual/p26-5-*`.
+
+## 6. Dusk/night readability and the sky stripe
+
+The vertical band came from collapsing a tilted equirectangular panorama onto
+one horizon row (`source.y=max(.025,source.y)`). Private ablations preserved it
+with cloud sprites hidden, removed it with the sky dome hidden, and showed no
+change when texture wrapping changed. Unclamped panorama directions removed the
+stretched stripe. The original HDR directions now pass intact to sampling.
+Diagnostics: `p26-sky-dusk-{full,no-clouds,no-sky,repeat}.png` and
+`p26-sky-test-dusk-{unclamped,horizon-fade}.png`.
+
+Cool hemisphere/ground fill and moonlight make grass, rocks and paths visible
+outside lantern pools. The existing directional light blends toward an
+above-horizon moon during blue hour instead of remaining below the terrain.
+There are no additional lights, shadows or passes. The daylight/classic budgets
+and the constant night environment-bake behavior are retained. Golden scattering
+fades with daylight so dusk stays cool.
+
+The full check and settled four-phase 150-raider check pass. Before/after:
+`p26-before-{dusk,night}.png` and `p26-6-{dusk,night}.png`. All frames/crops and
+GPU timings are under `state/visual/p26-6-*`.

@@ -14,3 +14,9 @@ test('golden-hour illumination keeps blue overhead and cloud fill while warming 
  assert.ok(material.uniforms.uTint!.value.b>.75,'Overhead tint must retain its blue channel');assert.ok(sky.sunlight.color.r>sky.sunlight.color.b,'Direct low sun stays warm');assert.ok(scene.environmentIntensity>.55,'Grazing sun needs readable sky fill');assert.ok(sky.sunlight.intensity>2.5);
  sky.root.traverse(o=>{if('geometry' in o)(o.geometry as import('three').BufferGeometry).dispose();if('material' in o)(o.material as import('three').Material).dispose();});sky.sunlight.shadow.dispose();
 });
+
+test('blue hour keeps an above-horizon moon fill and readable environment without a clamped panorama row',async()=>{
+ const {Scene,ShaderMaterial}=await import('three'),{createRealSky}=await import('../world/engine/real-sky.js'),{SKY_PHASES,skyCycle}=await import('../world/shared/sky-cycle.js');
+ for(const phase of [SKY_PHASES.dusk,SKY_PHASES.night]){assert.ok(skyCycle(phase).sun[1]>.1);const scene=new Scene(),sky=createRealSky(scene,phase,512);assert.ok(sky.sunlight.intensity>=1);assert.ok(scene.environmentIntensity>=.4);assert.ok(!(sky.sky.material as InstanceType<typeof ShaderMaterial>).fragmentShader.includes('source.y=max'));
+ sky.root.traverse(o=>{if('geometry' in o)(o.geometry as import('three').BufferGeometry).dispose();if('material' in o)(o.material as import('three').Material).dispose();});sky.sunlight.shadow.dispose();}
+});
